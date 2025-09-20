@@ -1,9 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:nimon/data/story_repo_mock.dart';
-import 'package:nimon/models/episode.dart';
-import 'package:nimon/models/story.dart';
-import '../writer/writer_screen.dart';
-import '../quiz/quiz_screen.dart';
+import '../../models/story.dart';
+import '../learn/learn_hub_screen.dart';
 
 class StoryScreen extends StatefulWidget {
   final Story story;
@@ -14,80 +11,126 @@ class StoryScreen extends StatefulWidget {
 }
 
 class _StoryScreenState extends State<StoryScreen> {
-  final repo = StoryRepoMock();
-  late Future<List<Episode>> _future;
-
-  @override
-  void initState() {
-    super.initState();
-    _future = repo.getEpisodesByStory(widget.story.id);
-  }
+  late final PageController _page = PageController();
 
   @override
   Widget build(BuildContext context) {
-    final s = widget.story;
+    final eps = demoEpisodes;
+
     return Scaffold(
-      appBar: AppBar(title: Text(s.title)),
-      body: FutureBuilder(
-        future: _future,
-        builder: (context, snap) {
-          if (!snap.hasData) return const Center(child: CircularProgressIndicator());
-          final eps = snap.data!;
-          return ListView(
-            padding: const EdgeInsets.all(16),
-            children: [
-              Text(s.desc, style: const TextStyle(fontStyle: FontStyle.italic)),
-              const SizedBox(height: 12),
-              for (final e in eps) _EpisodeBubble(ep: e),
-              const SizedBox(height: 24),
-              Row(
+      appBar: AppBar(
+        leading: const BackButton(),
+        title: Text(widget.story.title),
+        actions: [
+          IconButton(icon: const Icon(Icons.search), onPressed: () {}),
+          IconButton(icon: const Icon(Icons.bookmark_border), onPressed: () {}),
+          PopupMenuButton(
+            itemBuilder: (_) => const [
+              PopupMenuItem(value: 'share', child: Text('Share')),
+              PopupMenuItem(value: 'report', child: Text('Report')),
+            ],
+          ),
+        ],
+      ),
+      body: Column(
+        children: [
+          Expanded(
+            child: PageView.builder(
+              controller: _page,
+              itemCount: eps.length,
+              itemBuilder: (_, i) => ListView(
+                padding: const EdgeInsets.all(12),
                 children: [
-                  ElevatedButton.icon(
-                    onPressed: () async {
-                      await Navigator.push(context,
-                        MaterialPageRoute(builder: (_) => WriterScreen(storyId: s.id, nextOrder: eps.length+1)));
-                      setState(()=> _future = repo.getEpisodesByStory(s.id));
-                    },
-                    icon: const Icon(Icons.edit),
-                    label: const Text('Write Next Episode'),
-                  ),
-                  const SizedBox(width: 12),
-                  OutlinedButton.icon(
-                    onPressed: (){
-                      Navigator.push(context, MaterialPageRoute(builder: (_) => QuizScreen(storyId: s.id)));
-                    },
-                    icon: const Icon(Icons.quiz),
-                    label: const Text('Learn / Quiz'),
-                  ),
+                  _Narration(eps[i].narration),
+                  const SizedBox(height: 8),
+                  const _Dialog(speaker: 'YAMADA', text: 'かさ を わすれました。'),
+                  const _Dialog(speaker: 'AYANA', text: 'いっしょに いきますか。', right: true),
+                  const SizedBox(height: 8),
+                  _Narration(eps[i].footer),
+                  const SizedBox(height: 48),
                 ],
               ),
-            ],
-          );
-        },
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Text(
+              '01 / ${eps.length}',
+              style: const TextStyle(fontWeight: FontWeight.w600),
+            ),
+          ),
+        ],
+      ),
+      floatingActionButton: Wrap(
+        spacing: 10,
+        children: [
+          FloatingActionButton.small(
+            heroTag: 'save',
+            onPressed: () => _toast('Saved locally'),
+            child: const Icon(Icons.save_alt),
+          ),
+          FloatingActionButton.small(
+            heroTag: 'upload',
+            onPressed: () => _toast('Upload (UI only)'),
+            child: const Icon(Icons.cloud_upload),
+          ),
+          FloatingActionButton.extended(
+            heroTag: 'learn',
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => LearnHubScreen(story: widget.story)),
+            ),
+            icon: const Icon(Icons.menu_book),
+            label: const Text('Learn'),
+          ),
+        ],
       ),
     );
   }
+
+  void _toast(String m) => ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(m)));
 }
 
-class _EpisodeBubble extends StatelessWidget {
-  final Episode ep;
-  const _EpisodeBubble({required this.ep});
+class _Narration extends StatelessWidget {
+  final String text;
+  const _Narration(this.text);
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.all(12),
+    decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
+    child: Text(text),
+  );
+}
+
+class _Dialog extends StatelessWidget {
+  final String speaker, text;
+  final bool right;
+  const _Dialog({super.key, required this.speaker, required this.text, this.right = false});
 
   @override
   Widget build(BuildContext context) {
-    final isDialog = ep.type == 'dialog';
-    final bg = isDialog ? Colors.blue.shade50 : Colors.grey.shade200;
-    final align = isDialog ? CrossAxisAlignment.end : CrossAxisAlignment.start;
-    final speaker = (ep.speaker ?? '').isEmpty ? '' : '${ep.speaker}: ';
-    return Container(
-      margin: const EdgeInsets.symmetric(vertical: 6),
+    final bubble = Container(
       padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(12)),
-      child: Column(crossAxisAlignment: align, children: [
-        if (speaker.isNotEmpty)
-          Text(speaker, style: const TextStyle(fontWeight: FontWeight.bold)),
-        Text(ep.text),
-      ]),
+      decoration: BoxDecoration(
+        color: right ? const Color(0xFFFFE5F4) : const Color(0xFFE1F5FE),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(speaker, style: Theme.of(context).textTheme.labelSmall),
+          const SizedBox(height: 6),
+          Text(text),
+        ],
+      ),
+    );
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(
+        mainAxisAlignment: right ? MainAxisAlignment.end : MainAxisAlignment.start,
+        children: [SizedBox(width: 240, child: bubble)],
+      ),
     );
   }
 }

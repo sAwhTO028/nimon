@@ -1,9 +1,9 @@
 name: nimon
-description: NIMON - Collaborative Japanese Learning (MVP skeleton)
+description: NIMON - Phase 1 (Home/Reader skeleton)
 publish_to: "none"
 
 environment:
-  sdk: ">=3.0.0 <4.0.0"
+  sdk: ">=3.3.0 <4.0.0"
 
 dependencies:
   flutter:
@@ -18,5 +18,4 @@ dev_dependencies:
 flutter:
   uses-material-design: true
   assets:
-    - assets/data/
     - assets/images/

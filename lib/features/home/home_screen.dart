@@ -1,53 +1,110 @@
 import 'package:flutter/material.dart';
-import 'package:nimon/data/story_repo_mock.dart';
-import 'package:nimon/models/story.dart';
-import 'package:nimon/widgets/story_card.dart';
+import '../../models/story.dart';
 import '../story/story_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
-
   @override
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  final repo = StoryRepoMock();
-  late Future<List<Story>> _future;
-
-  @override
-  void initState() {
-    super.initState();
-    _future = repo.getStories();
-  }
+  String? _chip;
+  final _chips = const ['Love', 'History', 'Comedy', 'Horror', 'Art'];
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('NIMON')),
-      body: FutureBuilder(
-        future: _future,
-        builder: (context, snap) {
-          if (!snap.hasData) {
-            if (snap.hasError) return Center(child: Text('Error: ${snap.error}'));
-            return const Center(child: CircularProgressIndicator());
-          }
-          final stories = snap.data!;
-          return ListView.separated(
-            padding: const EdgeInsets.all(16),
-            itemCount: stories.length,
-            separatorBuilder: (_, __) => const SizedBox(height: 12),
-            itemBuilder: (ctx, i) => StoryCard(
-              story: stories[i],
-              onTap: () => Navigator.push(context,
-                MaterialPageRoute(builder: (_) => StoryScreen(story: stories[i])),
+      appBar: AppBar(
+        title: const Text('NIMON'),
+        actions: [
+          Padding(
+            padding: const EdgeInsets.only(right: 12),
+            child: FilledButton.tonal(
+              onPressed: () {},
+              child: const Row(children: [Icon(Icons.monetization_on, size: 18), SizedBox(width: 6), Text('98')]),
+            ),
+          )
+        ],
+      ),
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(12, 8, 12, 96),
+        children: [
+          // category chips (single select)
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: _chips
+                  .map((c) => Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: ChoiceChip(
+                  label: Text(c),
+                  selected: _chip == c,
+                  onSelected: (_) => setState(() => _chip = _chip == c ? null : c),
+                ),
+              ))
+                  .toList(),
+            ),
+          ),
+          const SizedBox(height: 12),
+
+          Text('Recommend Stories', style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: 8),
+          SizedBox(
+            height: 120,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              itemCount: 4,
+              separatorBuilder: (_, __) => const SizedBox(width: 12),
+              itemBuilder: (_, i) => Container(
+                width: 180,
+                decoration: BoxDecoration(
+                  color: Colors.black12,
+                  borderRadius: BorderRadius.circular(12),
+                ),
               ),
             ),
-          );
-        },
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: (){}, label: const Text('New Story'), icon: const Icon(Icons.add),
+          ),
+          const SizedBox(height: 16),
+
+          Text("Popular's Stories and Timeline", style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: 8),
+          SizedBox(
+            height: 120,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              itemCount: 4,
+              separatorBuilder: (_, __) => const SizedBox(width: 12),
+              itemBuilder: (_, i) => Container(
+                width: 180,
+                decoration: BoxDecoration(
+                  color: Colors.black12,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          // list of stories
+          ...demoStories.map(
+                (s) => Card(
+              child: ListTile(
+                leading: CircleAvatar(
+                  backgroundColor: Colors.black12,
+                  child: Text(s.level),
+                ),
+                title: Text(s.title),
+                subtitle: Text(s.desc, maxLines: 2, overflow: TextOverflow.ellipsis),
+                trailing: const Icon(Icons.favorite_border),
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => StoryScreen(story: s)),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

@@ -3,16 +3,21 @@ import 'package:google_fonts/google_fonts.dart';
 
 ThemeData buildTheme() {
   final base = ThemeData(
-    colorSchemeSeed: const Color(0xFF3AA6FF),
-    brightness: Brightness.light,
     useMaterial3: true,
+    colorSchemeSeed: const Color(0xFF4F6D7A),
+    brightness: Brightness.light,
   );
   return base.copyWith(
     textTheme: GoogleFonts.interTextTheme(base.textTheme),
-    appBarTheme: const AppBarTheme(centerTitle: true),
-    cardTheme: CardTheme(
-      elevation: 1,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+    cardTheme: const CardTheme(
+      margin: EdgeInsets.all(12),
+      clipBehavior: Clip.antiAlias,
+      elevation: 0,
+    ),
+    inputDecorationTheme: const InputDecorationTheme(
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.all(Radius.circular(12)),
+      ),
     ),
   );
 }
