@@ -1,0 +1,6 @@
+[
+  {"id":"e_1","storyId":"s_1","order":1,"type":"narration","text":"きょう、きょうとは あめ です。"},
+  {"id":"e_2","storyId":"s_1","order":2,"type":"dialog","speaker":"YAMADA","text":"かさ を わすれました。"},
+  {"id":"e_3","storyId":"s_1","order":3,"type":"dialog","speaker":"AYANA","text":"いっしょに いきますか。"},
+  {"id":"e_4","storyId":"s_2","order":1,"type":"narration","text":"わたし は きょう がっこうへ いきます。"}
+]

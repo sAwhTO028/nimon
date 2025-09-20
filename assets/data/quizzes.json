@@ -1,0 +1,9 @@
+[
+  {"storyId":"s_1","items":[
+    {"id":"q1","type":"mcq","question":"「あめ」の いみ は？","choices":["Snow","Rain","Wind","Sunny"],"answerIndex":1,"xp":5},
+    {"id":"q2","type":"fill","question":"（　）を わすれました。","answer":"かさ","xp":5}
+  ]},
+  {"storyId":"s_2","items":[
+    {"id":"q1","type":"mcq","question":"「がっこう」の いみ は？","choices":["Hospital","School","Park","Station"],"answerIndex":1,"xp":5}
+  ]}
+]
