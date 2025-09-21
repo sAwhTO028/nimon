@@ -1,25 +1,17 @@
-// imports...
-final _stories = <Story>[ /* …demo… */ ];
-final _episodes = <Episode>[ /* …demo episodes… */ ];
+import 'package:nimon/models/story.dart';
 
-class StoryRepoMock implements StoryRepo {
-  @override
-  Future<List<Story>> getStories({String? level}) async => _stories;
+/// Very thin shim used by the new StoryDetail/Writer UI to compile without
+/// depending on old interfaces. Replace with real repository later.
+class StoryRepoMock {
+  Future<List<Story>> listStories() async => <Story>[];
 
-  @override
-  Future<Story?> getStoryById(String id) async =>
-      _stories.firstWhere((s) => s.id == id);
+  Future<Story?> getStoryById(String id) async => null;
 
-  @override
-  Future<List<Episode>> getEpisodesByStory(String storyId) async =>
-      _episodes.where((e) => e.storyId == storyId).toList()..sort((a,b)=>a.index.compareTo(b.index));
+  Future<List<Episode>> listEpisodes(String storyId) async => <Episode>[];
 
-  @override
-  Future<void> addEpisode({required Episode episode}) async {
-    final next = (_episodes.where((e)=>e.storyId==episode.storyId).map((e)=>e.index).fold<int>(0, (p,c)=>c>p?c:p)) + 1;
-    _episodes.add(episode.copyWith(id: UniqueKey().toString(), index: next));
+  Future<void> addEpisode(dynamic episode) async {
+    // no-op for UI-only prototype
   }
 
-  @override
-  Future<List<QuizItem>> getQuizByStory(String storyId) async => [];
+  Future<List<dynamic>> listQuiz(String storyId) async => <dynamic>[];
 }

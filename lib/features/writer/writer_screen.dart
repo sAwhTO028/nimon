@@ -1,7 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:nimon/core/responsive.dart';
-import 'package:nimon/data/story_repo_mock.dart';
-import 'package:nimon/models/story.dart';
 
 class WriterArgs {
   final String storyId;
@@ -10,7 +7,6 @@ class WriterArgs {
 
 class WriterScreen extends StatefulWidget {
   static const routeName = '/writer';
-
   final String storyId;
   const WriterScreen({super.key, required this.storyId});
 
@@ -21,12 +17,10 @@ class WriterScreen extends StatefulWidget {
 enum BlockType { narration, dialogMe, dialogYou, mind }
 
 class _WriterScreenState extends State<WriterScreen> {
-  final _repo = StoryRepoMock();
-
-  List<EpisodeBlock> blocks = [];
   final _controller = TextEditingController();
-  BlockType _type = BlockType.narration;
   final _speakerCtl = TextEditingController();
+  BlockType _type = BlockType.narration;
+  final List<_Block> _blocks = [];
 
   @override
   void dispose() {
@@ -37,45 +31,48 @@ class _WriterScreenState extends State<WriterScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final pad = R.hPad(context);
     return Scaffold(
       appBar: AppBar(
         title: const Text('Write Episode'),
         actions: [
           IconButton(
-              tooltip: 'Save (draft)',
-              icon: const Icon(Icons.save_rounded),
-              onPressed: _saveDraft),
-          IconButton(
-            tooltip: 'Upload (UI-only)',
-            icon: const Icon(Icons.cloud_upload_rounded),
             onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('UI-only: AI check → upload')),
+              const SnackBar(
+                  content: Text('Saved draft (UI-only, not persisted)')),
             ),
+            icon: const Icon(Icons.save_rounded),
+          ),
+          IconButton(
+            onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                  content: Text('Upload → AI check (UI-only)')),
+            ),
+            icon: const Icon(Icons.cloud_upload_rounded),
           ),
         ],
       ),
       body: Column(
         children: [
           Expanded(
-            child: Padding(
-              padding: EdgeInsets.only(top: 12).add(pad),
-              child: ReorderableListView.builder(
-                itemCount: blocks.length,
-                onReorder: (o, n) {
-                  setState(() {
-                    if (n > o) n -= 1;
-                    final it = blocks.removeAt(o);
-                    blocks.insert(n, it);
-                  });
-                },
-                itemBuilder: (c, i) => _Bubble(
-                  key: ValueKey(blocks[i].id),
-                  block: blocks[i],
-                  onEdit: () => _edit(i),
-                  onDelete: () => setState(() => blocks.removeAt(i)),
-                ),
-              ),
+            child: ReorderableListView(
+              padding: const EdgeInsets.all(16),
+              onReorder: (o, n) {
+                setState(() {
+                  if (n > o) n -= 1;
+                  final it = _blocks.removeAt(o);
+                  _blocks.insert(n, it);
+                });
+              },
+              children: [
+                for (final b in _blocks)
+                  _Bubble(
+                    key: ValueKey(b.id),
+                    block: b,
+                    onEdit: () => _edit(b),
+                    onDelete: () =>
+                        setState(() => _blocks.removeWhere((x) => x.id == b.id)),
+                  ),
+              ],
             ),
           ),
           _Composer(
@@ -93,128 +90,66 @@ class _WriterScreenState extends State<WriterScreen> {
   void _add() {
     final txt = _controller.text.trim();
     if (txt.isEmpty) return;
-    final spk =
-    _type == BlockType.narration ? null : (_speakerCtl.text.trim().isEmpty ? 'YOU' : _speakerCtl.text.trim());
-
     setState(() {
-      blocks.add(EpisodeBlock(
+      _blocks.add(_Block(
         id: UniqueKey().toString(),
         type: _type,
         text: txt,
-        speaker: spk,
+        speaker: _type == BlockType.narration
+            ? null
+            : (_speakerCtl.text.trim().isEmpty ? 'YOU' : _speakerCtl.text),
       ));
       _controller.clear();
     });
   }
 
-  void _edit(int i) {
-    final b = blocks[i];
+  void _edit(_Block b) {
     _controller.text = b.text;
     _speakerCtl.text = b.speaker ?? '';
-    setState(() => _type = b.type);
-    blocks.removeAt(i);
-  }
-
-  Future<void> _saveDraft() async {
-    final text = blocks.map((b) => b.toLine()).join('\n\n');
-    final episode = Episode(
-      id: '',
-      storyId: widget.storyId,
-      index: 0, // mock repo ထဲက auto index ပေးမယ်ဆိုရင် 0 ထား
-      jlptLevel: 'N5',
-      text: text,
-      preview: text.length > 80 ? '${text.substring(0, 80)}…' : text,
-    );
-
-    try {
-      // mock repo signature မတူနိုင်လို့ 2 နည်းစလုံးစမ်း
-      try {
-        // ignore: invalid_use_of_protected_member
-        await (_repo as dynamic).addEpisode(episode);
-      } catch (_) {
-        // ignore: invalid_use_of_protected_member
-        await (_repo as dynamic).addEpisode(episode);
-      }
-      if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(const SnackBar(content: Text('Draft saved (mock)')));
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Save failed: $e')));
-      }
-    }
+    setState(() {
+      _type = b.type;
+      _blocks.removeWhere((x) => x.id == b.id);
+    });
   }
 }
 
-/// local draft block
-class EpisodeBlock {
+class _Block {
   final String id;
   final BlockType type;
   final String text;
   final String? speaker;
-  EpisodeBlock({
-    required this.id,
-    required this.type,
-    required this.text,
-    this.speaker,
-  });
-
-  String toLine() {
-    switch (type) {
-      case BlockType.narration:
-        return text;
-      case BlockType.dialogMe:
-        return '${speaker ?? "ME"}: $text';
-      case BlockType.dialogYou:
-        return '${speaker ?? "YOU"}: $text';
-      case BlockType.mind:
-        return '( $text )';
-    }
-  }
+  _Block({required this.id, required this.type, required this.text, this.speaker});
 }
 
 class _Bubble extends StatelessWidget {
-  final EpisodeBlock block;
+  final _Block block;
   final VoidCallback onEdit;
   final VoidCallback onDelete;
   const _Bubble({super.key, required this.block, required this.onEdit, required this.onDelete});
 
   @override
   Widget build(BuildContext context) {
-    final radius = R.radius(context);
-
     if (block.type == BlockType.narration) {
-      // FULL-WIDTH narration
+      // full-width bar
       return Container(
         key: key,
         margin: const EdgeInsets.symmetric(vertical: 8),
-        child: Row(
-          children: [
-            Expanded(
-              child: Material(
-                color: Theme.of(context).colorScheme.surface,
-                borderRadius: radius,
-                child: InkWell(
-                  borderRadius: radius,
-                  onLongPress: () => _menu(context),
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Text(block.text, style: Theme.of(context).textTheme.bodyLarge),
-                  ),
-                ),
-              ),
+        child: Material(
+          color: Theme.of(context).colorScheme.surface,
+          borderRadius: BorderRadius.circular(16),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(16),
+            onLongPress: () => _menu(context),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Text(block.text),
             ),
-          ],
+          ),
         ),
       );
     }
-
     final isMe = block.type == BlockType.dialogMe;
     final color = isMe ? Colors.lightBlue.shade100 : Colors.pink.shade100;
-    final align = isMe ? MainAxisAlignment.start : MainAxisAlignment.end;
-
     return Container(
       key: key,
       margin: const EdgeInsets.symmetric(vertical: 6),
@@ -223,11 +158,15 @@ class _Bubble extends StatelessWidget {
         children: [
           if (block.speaker != null)
             Padding(
-              padding: EdgeInsets.only(left: isMe ? 6 : 0, right: isMe ? 0 : 6, bottom: 4),
+              padding: EdgeInsets.only(
+                left: isMe ? 6 : 0,
+                right: isMe ? 0 : 6,
+                bottom: 4,
+              ),
               child: Text(block.speaker!, style: Theme.of(context).textTheme.labelSmall),
             ),
           Row(
-            mainAxisAlignment: align,
+            mainAxisAlignment: isMe ? MainAxisAlignment.start : MainAxisAlignment.end,
             children: [
               ConstrainedBox(
                 constraints: BoxConstraints(
@@ -235,9 +174,9 @@ class _Bubble extends StatelessWidget {
                 ),
                 child: Material(
                   color: color,
-                  borderRadius: radius,
+                  borderRadius: BorderRadius.circular(16),
                   child: InkWell(
-                    borderRadius: radius,
+                    borderRadius: BorderRadius.circular(16),
                     onLongPress: () => _menu(context),
                     child: Padding(
                       padding: const EdgeInsets.all(14),
@@ -256,7 +195,7 @@ class _Bubble extends StatelessWidget {
   void _menu(BuildContext context) async {
     final res = await showMenu<String>(
       context: context,
-      position: const RelativeRect.fromLTRB(1000, 80, 16, 0),
+      position: const RelativeRect.fromLTRB(1000, 100, 16, 0),
       items: const [
         PopupMenuItem(value: 'edit', child: Text('Edit')),
         PopupMenuItem(value: 'delete', child: Text('Delete')),
@@ -284,12 +223,11 @@ class _Composer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final pad = R.hPad(context);
     final isDialog = type != BlockType.narration;
     return SafeArea(
       top: false,
       child: Padding(
-        padding: pad.add(const EdgeInsets.fromLTRB(0, 8, 0, 12)),
+        padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
         child: Column(
           children: [
             Row(
