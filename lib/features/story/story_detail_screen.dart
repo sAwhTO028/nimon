@@ -1,56 +1,62 @@
 import 'package:flutter/material.dart';
-import 'package:nimon/data/story_repo_mock.dart';
-import 'package:nimon/models/story.dart';
-
-class StoryDetailArgs {
-  final String storyId;
-  StoryDetailArgs(this.storyId);
-}
+import '../../data/story_repo_mock.dart';
+import '../writer/writer_screen.dart';
+import '../learn/learn_hub_screen.dart';
 
 class StoryDetailScreen extends StatefulWidget {
-  static const routeName = '/storyDetail';
   final String storyId;
   const StoryDetailScreen({super.key, required this.storyId});
-
   @override
   State<StoryDetailScreen> createState() => _StoryDetailScreenState();
 }
 
 class _StoryDetailScreenState extends State<StoryDetailScreen> {
   final _repo = StoryRepoMock();
-
-  late Future<Story?> _fStory;
-  late Future<List<Episode>> _fEpisodes;
+  late Future<dynamic> _fStory;
+  late Future<List<dynamic>> _fEpisodes;
 
   @override
   void initState() {
     super.initState();
     _fStory = _repo.getStoryById(widget.storyId);
-    _fEpisodes = _repo.listEpisodes(widget.storyId);
+    _fEpisodes = _repo.getEpisodesByStory(widget.storyId);
+  }
+
+  String _desc(dynamic s){
+    return (s['description'] ?? s['desc'] ?? s['summary'] ?? '') as String;
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Story')),
+      appBar: AppBar(
+        title: const Text('Story'),
+        actions: [
+          IconButton(icon: const Icon(Icons.save_alt_rounded), onPressed: (){
+            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Saved locally (UI-only)')));
+          }),
+          IconButton(icon: const Icon(Icons.cloud_upload_rounded), onPressed: (){
+            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Upload → AI check (UI-only)')));
+          }),
+          IconButton(icon: const Icon(Icons.school_outlined), onPressed: (){
+            Navigator.of(context).push(MaterialPageRoute(builder: (_) => const LearnHubScreen()));
+          }),
+        ],
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        icon: const Icon(Icons.edit_note_rounded),
+        onPressed: (){
+          Navigator.of(context).push(MaterialPageRoute(builder: (_) => WriterScreen(storyId: widget.storyId)));
+        },
+        label: const Text('Edit+'),
+      ),
       body: FutureBuilder(
         future: Future.wait([_fStory, _fEpisodes]),
-        builder: (context, snap) {
-          if (!snap.hasData) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          final story = snap.data![0] as Story?;
-          final eps = snap.data![1] as List<Episode>;
-          final dyn = story as dynamic;
-          final desc = (dyn.description as String?) ??
-              (dyn.desc as String?) ??
-              (dyn.summary as String?) ??
-              (dyn.overview as String?) ??
-              '';
-
-          if (story == null) {
-            return const Center(child: Text('Story not found (mock)'));
-          }
+        builder: (c, snap) {
+          if (!snap.hasData) return const Center(child: CircularProgressIndicator());
+          final s = snap.data![0] as Map<String,dynamic>?;
+          final eps = snap.data![1] as List<dynamic>;
+          if (s==null) return const Center(child: Text('Not found'));
 
           return ListView(
             padding: const EdgeInsets.all(16),
@@ -58,40 +64,44 @@ class _StoryDetailScreenState extends State<StoryDetailScreen> {
               Card(
                 child: Padding(
                   padding: const EdgeInsets.all(16),
-                  child: Column(
+                  child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(story.title,
-                          style: Theme.of(context).textTheme.titleLarge),
-                      const SizedBox(height: 8),
-                      Wrap(
-                        spacing: 8,
-                        children: [
-                          Chip(
-                            label: Text('Level ${story.level}'),
-                            visualDensity: VisualDensity.compact,
+                      Container(width: 120, height: 160,
+                          decoration: BoxDecoration(
+                            color: Colors.grey.shade200,
+                            borderRadius: BorderRadius.circular(12),
                           ),
-                          Chip(
-                            label: Text('${eps.length} eps'),
-                            visualDensity: VisualDensity.compact,
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      Text(desc.isEmpty ? '—' : desc),
+                          child: const Icon(Icons.image, size: 48)),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                          Text(s['title'] ?? 'Untitled', style: Theme.of(context).textTheme.titleLarge),
+                          const SizedBox(height: 8),
+                          Wrap(spacing: 8, children: [
+                            Chip(label: Text('Level ${s['level'] ?? 'N/A'}')),
+                            Chip(label: Text('${eps.length} eps')),
+                            ...(s['tags'] as List<dynamic>? ?? []).take(3).map((t)=>Chip(label: Text(t.toString()))),
+                          ]),
+                          const SizedBox(height: 8),
+                          Text(_desc(s).isEmpty ? '—' : _desc(s)),
+                        ]),
+                      )
                     ],
                   ),
                 ),
               ),
               const SizedBox(height: 12),
-              ...List.generate(eps.length, (i) {
+              ...List.generate(eps.length, (i){
+                final e = eps[i] as Map<String,dynamic>;
+                final idx = e['index'] ?? i+1;
+                final preview = e['preview'] ?? e['text'] ?? '';
                 return Card(
                   child: ListTile(
-                    title: Text('Episode ${i + 1}'),
-                    subtitle: const Text('Tap to open (UI-only)'),
-                    trailing:
-                    const Icon(Icons.chevron_right_rounded),
-                    onTap: () {},
+                    title: Text('Episode $idx'),
+                    subtitle: Text(preview, maxLines: 2, overflow: TextOverflow.ellipsis),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: (){},
                   ),
                 );
               }),
