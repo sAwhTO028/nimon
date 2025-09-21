@@ -1,96 +1,57 @@
 import 'package:flutter/material.dart';
-import '../../data/story_repo_mock.dart';
+import 'package:nimon/data/story_repo.dart';
+import 'package:nimon/models/story.dart';
 
 class MonoScreen extends StatelessWidget {
-  const MonoScreen({super.key});
+  final StoryRepo repo;
+  const MonoScreen({super.key, required this.repo});
 
   @override
   Widget build(BuildContext context) {
-    final repo = StoryRepoMock();
-    return Scaffold(
-      appBar: AppBar(title: const Text('Mono')),
-      body: FutureBuilder(
-        future: repo.getStories(),
-        builder: (c, s) {
-          if (!s.hasData) return const Center(child: CircularProgressIndicator());
-          final list = (s.data as List).cast<Map<String, dynamic>>();
-          return ListView.separated(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
-            itemCount: list.length,
-            separatorBuilder: (_, __) => const SizedBox(height: 12),
-            itemBuilder: (c, i) => _MonoCard(data: list[i]),
-          );
-        },
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => ScaffoldMessenger.of(context)
-            .showSnackBar(const SnackBar(content: Text('Add MONO (UI-only)'))),
-        child: const Icon(Icons.add),
-      ),
+    return FutureBuilder<List<Story>>(
+      future: repo.getStories(),
+      builder: (context, snap) {
+        final list = snap.data ?? const <Story>[];
+        return ListView.builder(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
+          itemCount: list.length.clamp(0, 30),
+          itemBuilder: (_, i) => _monoCard(context, list[i]),
+        );
+      },
     );
   }
-}
 
-class _MonoCard extends StatelessWidget {
-  final Map<String, dynamic> data;
-  const _MonoCard({required this.data});
-
-  @override
-  Widget build(BuildContext context) {
-    final level = data['level'] ?? 'N?';
-    final title = data['title'] ?? 'Untitled';
-    final desc  = data['description'] ?? 'Description overall…';
-    final eps   = data['episodes'] ?? 0;
-
+  Widget _monoCard(BuildContext ctx, Story s) {
     return Card(
-      clipBehavior: Clip.antiAlias,
+      margin: const EdgeInsets.only(bottom: 16),
       child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          // thumbnail circle
-          Container(
-            width: 84, height: 84,
-            decoration: const BoxDecoration(shape: BoxShape.circle, color: Color(0xFFE0E0E0)),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Row(children: [
-                Expanded(child: Text(title,
-                    maxLines: 1, overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700))),
-                _LevelBadge(level: level),
-              ]),
-              const SizedBox(height: 6),
-              Text(desc, maxLines: 2, overflow: TextOverflow.ellipsis),
-              const SizedBox(height: 12),
-              Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                Text('Episode - ${eps.toString().padLeft(2, '0')}',
-                    style: Theme.of(context).textTheme.labelLarge),
-                IconButton(
-                  onPressed: () => ScaffoldMessenger.of(context)
-                      .showSnackBar(const SnackBar(content: Text('Edit Mono (UI-only)'))),
-                  icon: const Icon(Icons.edit_note_rounded),
-                )
-              ])
-            ]),
-          ),
-        ]),
+        padding: const EdgeInsets.all(12),
+        child: Row(
+          children: [
+            CircleAvatar(radius: 44, backgroundImage: NetworkImage(s.coverUrl ?? '')),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(s.title, style: Theme.of(ctx).textTheme.titleLarge),
+                  const SizedBox(height: 8),
+                  Text('Description overall……', maxLines: 1),
+                  const SizedBox(height: 8),
+                  Text('Episode – 0${(s.likes % 9) + 1}'),
+                ],
+              ),
+            ),
+            Column(
+              children: [
+                Chip(label: Text(s.jlptLevel)),
+                const SizedBox(height: 8),
+                const Icon(Icons.edit_note, size: 28),
+              ],
+            )
+          ],
+        ),
       ),
-    );
-  }
-}
-
-class _LevelBadge extends StatelessWidget {
-  final String level;
-  const _LevelBadge({required this.level});
-  @override
-  Widget build(BuildContext context) {
-    final color = switch (level) { 'N5' => Colors.lightGreen, 'N4' => Colors.cyan, 'N3' => Colors.deepOrange, _ => Colors.grey };
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(8)),
-      child: Text(level, style: const TextStyle(color: Colors.black, fontWeight: FontWeight.w700)),
     );
   }
 }

@@ -1,127 +1,108 @@
 import 'package:flutter/material.dart';
-import '../../data/story_repo_mock.dart';
-import '../writer/writer_screen.dart';
-import '../learn/learn_hub_screen.dart';
-import '../reader/reader_screen.dart';
+import 'package:go_router/go_router.dart';
+import 'package:nimon/data/story_repo.dart';
+import 'package:nimon/models/story.dart';
 
 class StoryDetailScreen extends StatefulWidget {
+  final StoryRepo repo;
   final String storyId;
-  const StoryDetailScreen({super.key, required this.storyId});
+  const StoryDetailScreen({super.key, required this.repo, required this.storyId});
+
   @override
   State<StoryDetailScreen> createState() => _StoryDetailScreenState();
 }
 
 class _StoryDetailScreenState extends State<StoryDetailScreen> {
-  final _repo = StoryRepoMock();
-  late Future<dynamic> _fStory;
-  late Future<List<dynamic>> _fEpisodes;
+  late Future<Story?> _storyF;
+  late Future<List<Episode>> _epsF;
 
   @override
   void initState() {
     super.initState();
-    _fStory = _repo.getStoryById(widget.storyId);
-    _fEpisodes = _repo.getEpisodesByStory(widget.storyId);
-  }
-
-  String _desc(dynamic s){
-    return (s['description'] ?? s['desc'] ?? s['summary'] ?? '') as String;
+    _storyF = widget.repo.getStoryById(widget.storyId);
+    _epsF = widget.repo.getEpisodesByStory(widget.storyId);
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Story'),
-        actions: [
-          IconButton(icon: const Icon(Icons.save_alt_rounded), onPressed: (){
-            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Saved locally (UI-only)')));
-          }),
-          IconButton(icon: const Icon(Icons.cloud_upload_rounded), onPressed: (){
-            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Upload → AI check (UI-only)')));
-          }),
-          IconButton(icon: const Icon(Icons.school_outlined), onPressed: (){
-            Navigator.of(context).push(MaterialPageRoute(builder: (_) => const LearnHubScreen()));
-          }),
-        ],
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        icon: const Icon(Icons.edit_note_rounded),
-        onPressed: (){
-          Navigator.of(context).push(MaterialPageRoute(builder: (_) => WriterScreen(storyId: widget.storyId)));
-        },
-        label: const Text('Edit+'),
-      ),
-      body: FutureBuilder(
-        future: Future.wait([_fStory, _fEpisodes]),
-        builder: (c, snap) {
-          if (!snap.hasData) return const Center(child: CircularProgressIndicator());
-          final s = snap.data![0] as Map<String,dynamic>?;
-          final eps = snap.data![1] as List<dynamic>;
-          if (s==null) return const Center(child: Text('Not found'));
-
+      appBar: AppBar(title: const Text('Story')),
+      body: FutureBuilder<Story?>(
+        future: _storyF,
+        builder: (context, snap) {
+          final story = snap.data;
+          if (story == null) {
+            return const Center(child: CircularProgressIndicator());
+          }
           return ListView(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
             children: [
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Container(width: 120, height: 160,
-                          decoration: BoxDecoration(
-                            color: Colors.grey.shade200,
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: const Icon(Icons.image, size: 48)),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                          Text(s['title'] ?? 'Untitled', style: Theme.of(context).textTheme.titleLarge),
-                          const SizedBox(height: 8),
-                          Wrap(spacing: 8, children: [
-                            Chip(label: Text('Level ${s['level'] ?? 'N/A'}')),
-                            Chip(label: Text('${eps.length} eps')),
-                            ...(s['tags'] as List<dynamic>? ?? []).take(3).map((t)=>Chip(label: Text(t.toString()))),
-                          ]),
-                          const SizedBox(height: 8),
-                          Text(_desc(s).isEmpty ? '—' : _desc(s)),
-                        ]),
-                      )
-                    ],
-                  ),
-                ),
-              ),
+              _hero(story),
               const SizedBox(height: 12),
-              ...List.generate(eps.length, (i){
-                final e = eps[i] as Map<String,dynamic>;
-                final idx = e['index'] ?? i+1;
-                final preview = e['preview'] ?? e['text'] ?? '';
-                return Card(
-                  child: ListTile(
-                    title: Text('Episode $idx'),
-                    subtitle: Text(preview, maxLines: 2, overflow: TextOverflow.ellipsis),
-                    trailing: const Icon(Icons.chevron_right),
-                    onTap: () {
-                      Navigator.of(context).push(MaterialPageRoute(
-                        builder: (_) => ReaderScreen(
-                          title: s['title'] ?? 'Episode',
-                          blocks: [
-                            {'type':'narr','text':'Rain was falling softly…'},
-                            {'type':'dialogMe','speaker':'YAMADA','text':'Ah… I forgot my umbrella.'},
-                            {'type':'dialogYou','speaker':'AYANA','text':'Do you want to share mine?'},
-                            {'type':'narr','text':'Aya tilted her umbrella…'},
-                          ],
-                        ),
-                      ));
-                    },
-                  ),
-                );
-              }),
+              Text(story.description),
+              const SizedBox(height: 16),
+              _actions(context, story),
+              const SizedBox(height: 12),
+              Text('Episodes', style: Theme.of(context).textTheme.titleMedium),
+              const SizedBox(height: 8),
+              FutureBuilder<List<Episode>>(
+                future: _epsF,
+                builder: (context, s2) {
+                  final eps = s2.data ?? const <Episode>[];
+                  return Column(
+                    children: eps
+                        .map((e) => Card(
+                      child: ListTile(
+                        title: Text('Episode ${e.index}'),
+                        subtitle: Text(e.preview),
+                        onTap: () => context.push('/story/${story.id}/write'),
+                      ),
+                    ))
+                        .toList(),
+                  );
+                },
+              ),
             ],
           );
         },
       ),
     );
   }
+
+  Widget _hero(Story s) => AspectRatio(
+    aspectRatio: 16 / 9,
+    child: Card(
+      clipBehavior: Clip.antiAlias,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          Image.network(s.coverUrl ?? '', fit: BoxFit.cover),
+          Container(color: Colors.black26),
+          Align(
+            alignment: Alignment.bottomLeft,
+            child: Padding(
+              padding: const EdgeInsets.all(12.0),
+              child: Text(s.title,
+                  style: const TextStyle(
+                      fontSize: 22, color: Colors.white, fontWeight: FontWeight.bold)),
+            ),
+          )
+        ],
+      ),
+    ),
+  );
+
+  Widget _actions(BuildContext ctx, Story s) => Wrap(
+    spacing: 12,
+    children: [
+      FilledButton.icon(onPressed: () {}, icon: const Icon(Icons.bookmark), label: const Text('Save')),
+      OutlinedButton.icon(onPressed: () {}, icon: const Icon(Icons.upload), label: const Text('Upload')),
+      OutlinedButton.icon(onPressed: () {}, icon: const Icon(Icons.school), label: const Text('Learn')),
+      FilledButton.tonalIcon(
+        onPressed: () => ctx.push('/story/${s.id}/write'),
+        icon: const Icon(Icons.edit),
+        label: const Text('Write Next'),
+      ),
+    ],
+  );
 }

@@ -1,21 +1,17 @@
 name: nimon
-description: NIMON - Phase 1 (Home/Reader skeleton)
-publish_to: "none"
-
+description: NIMON demo
 environment:
   sdk: ">=3.3.0 <4.0.0"
 
 dependencies:
   flutter:
     sdk: flutter
+  go_router: ^14.2.7
   google_fonts: ^6.2.1
-
-dev_dependencies:
-  flutter_test:
-    sdk: flutter
-  flutter_lints: ^4.0.0
+  uuid: ^4.4.2
+  collection: ^1.18.0
 
 flutter:
   uses-material-design: true
   assets:
-    - assets/images/
+    - assets/
