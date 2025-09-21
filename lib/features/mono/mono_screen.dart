@@ -1,63 +1,96 @@
 import 'package:flutter/material.dart';
-import '../widgets/red_square.dart';
+import '../../data/story_repo_mock.dart';
 
 class MonoScreen extends StatelessWidget {
   const MonoScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
+    final repo = StoryRepoMock();
     return Scaffold(
       appBar: AppBar(title: const Text('Mono')),
-      floatingActionButton: FloatingActionButton.extended(
-        icon: const Icon(Icons.add),
-        label: const Text('New Mono'),
-        onPressed: () {
-          showModalBottomSheet(
-            context: context, isScrollControlled: true,
-            builder: (_) => const _StartMonoSheet(),
+      body: FutureBuilder(
+        future: repo.getStories(),
+        builder: (c, s) {
+          if (!s.hasData) return const Center(child: CircularProgressIndicator());
+          final list = (s.data as List).cast<Map<String, dynamic>>();
+          return ListView.separated(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
+            itemCount: list.length,
+            separatorBuilder: (_, __) => const SizedBox(height: 12),
+            itemBuilder: (c, i) => _MonoCard(data: list[i]),
           );
         },
       ),
-      body: const Center(child: Text('Your mono list (UI-only)')),
+      floatingActionButton: FloatingActionButton(
+        onPressed: () => ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('Add MONO (UI-only)'))),
+        child: const Icon(Icons.add),
+      ),
     );
   }
 }
 
-class _StartMonoSheet extends StatefulWidget {
-  const _StartMonoSheet();
-  @override
-  State<_StartMonoSheet> createState() => _StartMonoSheetState();
-}
+class _MonoCard extends StatelessWidget {
+  final Map<String, dynamic> data;
+  const _MonoCard({required this.data});
 
-class _StartMonoSheetState extends State<_StartMonoSheet> {
-  int step = 0;
   @override
   Widget build(BuildContext context) {
-    return SafeArea(
+    final level = data['level'] ?? 'N?';
+    final title = data['title'] ?? 'Untitled';
+    final desc  = data['description'] ?? 'Description overall…';
+    final eps   = data['episodes'] ?? 0;
+
+    return Card(
+      clipBehavior: Clip.antiAlias,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(16,16,16,24),
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-            const Text('Start Mono', style: TextStyle(fontSize: 18,fontWeight: FontWeight.w600)),
-            IconButton(icon: const Icon(Icons.close), onPressed: ()=>Navigator.pop(context)),
-          ]),
-          const SizedBox(height: 8),
-          Stepper(
-            currentStep: step,
-            onStepContinue: () => setState(()=> step = (step+1).clamp(0,2)),
-            onStepCancel: () => setState(()=> step = (step-1).clamp(0,2)),
-            steps: const [
-              Step(title: Text('Select Type'), content: Text('current/new or QR code (UI-only)')),
-              Step(title: Text('Confirm Level'), content: Text('N5/N4/N3 (UI-only)')),
-              Step(title: Text('Ready'), content: Text('AI check → upload ready (UI-only)')),
-            ],
+        padding: const EdgeInsets.all(16),
+        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          // thumbnail circle
+          Container(
+            width: 84, height: 84,
+            decoration: const BoxDecoration(shape: BoxShape.circle, color: Color(0xFFE0E0E0)),
           ),
-          const SizedBox(height: 12),
-          const Text('Tap the red square to go next screen (arrow slide):'),
-          const SizedBox(height: 8),
-          const RedSquare(),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Row(children: [
+                Expanded(child: Text(title,
+                    maxLines: 1, overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700))),
+                _LevelBadge(level: level),
+              ]),
+              const SizedBox(height: 6),
+              Text(desc, maxLines: 2, overflow: TextOverflow.ellipsis),
+              const SizedBox(height: 12),
+              Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                Text('Episode - ${eps.toString().padLeft(2, '0')}',
+                    style: Theme.of(context).textTheme.labelLarge),
+                IconButton(
+                  onPressed: () => ScaffoldMessenger.of(context)
+                      .showSnackBar(const SnackBar(content: Text('Edit Mono (UI-only)'))),
+                  icon: const Icon(Icons.edit_note_rounded),
+                )
+              ])
+            ]),
+          ),
         ]),
       ),
+    );
+  }
+}
+
+class _LevelBadge extends StatelessWidget {
+  final String level;
+  const _LevelBadge({required this.level});
+  @override
+  Widget build(BuildContext context) {
+    final color = switch (level) { 'N5' => Colors.lightGreen, 'N4' => Colors.cyan, 'N3' => Colors.deepOrange, _ => Colors.grey };
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(8)),
+      child: Text(level, style: const TextStyle(color: Colors.black, fontWeight: FontWeight.w700)),
     );
   }
 }

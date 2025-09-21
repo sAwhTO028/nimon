@@ -23,64 +23,104 @@ class _WriterScreenState extends State<WriterScreen> {
   Widget build(BuildContext context) {
     final isDialog = _type != BlockType.narration;
     return Scaffold(
-      appBar: AppBar(title: const Text('Write Episode')),
-      body: Column(
-        children: [
-          Expanded(
-            child: ReorderableListView(
-              padding: const EdgeInsets.all(16),
-              onReorder: (o, n) { setState(() { if (n>o) n-=1; final it=_blocks.removeAt(o); _blocks.insert(n, it); }); },
-              children: [
-                for (final b in _blocks)
-                  _Bubble(key: ValueKey(b.id), block: b,
-                      onEdit: ()=>_edit(b),
-                      onDelete: ()=>setState(() => _blocks.removeWhere((x)=>x.id==b.id))),
-              ],
-            ),
+      appBar: AppBar(
+        title: const Text('Write Episode'),
+        actions: [
+          IconButton(
+            tooltip: 'AI Check',
+            icon: const Icon(Icons.rule_folder_outlined),
+            onPressed: () => _snack(context, 'AI checking… (UI-only)'),
           ),
-          SafeArea(
-            top:false,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(12,8,12,12),
-              child: Column(children: [
-                Row(children: [
-                  SegmentedButton<BlockType>(
-                    segments: const [
-                      ButtonSegment(value: BlockType.narration, label: Text('Narr')),
-                      ButtonSegment(value: BlockType.dialogMe, label: Text('Say Me')),
-                      ButtonSegment(value: BlockType.dialogYou, label: Text('Say You')),
-                      ButtonSegment(value: BlockType.mind, label: Text('Mind')),
-                    ],
-                    selected: {_type},
-                    onSelectionChanged: (s)=>setState(()=>_type=s.first),
-                  ),
-                  const SizedBox(width:8),
-                  if (isDialog) SizedBox(
-                    width: 120,
-                    child: TextField(
-                      controller: _speaker,
-                      decoration: const InputDecoration(labelText: 'Speaker', isDense: true, border: OutlineInputBorder()),
-                    ),
-                  )
-                ]),
-                const SizedBox(height:8),
-                Row(children: [
-                  Expanded(child: TextField(
-                    controller: _controller, minLines:1, maxLines:4,
-                    decoration: const InputDecoration(hintText: 'Say anything…', border: OutlineInputBorder()),
-                  )),
-                  const SizedBox(width:8),
-                  IconButton.filled(
-                    onPressed: _add,
-                    icon: const Icon(Icons.send_rounded),
-                  )
-                ])
-              ]),
-            ),
-          )
+          IconButton(
+            tooltip: 'Save Draft',
+            icon: const Icon(Icons.save_outlined),
+            onPressed: () => _snack(context, 'Saved to device (UI-only)'),
+          ),
+          IconButton(
+            tooltip: 'Reader Preview',
+            icon: const Icon(Icons.remove_red_eye_outlined),
+            onPressed: () => _snack(context, 'Open preview (UI-only)'),
+          ),
+          IconButton(
+            tooltip: 'Upload',
+            icon: const Icon(Icons.cloud_upload_outlined),
+            onPressed: () => _snack(context, 'Uploaded (UI-only)'),
+          ),
         ],
       ),
+      body: Column(children: [
+        Expanded(
+          child: ReorderableListView.builder(
+            padding: const EdgeInsets.all(16),
+            itemCount: _blocks.length,
+            onReorder: (o,n){ setState(()=> _reorder(o,n)); },
+            itemBuilder: (c,i){
+              final b = _blocks[i];
+              return Dismissible(
+                key: ValueKey(b.id),
+                background: Container(color: Colors.red.withOpacity(.2)),
+                onDismissed: (_) => setState(()=>_blocks.removeAt(i)),
+                child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  ReorderableDragStartListener(
+                    index: i,
+                    child: const Padding(
+                      padding: EdgeInsets.only(right: 8, top: 12),
+                      child: Icon(Icons.drag_indicator),
+                    ),
+                  ),
+                  Expanded(child: _Bubble(
+                    block: b,
+                    onEdit: ()=>_edit(b),
+                    onDelete: ()=>setState(()=>_blocks.removeWhere((x)=>x.id==b.id)),
+                  )),
+                ]),
+              );
+            },
+          ),
+        ),
+        SafeArea(
+          top:false,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(12,8,12,12),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              SegmentedButton<BlockType>(
+                segments: const [
+                  ButtonSegment(value: BlockType.narration, label: Text('Narr')),
+                  ButtonSegment(value: BlockType.dialogMe, label: Text('Say Me')),
+                  ButtonSegment(value: BlockType.dialogYou, label: Text('Say You')),
+                  ButtonSegment(value: BlockType.mind, label: Text('Mind')),
+                ],
+                selected: {_type},
+                onSelectionChanged: (s)=>setState(()=>_type = s.first),
+              ),
+              const SizedBox(height: 8),
+              if (isDialog)
+                TextField(
+                  controller: _speaker,
+                  decoration: const InputDecoration(
+                      labelText: 'Speaker', border: OutlineInputBorder(), isDense: true),
+                ),
+              if (isDialog) const SizedBox(height: 8),
+              Row(children: [
+                Expanded(child: TextField(
+                  controller: _controller, minLines:1, maxLines:4,
+                  decoration: const InputDecoration(
+                      hintText: 'Say anything…', border: OutlineInputBorder()),
+                )),
+                const SizedBox(width: 8),
+                IconButton.filled(onPressed: _add, icon: const Icon(Icons.send_rounded))
+              ])
+            ]),
+          ),
+        ),
+      ]),
     );
+  }
+
+  void _reorder(int oldIndex, int newIndex){
+    if (newIndex > oldIndex) newIndex -= 1;
+    final it = _blocks.removeAt(oldIndex);
+    _blocks.insert(newIndex, it);
   }
 
   void _add(){
@@ -99,6 +139,11 @@ class _WriterScreenState extends State<WriterScreen> {
     setState(() { _type = b.type; _blocks.removeWhere((x)=>x.id==b.id); });
   }
 }
+
+void _snack(BuildContext ctx, String m) {
+  ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content: Text(m)));
+}
+
 
 class _Block {
   final String id;

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../data/story_repo_mock.dart';
 import '../writer/writer_screen.dart';
 import '../learn/learn_hub_screen.dart';
+import '../reader/reader_screen.dart';
 
 class StoryDetailScreen extends StatefulWidget {
   final String storyId;
@@ -101,7 +102,19 @@ class _StoryDetailScreenState extends State<StoryDetailScreen> {
                     title: Text('Episode $idx'),
                     subtitle: Text(preview, maxLines: 2, overflow: TextOverflow.ellipsis),
                     trailing: const Icon(Icons.chevron_right),
-                    onTap: (){},
+                    onTap: () {
+                      Navigator.of(context).push(MaterialPageRoute(
+                        builder: (_) => ReaderScreen(
+                          title: s['title'] ?? 'Episode',
+                          blocks: [
+                            {'type':'narr','text':'Rain was falling softly…'},
+                            {'type':'dialogMe','speaker':'YAMADA','text':'Ah… I forgot my umbrella.'},
+                            {'type':'dialogYou','speaker':'AYANA','text':'Do you want to share mine?'},
+                            {'type':'narr','text':'Aya tilted her umbrella…'},
+                          ],
+                        ),
+                      ));
+                    },
                   ),
                 );
               }),
