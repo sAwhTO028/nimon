@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:nimon/data/story_repo.dart';
 import 'package:nimon/models/story.dart';
@@ -12,17 +11,24 @@ class WriterScreen extends StatefulWidget {
   State<WriterScreen> createState() => _WriterScreenState();
 }
 
+/// UI-only meta for each block (alignment/color)
+class _BlockMeta {
+  _BlockMeta(this.pos, this.colorCode);
+  String pos;        // 'left' | 'right' | 'mid'
+  String colorCode;  // 'blue' | 'pink' | 'green'
+}
+
 class _WriterScreenState extends State<WriterScreen> {
   final _textCtl = TextEditingController();
   final _speakerCtl = TextEditingController();
 
-  // Compose state
+  // compose state
   BlockType _type = BlockType.narration;
-  String _speaker = '';
-  String _pos = 'left'; // left/right/mid
-  String _bubbleColor = 'blue'; // blue/pink/green
+  String _pos = 'left';
+  String _bubbleColor = 'blue';
 
   final List<EpisodeBlock> _blocks = [];
+  final List<_BlockMeta> _metas = []; // same length with _blocks
 
   @override
   void dispose() {
@@ -43,12 +49,9 @@ class _WriterScreenState extends State<WriterScreen> {
       ),
       actions: [
         IconButton(
-          tooltip: 'Save (local demo)',
+          tooltip: 'Save (demo)',
           icon: const Icon(Icons.check_circle_outline),
-          onPressed: () {
-            // you can hook repo.addEpisode() here if your Episode model is ready
-            _snack('Saved (demo)');
-          },
+          onPressed: () => _snack('Saved (demo)'),
         ),
         IconButton(
           tooltip: 'AI check (demo)',
@@ -56,7 +59,7 @@ class _WriterScreenState extends State<WriterScreen> {
           onPressed: () => _snack('Queued for AI check (demo)'),
         ),
         IconButton(
-          tooltip: 'Reader preview',
+          tooltip: 'Reader preview (demo)',
           icon: const Icon(Icons.remove_red_eye_outlined),
           onPressed: () => _snack('Preview not implemented (demo)'),
         ),
@@ -76,7 +79,7 @@ class _WriterScreenState extends State<WriterScreen> {
       body: SafeArea(
         child: Column(
           children: [
-            // ======== Blocks ========
+            // ===== Blocks list =====
             Expanded(
               child: _blocks.isEmpty
                   ? const Center(
@@ -92,8 +95,10 @@ class _WriterScreenState extends State<WriterScreen> {
                 onReorder: (oldIndex, newIndex) {
                   setState(() {
                     if (newIndex > oldIndex) newIndex -= 1;
-                    final moved = _blocks.removeAt(oldIndex);
-                    _blocks.insert(newIndex, moved);
+                    final movedBlock = _blocks.removeAt(oldIndex);
+                    final movedMeta = _metas.removeAt(oldIndex);
+                    _blocks.insert(newIndex, movedBlock);
+                    _metas.insert(newIndex, movedMeta);
                   });
                 },
               ),
@@ -101,7 +106,7 @@ class _WriterScreenState extends State<WriterScreen> {
 
             const Divider(height: 1),
 
-            // ======== Type toggle ========
+            // ===== Type toggle =====
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
               child: Align(
@@ -109,22 +114,18 @@ class _WriterScreenState extends State<WriterScreen> {
                 child: ToggleButtons(
                   isSelected: [
                     _type == BlockType.narration,
-                    _type == BlockType.dialog
+                    _type == BlockType.dialog,
                   ],
-                  onPressed: (i) {
-                    setState(() {
-                      _type = i == 0 ? BlockType.narration : BlockType.dialog;
-                    });
-                  },
-                  constraints:
-                  const BoxConstraints(minHeight: 40, minWidth: 120),
+                  onPressed: (i) =>
+                      setState(() => _type = i == 0 ? BlockType.narration : BlockType.dialog),
+                  constraints: const BoxConstraints(minHeight: 40, minWidth: 120),
                   borderRadius: BorderRadius.circular(14),
                   children: const [Text('Narration'), Text('Dialog')],
                 ),
               ),
             ),
 
-            // ======== Dialog options ========
+            // ===== Dialog options =====
             if (_type == BlockType.dialog) ...[
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -134,7 +135,6 @@ class _WriterScreenState extends State<WriterScreen> {
                     labelText: 'Speaker',
                     hintText: 'e.g. AYANA / YAMADA',
                   ),
-                  onChanged: (v) => _speaker = v,
                 ),
               ),
               const SizedBox(height: 8),
@@ -178,21 +178,19 @@ class _WriterScreenState extends State<WriterScreen> {
               const SizedBox(height: 10),
             ],
 
-            // ======== Composer ========
+            // ===== Composer =====
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: TextField(
                 controller: _textCtl,
                 maxLines: 5,
                 minLines: 3,
-                decoration: const InputDecoration(
-                  hintText: 'Say anything...',
-                ),
+                decoration: const InputDecoration(hintText: 'Say anything...'),
               ),
             ),
             const SizedBox(height: 8),
 
-            // ======== Clear / Add ========
+            // ===== Clear (left) — Add (right) =====
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
               child: Row(
@@ -201,9 +199,6 @@ class _WriterScreenState extends State<WriterScreen> {
                     onPressed: () {
                       _textCtl.clear();
                       _speakerCtl.clear();
-                      setState(() {
-                        _speaker = '';
-                      });
                     },
                     child: const Text('Clear'),
                   ),
@@ -223,7 +218,6 @@ class _WriterScreenState extends State<WriterScreen> {
   }
 
   // ===== Helpers =====
-
   Widget _colorDot(Color c, String code) {
     final selected = _bubbleColor == code;
     return InkWell(
@@ -234,10 +228,7 @@ class _WriterScreenState extends State<WriterScreen> {
         decoration: BoxDecoration(
           color: c,
           shape: BoxShape.circle,
-          border: Border.all(
-            color: Colors.black54,
-            width: selected ? 3 : 1,
-          ),
+          border: Border.all(color: Colors.black54, width: selected ? 3 : 1),
         ),
       ),
     );
@@ -250,57 +241,40 @@ class _WriterScreenState extends State<WriterScreen> {
       return;
     }
 
-    // pack dialog meta (position/color) into footer JSON (optional)
-    String? footer;
-    if (_type == BlockType.dialog) {
-      footer = jsonEncode({'pos': _pos, 'color': _bubbleColor});
-    }
-
     final block = EpisodeBlock(
       type: _type,
       text: text,
-      speaker:
-      _type == BlockType.dialog && _speakerCtl.text.trim().isNotEmpty
+      speaker: _type == BlockType.dialog && _speakerCtl.text.trim().isNotEmpty
           ? _speakerCtl.text.trim()
           : null,
-      footer: footer, // remove if your model doesn’t have footer
     );
 
     setState(() {
       _blocks.add(block);
+      _metas.add(_BlockMeta(_pos, _bubbleColor)); // keep meta in parallel
       _textCtl.clear();
       _speakerCtl.clear();
-      _speaker = '';
     });
   }
 
   Widget _blockTile(BuildContext ctx, EpisodeBlock b, int i, {Key? key}) {
     final isNarr = b.type == BlockType.narration;
 
-    // derive alignment & color from footer meta if present
-    String pos = 'left';
-    String col = 'blue';
-    if ((b.footer ?? '').isNotEmpty) {
-      try {
-        final m = jsonDecode(b.footer!);
-        pos = (m['pos'] as String?) ?? 'left';
-        col = (m['color'] as String?) ?? 'blue';
-      } catch (_) {}
-    }
+    // meta for alignment / color
+    _BlockMeta meta = (i < _metas.length) ? _metas[i] : _BlockMeta('left', 'blue');
+    final alignEnd = meta.pos == 'right';
+    final center = meta.pos == 'mid';
 
-    final color = switch (col) {
+    final color = switch (meta.colorCode) {
       'pink' => Colors.pink.shade100,
       'green' => Colors.green.shade100,
       _ => Colors.blue.shade100,
     };
 
-    final alignEnd = pos == 'right';
-    final center = pos == 'mid';
-
     final bubble = Container(
       constraints: BoxConstraints(
-          maxWidth:
-          MediaQuery.sizeOf(ctx).width * (isNarr ? 0.95 : 0.85)),
+        maxWidth: MediaQuery.sizeOf(ctx).width * (isNarr ? 0.95 : 0.85),
+      ),
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -321,7 +295,7 @@ class _WriterScreenState extends State<WriterScreen> {
     );
 
     return Container(
-      key: key, // REQUIRED for ReorderableListView
+      key: key, // required for ReorderableListView
       child: GestureDetector(
         onLongPress: () => _showEditSheet(ctx, b, i),
         child: Row(
@@ -354,17 +328,16 @@ class _WriterScreenState extends State<WriterScreen> {
                     content: TextField(controller: c, maxLines: 6),
                     actions: [
                       TextButton(
-                          onPressed: () => Navigator.pop(ctx),
-                          child: const Text('Cancel')),
+                        onPressed: () => Navigator.pop(ctx),
+                        child: const Text('Cancel'),
+                      ),
                       FilledButton(
                         onPressed: () {
                           setState(() {
-                            // replace with new instance (no id field)
                             _blocks[index] = EpisodeBlock(
                               type: b.type,
                               text: c.text,
                               speaker: b.speaker,
-                              footer: b.footer,
                             );
                           });
                           Navigator.pop(ctx);
@@ -381,7 +354,12 @@ class _WriterScreenState extends State<WriterScreen> {
               title: const Text('Delete'),
               onTap: () {
                 Navigator.pop(ctx);
-                setState(() => _blocks.removeAt(index));
+                setState(() {
+                  _blocks.removeAt(index);
+                  if (index < _metas.length) {
+                    _metas.removeAt(index);
+                  }
+                });
               },
             ),
           ],
