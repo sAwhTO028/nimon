@@ -1,173 +1,389 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
+import 'package:nimon/data/story_repo.dart';
 import 'package:nimon/models/story.dart';
-import 'package:uuid/uuid.dart';
-import 'package:nimon/data/repo_singleton.dart';
-
-final _uuid = const Uuid();
 
 class WriterScreen extends StatefulWidget {
+  const WriterScreen({super.key, required this.repo, required this.storyId});
+  final StoryRepo repo;
   final String storyId;
-  const WriterScreen({super.key, required this.storyId});
 
   @override
   State<WriterScreen> createState() => _WriterScreenState();
 }
 
 class _WriterScreenState extends State<WriterScreen> {
-  final _blocks = <EpisodeBlock>[
-    const EpisodeBlock(type: BlockType.narration, text: 'Intro narration…'),
-  ];
+  final _textCtl = TextEditingController();
+  final _speakerCtl = TextEditingController();
+
+  // Compose state
   BlockType _type = BlockType.narration;
-  final _speaker = TextEditingController();
-  final _text = TextEditingController();
+  String _speaker = '';
+  String _pos = 'left'; // left/right/mid
+  String _bubbleColor = 'blue'; // blue/pink/green
 
-  void _snack(BuildContext context, String m) =>
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(m)));
-
-  void _addBlock() {
-    if (_text.text.trim().isEmpty) return;
-    setState(() {
-      _blocks.add(EpisodeBlock(
-        type: _type,
-        text: _text.text.trim(),
-        speaker: _type == BlockType.dialog ? _speaker.text.trim() : null,
-      ));
-      _text.clear();
-    });
-  }
+  final List<EpisodeBlock> _blocks = [];
 
   @override
   void dispose() {
-    _speaker.dispose();
-    _text.dispose();
+    _textCtl.dispose();
+    _speakerCtl.dispose();
     super.dispose();
+  }
+
+  void _snack(String m) =>
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(m)));
+
+  PreferredSizeWidget _writerAppBar() {
+    return AppBar(
+      title: const Text('Write Episode'),
+      leading: IconButton(
+        icon: const Icon(Icons.arrow_back),
+        onPressed: () => Navigator.pop(context),
+      ),
+      actions: [
+        IconButton(
+          tooltip: 'Save (local demo)',
+          icon: const Icon(Icons.check_circle_outline),
+          onPressed: () {
+            // you can hook repo.addEpisode() here if your Episode model is ready
+            _snack('Saved (demo)');
+          },
+        ),
+        IconButton(
+          tooltip: 'AI check (demo)',
+          icon: const Icon(Icons.psychology_alt_outlined),
+          onPressed: () => _snack('Queued for AI check (demo)'),
+        ),
+        IconButton(
+          tooltip: 'Reader preview',
+          icon: const Icon(Icons.remove_red_eye_outlined),
+          onPressed: () => _snack('Preview not implemented (demo)'),
+        ),
+        IconButton(
+          tooltip: 'Upload (demo)',
+          icon: const Icon(Icons.cloud_upload_outlined),
+          onPressed: () => _snack('Upload queued (demo)'),
+        ),
+      ],
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Write Episode'),
-        actions: [
-          IconButton(onPressed: () => _snack(context, 'AI Check (demo)'), icon: const Icon(Icons.check_circle)),
-          IconButton(onPressed: () => _snack(context, 'Saved (demo)'), icon: const Icon(Icons.save)),
-          IconButton(onPressed: () => _snack(context, 'Preview (demo)'), icon: const Icon(Icons.visibility)),
-          IconButton(onPressed: () => _snack(context, 'Upload (demo)'), icon: const Icon(Icons.cloud_upload)),
-        ],
-      ),
-      body: Column(
-        children: [
-          Expanded(
-            child: ReorderableListView.builder(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 160),
-              itemCount: _blocks.length,
-              onReorder: (a, b) {
-                setState(() {
-                  if (b > a) b -= 1;
-                  final item = _blocks.removeAt(a);
-                  _blocks.insert(b, item);
-                });
-              },
-              itemBuilder: (ctx, i) => _blockTile(ctx, _blocks[i], i),
+      appBar: _writerAppBar(),
+      body: SafeArea(
+        child: Column(
+          children: [
+            // ======== Blocks ========
+            Expanded(
+              child: _blocks.isEmpty
+                  ? const Center(
+                child: Text('No content yet. Write something below.'),
+              )
+                  : ReorderableListView.builder(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+                itemCount: _blocks.length,
+                itemBuilder: (ctx, i) {
+                  final b = _blocks[i];
+                  return _blockTile(ctx, b, i, key: ValueKey('block_$i'));
+                },
+                onReorder: (oldIndex, newIndex) {
+                  setState(() {
+                    if (newIndex > oldIndex) newIndex -= 1;
+                    final moved = _blocks.removeAt(oldIndex);
+                    _blocks.insert(newIndex, moved);
+                  });
+                },
+              ),
             ),
-          ),
-          _composer(context),
-        ],
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () async {
-          if (_blocks.isEmpty) return;
-          final ep = Episode(
-            id: _uuid.v4(),
-            storyId: widget.storyId,
-            index: 0, // repo will set next
-            blocks: List.of(_blocks),
-          );
-          await repo.addEpisode(episode: ep);
-          if (context.mounted) {
-            _snack(context, 'Published (demo).');
-            context.pop();
-          }
-        },
-        label: const Text('Publish'),
-        icon: const Icon(Icons.upload),
+
+            const Divider(height: 1),
+
+            // ======== Type toggle ========
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: ToggleButtons(
+                  isSelected: [
+                    _type == BlockType.narration,
+                    _type == BlockType.dialog
+                  ],
+                  onPressed: (i) {
+                    setState(() {
+                      _type = i == 0 ? BlockType.narration : BlockType.dialog;
+                    });
+                  },
+                  constraints:
+                  const BoxConstraints(minHeight: 40, minWidth: 120),
+                  borderRadius: BorderRadius.circular(14),
+                  children: const [Text('Narration'), Text('Dialog')],
+                ),
+              ),
+            ),
+
+            // ======== Dialog options ========
+            if (_type == BlockType.dialog) ...[
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: TextField(
+                  controller: _speakerCtl,
+                  decoration: const InputDecoration(
+                    labelText: 'Speaker',
+                    hintText: 'e.g. AYANA / YAMADA',
+                  ),
+                  onChanged: (v) => _speaker = v,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Wrap(
+                  spacing: 8,
+                  children: [
+                    ChoiceChip(
+                      label: const Text('Left'),
+                      selected: _pos == 'left',
+                      onSelected: (_) => setState(() => _pos = 'left'),
+                    ),
+                    ChoiceChip(
+                      label: const Text('Right'),
+                      selected: _pos == 'right',
+                      onSelected: (_) => setState(() => _pos = 'right'),
+                    ),
+                    ChoiceChip(
+                      label: const Text('Mid'),
+                      selected: _pos == 'mid',
+                      onSelected: (_) => setState(() => _pos = 'mid'),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 6),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Wrap(
+                  spacing: 10,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    const Text('Color:'),
+                    _colorDot(Colors.blue.shade100, 'blue'),
+                    _colorDot(Colors.pink.shade100, 'pink'),
+                    _colorDot(Colors.green.shade100, 'green'),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 10),
+            ],
+
+            // ======== Composer ========
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: TextField(
+                controller: _textCtl,
+                maxLines: 5,
+                minLines: 3,
+                decoration: const InputDecoration(
+                  hintText: 'Say anything...',
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+
+            // ======== Clear / Add ========
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+              child: Row(
+                children: [
+                  OutlinedButton(
+                    onPressed: () {
+                      _textCtl.clear();
+                      _speakerCtl.clear();
+                      setState(() {
+                        _speaker = '';
+                      });
+                    },
+                    child: const Text('Clear'),
+                  ),
+                  const Spacer(),
+                  FilledButton.icon(
+                    onPressed: _onAddPressed,
+                    icon: const Icon(Icons.add),
+                    label: const Text('Add'),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
 
-  Widget _blockTile(BuildContext ctx, EpisodeBlock b, int i) {
+  // ===== Helpers =====
+
+  Widget _colorDot(Color c, String code) {
+    final selected = _bubbleColor == code;
+    return InkWell(
+      onTap: () => setState(() => _bubbleColor = code),
+      child: Container(
+        width: 26,
+        height: 26,
+        decoration: BoxDecoration(
+          color: c,
+          shape: BoxShape.circle,
+          border: Border.all(
+            color: Colors.black54,
+            width: selected ? 3 : 1,
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _onAddPressed() {
+    final text = _textCtl.text.trim();
+    if (text.isEmpty) {
+      _snack('Type something first');
+      return;
+    }
+
+    // pack dialog meta (position/color) into footer JSON (optional)
+    String? footer;
+    if (_type == BlockType.dialog) {
+      footer = jsonEncode({'pos': _pos, 'color': _bubbleColor});
+    }
+
+    final block = EpisodeBlock(
+      type: _type,
+      text: text,
+      speaker:
+      _type == BlockType.dialog && _speakerCtl.text.trim().isNotEmpty
+          ? _speakerCtl.text.trim()
+          : null,
+      footer: footer, // remove if your model doesn’t have footer
+    );
+
+    setState(() {
+      _blocks.add(block);
+      _textCtl.clear();
+      _speakerCtl.clear();
+      _speaker = '';
+    });
+  }
+
+  Widget _blockTile(BuildContext ctx, EpisodeBlock b, int i, {Key? key}) {
     final isNarr = b.type == BlockType.narration;
-    return Container(
-      key: ValueKey('b$i'),
+
+    // derive alignment & color from footer meta if present
+    String pos = 'left';
+    String col = 'blue';
+    if ((b.footer ?? '').isNotEmpty) {
+      try {
+        final m = jsonDecode(b.footer!);
+        pos = (m['pos'] as String?) ?? 'left';
+        col = (m['color'] as String?) ?? 'blue';
+      } catch (_) {}
+    }
+
+    final color = switch (col) {
+      'pink' => Colors.pink.shade100,
+      'green' => Colors.green.shade100,
+      _ => Colors.blue.shade100,
+    };
+
+    final alignEnd = pos == 'right';
+    final center = pos == 'mid';
+
+    final bubble = Container(
+      constraints: BoxConstraints(
+          maxWidth:
+          MediaQuery.sizeOf(ctx).width * (isNarr ? 0.95 : 0.85)),
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: isNarr ? Colors.white : (i.isEven ? Colors.blue.shade50 : Colors.pink.shade50),
+        color: isNarr ? Colors.white : color,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: Colors.black12),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (!isNarr)
-            Text('${b.speaker ?? ''}:',
-                style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.black54)),
+          if (!isNarr && (b.speaker ?? '').isNotEmpty)
+            Text('${b.speaker}:',
+                style: const TextStyle(
+                    fontWeight: FontWeight.bold, color: Colors.black54)),
           Text(b.text),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.end,
-            children: [
-              IconButton(
-                  onPressed: () => setState(() => _blocks.removeAt(i)),
-                  icon: const Icon(Icons.delete_outline)),
-            ],
-          )
         ],
+      ),
+    );
+
+    return Container(
+      key: key, // REQUIRED for ReorderableListView
+      child: GestureDetector(
+        onLongPress: () => _showEditSheet(ctx, b, i),
+        child: Row(
+          mainAxisAlignment: center
+              ? MainAxisAlignment.center
+              : (alignEnd ? MainAxisAlignment.end : MainAxisAlignment.start),
+          children: [bubble],
+        ),
       ),
     );
   }
 
-  Widget _composer(BuildContext context) {
-    return SafeArea(
-      top: false,
-      child: Container(
-        padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
-        decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.surface,
-          boxShadow: const [BoxShadow(blurRadius: 8, color: Colors.black12)],
-        ),
+  void _showEditSheet(BuildContext ctx, EpisodeBlock b, int index) {
+    showModalBottomSheet(
+      context: ctx,
+      builder: (_) => SafeArea(
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
           children: [
-            SegmentedButton<BlockType>(
-              segments: const [
-                ButtonSegment(value: BlockType.narration, label: Text('Narration')),
-                ButtonSegment(value: BlockType.dialog, label: Text('Dialog')),
-              ],
-              selected: {_type},
-              onSelectionChanged: (s) => setState(() => _type = s.first),
+            ListTile(
+              leading: const Icon(Icons.edit),
+              title: const Text('Edit'),
+              onTap: () {
+                Navigator.pop(ctx);
+                final c = TextEditingController(text: b.text);
+                showDialog(
+                  context: ctx,
+                  builder: (_) => AlertDialog(
+                    title: const Text('Edit Block'),
+                    content: TextField(controller: c, maxLines: 6),
+                    actions: [
+                      TextButton(
+                          onPressed: () => Navigator.pop(ctx),
+                          child: const Text('Cancel')),
+                      FilledButton(
+                        onPressed: () {
+                          setState(() {
+                            // replace with new instance (no id field)
+                            _blocks[index] = EpisodeBlock(
+                              type: b.type,
+                              text: c.text,
+                              speaker: b.speaker,
+                              footer: b.footer,
+                            );
+                          });
+                          Navigator.pop(ctx);
+                        },
+                        child: const Text('Save'),
+                      ),
+                    ],
+                  ),
+                );
+              },
             ),
-            if (_type == BlockType.dialog) ...[
-              const SizedBox(height: 8),
-              TextField(controller: _speaker, decoration: const InputDecoration(labelText: 'Speaker')),
-            ],
-            const SizedBox(height: 8),
-            TextField(
-              controller: _text,
-              maxLines: 3,
-              decoration: const InputDecoration(
-                hintText: 'Say anything…',
-                border: OutlineInputBorder(),
-              ),
+            ListTile(
+              leading: const Icon(Icons.delete_outline),
+              title: const Text('Delete'),
+              onTap: () {
+                Navigator.pop(ctx);
+                setState(() => _blocks.removeAt(index));
+              },
             ),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                FilledButton.icon(onPressed: _addBlock, icon: const Icon(Icons.add), label: const Text('Add')),
-                const SizedBox(width: 12),
-                OutlinedButton(onPressed: () => setState(_blocks.clear), child: const Text('Clear')),
-              ],
-            )
           ],
         ),
       ),

@@ -8,16 +8,25 @@ class MonoScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<List<Story>>(
-      future: repo.getStories(),
-      builder: (context, snap) {
-        final list = snap.data ?? const <Story>[];
-        return ListView.builder(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
-          itemCount: list.length.clamp(0, 30),
-          itemBuilder: (_, i) => _monoCard(context, list[i]),
-        );
-      },
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Mono'),
+        actions: [
+          IconButton(icon: const Icon(Icons.search), onPressed: () {}),
+          IconButton(icon: const Icon(Icons.add), onPressed: () {}),
+        ],
+      ),
+      body: FutureBuilder<List<Story>>(
+        future: repo.getStories(),
+        builder: (context, snap) {
+          final list = snap.data ?? const <Story>[];
+          return ListView.builder(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
+            itemCount: list.length.clamp(0, 30),
+            itemBuilder: (_, i) => _monoCard(context, list[i]),
+          );
+        },
+      ),
     );
   }
 

@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:nimon/data/story_repo.dart';
 import 'package:nimon/models/story.dart';
+import 'package:nimon/features/reader/reader_screen.dart';
+import 'package:nimon/features/learn/learn_hub_screen.dart';
 
 class StoryDetailScreen extends StatefulWidget {
   final StoryRepo repo;
@@ -25,16 +27,26 @@ class _StoryDetailScreenState extends State<StoryDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Story')),
-      body: FutureBuilder<Story?>(
-        future: _storyF,
-        builder: (context, snap) {
-          final story = snap.data;
-          if (story == null) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          return ListView(
+    return FutureBuilder<Story?>(
+      future: _storyF,
+      builder: (context, snap) {
+        final story = snap.data;
+        if (story == null) {
+          return const Scaffold(body: Center(child: CircularProgressIndicator()));
+        }
+        return Scaffold(
+          appBar: AppBar(
+            title: const Text('Story'),
+            actions: [
+              IconButton(
+                icon: const Icon(Icons.favorite_border),
+                onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Reacted ♥ (demo)')),
+                ),
+              ),
+            ],
+          ),
+          body: ListView(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
             children: [
               _hero(story),
@@ -55,7 +67,7 @@ class _StoryDetailScreenState extends State<StoryDetailScreen> {
                       child: ListTile(
                         title: Text('Episode ${e.index}'),
                         subtitle: Text(e.preview),
-                        onTap: () => context.push('/story/${story.id}/write'),
+                        onTap: () => _openReader(context, story, e),
                       ),
                     ))
                         .toList(),
@@ -63,10 +75,27 @@ class _StoryDetailScreenState extends State<StoryDetailScreen> {
                 },
               ),
             ],
-          );
-        },
-      ),
+          ),
+        );
+      },
     );
+  }
+
+  void _openReader(BuildContext ctx, Story story, Episode ep) {
+    // map Episode.blocks -> ReaderScreen blocks format
+    final blocks = <Map<String, dynamic>>[];
+    for (var i = 0; i < ep.blocks.length; i++) {
+      final b = ep.blocks[i];
+      if (b.type == BlockType.narration) {
+        blocks.add({'type': 'narr', 'text': b.text});
+      } else {
+        final side = (i % 2 == 0) ? 'dialogMe' : 'dialogYou';
+        blocks.add({'type': side, 'text': b.text, 'speaker': b.speaker ?? ''});
+      }
+    }
+    Navigator.of(ctx).push(MaterialPageRoute(
+      builder: (_) => ReaderScreen(title: story.title, blocks: blocks),
+    ));
   }
 
   Widget _hero(Story s) => AspectRatio(
@@ -95,9 +124,18 @@ class _StoryDetailScreenState extends State<StoryDetailScreen> {
   Widget _actions(BuildContext ctx, Story s) => Wrap(
     spacing: 12,
     children: [
-      FilledButton.icon(onPressed: () {}, icon: const Icon(Icons.bookmark), label: const Text('Save')),
-      OutlinedButton.icon(onPressed: () {}, icon: const Icon(Icons.upload), label: const Text('Upload')),
-      OutlinedButton.icon(onPressed: () {}, icon: const Icon(Icons.school), label: const Text('Learn')),
+      FilledButton.icon(
+        onPressed: () => ScaffoldMessenger.of(ctx).showSnackBar(
+          const SnackBar(content: Text('Saved (demo)')),
+        ),
+        icon: const Icon(Icons.bookmark),
+        label: const Text('Save'),
+      ),
+      OutlinedButton.icon(
+        onPressed: () => ctx.push('/learn/${s.id}'),
+        icon: const Icon(Icons.school),
+        label: const Text('Learn'),
+      ),
       FilledButton.tonalIcon(
         onPressed: () => ctx.push('/story/${s.id}/write'),
         icon: const Icon(Icons.edit),
