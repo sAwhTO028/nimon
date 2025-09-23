@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:nimon/features/reader/reader_screen.dart';
+import 'package:nimon/data/repo_singleton.dart';
 import '../../data/story_repo.dart';
 import '../../models/story.dart';
 import '../story/story_detail_screen.dart';
@@ -23,6 +25,54 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     _future = repo.listStories();
+  }
+
+  Future<void> _openBestEpisode(BuildContext context, Story s) async {
+    // 1) show loader
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      useRootNavigator: true,
+      builder: (_) => const Center(child: CircularProgressIndicator()),
+    );
+
+    try {
+      final eps = await repo.getEpisodesByStory(s.id);
+
+      if (!context.mounted) return;
+
+      // 2) close loader BEFORE pushing
+      Navigator.of(context, rootNavigator: true).pop();
+
+      if (eps.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No episodes yet')),
+        );
+        return;
+      }
+
+      // 3) pick best (latest)
+      eps.sort((a, b) => b.index.compareTo(a.index));
+      final best = eps.first;
+
+      // small delay so the pop animation fully finishes
+      await Future.delayed(const Duration(milliseconds: 80));
+      if (!context.mounted) return;
+
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => ReaderScreen(episode: best)),
+      );
+    } catch (e) {
+      if (!context.mounted) return;
+      // ensure loader is closed on error
+      if (Navigator.of(context, rootNavigator: true).canPop()) {
+        Navigator.of(context, rootNavigator: true).pop();
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to open episode: $e')),
+      );
+    }
   }
 
   void _onSelectRank(String v) {
@@ -163,19 +213,10 @@ class _HomeScreenState extends State<HomeScreen> {
               builder: (ctx, snap) {
                 if (!snap.hasData) {
                   return const SizedBox(
-                      height: 240, child: Center(child: CircularProgressIndicator()));
+                      height: 280, child: Center(child: CircularProgressIndicator()));
                 }
                 final stories = snap.data!;
-                return SizedBox(
-                  height: 240,
-                  child: ListView.separated(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    scrollDirection: Axis.horizontal,
-                    itemCount: stories.length,
-                    separatorBuilder: (_, __) => const SizedBox(width: 12),
-                    itemBuilder: (_, i) => _writerCollectionCard(context, stories[i]),
-                  ),
-                );
+                return _writerCollections(stories);
               },
             ),
           ),
@@ -303,45 +344,104 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _writerCollectionCard(BuildContext context, Story s) {
-    final cs = Theme.of(context).colorScheme;
+  Widget _writerCollections(List<Story> items) {
     return SizedBox(
-      width: 300,
-      child: Material(
-        color: cs.surface,
-        borderRadius: BorderRadius.circular(16),
+      height: 280,
+      child: ListView.separated(
+        padding: const EdgeInsets.symmetric(horizontal: 20),
+        scrollDirection: Axis.horizontal,
+        itemBuilder: (_, i) => _writerCollectionCard(items[i]),
+        separatorBuilder: (_, __) => const SizedBox(width: 16),
+        itemCount: items.length,
+      ),
+    );
+  }
+
+  Widget _writerCollectionCard(Story s) {
+    return SizedBox(
+      width: 320,
+      child: Card(
+        clipBehavior: Clip.antiAlias,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         child: InkWell(
-          borderRadius: BorderRadius.circular(16),
-          onTap: () => _openDetail(s),
+          onTap: () => _openBestEpisode(context, s),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // cover
-              ClipRRect(
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-                child: Image.network(
-                  (s.coverUrl?.isNotEmpty ?? false)
-                      ? s.coverUrl!
-                      : 'https://picsum.photos/seed/col_${s.id}/640/360',
-                  height: 150, width: double.infinity, fit: BoxFit.cover,
-                ),
+              Stack(
+                children: [
+                  AspectRatio(
+                    aspectRatio: 16 / 9,
+                    child: Image.network(
+                      (s.coverUrl?.isNotEmpty ?? false)
+                          ? s.coverUrl!
+                          : 'https://picsum.photos/800/450?blur=1',
+                      fit: BoxFit.cover,
+                    ),
+                  ),
+                  Positioned.fill(
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [Colors.transparent, Colors.black.withOpacity(0.35)],
+                        ),
+                      ),
+                    ),
+                  ),
+                  if (s.jlptLevel.isNotEmpty)
+                    Positioned(
+                      top: 8,
+                      right: 8,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withOpacity(0.6),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          s.jlptLevel,
+                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+                        ),
+                      ),
+                    ),
+                ],
               ),
-              // meta
               Padding(
-                padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+                padding: const EdgeInsets.fromLTRB(12, 10, 12, 6),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('WRITER NAME',
-                        style: Theme.of(context)
-                            .textTheme
-                            .labelLarge
-                            ?.copyWith(color: Colors.black54, letterSpacing: .2)),
+                    const Text(
+                      'WRITER NAME',
+                      style: TextStyle(
+                        fontSize: 12,
+                        letterSpacing: 0.6,
+                        color: Colors.black54,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      s.title,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                    ),
                     const SizedBox(height: 6),
-                    Text(s.title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontWeight: FontWeight.w800)),
+                    Row(
+                      children: [
+                        // Episode count is not available in Story; omit to keep contracts.
+                        const Icon(Icons.favorite, size: 14, color: Colors.black45),
+                        const SizedBox(width: 4),
+                        Text(
+                          '${s.likes}',
+                          style: const TextStyle(fontSize: 12, color: Colors.black54),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
                   ],
                 ),
               ),
