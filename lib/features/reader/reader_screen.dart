@@ -1,31 +1,35 @@
 import 'package:flutter/material.dart';
+import 'package:nimon/models/story.dart';
 
 /// Clean reader (Narration / Dialog / Monologue / Emotion only)
 /// Example item:
 ///  {'kind':'dialog','text':'遅れそう！','speaker':'AYA','pos':'right','color':'pink'}
 class ReaderScreen extends StatelessWidget {
-  const ReaderScreen({super.key, required this.title, required this.blocks});
-  final String title;
-  final List<Map<String, dynamic>> blocks;
+  const ReaderScreen({super.key, required this.episode});
+  final Episode episode;
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text(title)),
+      appBar: AppBar(title: Text('Episode ${episode.index}')),
       body: ListView.builder(
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
-        itemCount: blocks.length,
-        itemBuilder: (ctx, i) => _tile(ctx, blocks[i]),
+        itemCount: episode.blocks.length,
+        itemBuilder: (ctx, i) => _tile(ctx, episode.blocks[i], i),
       ),
     );
   }
 
-  Widget _tile(BuildContext ctx, Map<String, dynamic> b) {
-    final kind  = b['kind']   as String? ?? 'narr';
-    final text  = b['text']   as String? ?? '';
-    final spk   = b['speaker']as String? ?? '';
-    final pos   = b['pos']    as String? ?? 'left';
-    final color = b['color']  as String? ?? 'blue';
+  Widget _tile(BuildContext ctx, EpisodeBlock block, int index) {
+    final isDialog = block.type == BlockType.dialog;
+    final text = block.text;
+    final spk = block.speaker ?? '';
+    final pos = (index % 2 == 0) ? 'left' : 'right';
+    final color = (index % 3 == 0)
+        ? 'blue'
+        : (index % 3 == 1)
+            ? 'pink'
+            : 'green';
 
     final align = switch (pos) {
       'right' => MainAxisAlignment.end,
@@ -37,21 +41,16 @@ class ReaderScreen extends StatelessWidget {
       'green' => Colors.green.shade100,
       _       => Colors.blue.shade100,
     };
-    final isDialog = kind == 'dialog';
-
-    Widget content = switch (kind) {
-      'dialog' => Column(
+    Widget content = isDialog
+        ? Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (spk.isNotEmpty)
             Text('$spk:', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.black54)),
           Text(text),
         ],
-      ),
-      'monologue' => Text('『$text』', style: const TextStyle(fontStyle: FontStyle.italic)),
-      'emotion'   => Text(text),
-      _           => Text(text), // narration
-    };
+      )
+        : Text(text);
 
     final bubble = Container(
       constraints: BoxConstraints(maxWidth: MediaQuery.sizeOf(ctx).width * (isDialog ? 0.85 : 0.95)),

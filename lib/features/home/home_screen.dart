@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import '../../data/story_repo.dart';
 import '../../models/story.dart';
 import '../story/story_detail_screen.dart';
@@ -32,12 +33,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _openDetail(Story s) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => StoryDetailScreen(repo: repo, storyId: s.id), // ✅ storyId
-      ),
-    );
+    context.push('/story/${s.id}');
   }
 
   @override

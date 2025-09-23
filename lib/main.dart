@@ -10,6 +10,8 @@ import 'package:nimon/features/writer/writer_screen.dart';
 import 'package:nimon/login/login_screen.dart';
 import 'package:nimon/data/repo_singleton.dart';
 import 'package:nimon/features/learn/learn_hub_screen.dart';
+import 'package:nimon/models/story.dart';
+import 'package:nimon/features/reader/reader_screen.dart';
 
 void main() => runApp(const NimonApp());
 
@@ -47,12 +49,19 @@ final _router = GoRouter(
         GoRoute(
           path: '/story/:id/write',
           builder: (ctx, st) => WriterScreen(
-              repo: StoryRepoMock(),
+              repo: repo,
               storyId: st.pathParameters['id']!),
         ),
         GoRoute(
           path: '/learn/:id',
           builder: (ctx, st) => LearnHubScreen(),
+        ),
+        GoRoute(
+          path: '/reader',
+          builder: (ctx, st) {
+            final ep = st.extra as Episode?;
+            return ReaderScreen(episode: ep!);
+          },
         ),
       ],
     ),

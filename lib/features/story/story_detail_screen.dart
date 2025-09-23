@@ -82,20 +82,7 @@ class _StoryDetailScreenState extends State<StoryDetailScreen> {
   }
 
   void _openReader(BuildContext ctx, Story story, Episode ep) {
-    // map Episode.blocks -> ReaderScreen blocks format
-    final blocks = <Map<String, dynamic>>[];
-    for (var i = 0; i < ep.blocks.length; i++) {
-      final b = ep.blocks[i];
-      if (b.type == BlockType.narration) {
-        blocks.add({'type': 'narr', 'text': b.text});
-      } else {
-        final side = (i % 2 == 0) ? 'dialogMe' : 'dialogYou';
-        blocks.add({'type': side, 'text': b.text, 'speaker': b.speaker ?? ''});
-      }
-    }
-    Navigator.of(ctx).push(MaterialPageRoute(
-      builder: (_) => ReaderScreen(title: story.title, blocks: blocks),
-    ));
+    ctx.push('/reader', extra: ep);
   }
 
   Widget _hero(Story s) => AspectRatio(
