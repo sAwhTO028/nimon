@@ -68,10 +68,16 @@ class StoryRepoMock implements StoryRepo {
   Future<List<Story>> listStories({String? filter}) async => _stories;
 
   @override
-  Future<List<Story>> getStories({String? level}) async {
+  Future<List<Story>> getStories({String? rank, String? category}) async {
     await Future<void>.delayed(const Duration(milliseconds: 250));
-    if (level == null) return _stories;
-    return _stories.where((s) => s.jlptLevel == level).toList();
+    Iterable<Story> result = _stories;
+    if (rank != null && rank != 'ALL') {
+      result = result.where((s) => s.jlptLevel == rank);
+    }
+    if (category != null && category != 'ALL') {
+      result = result.where((s) => s.tags.contains(category));
+    }
+    return result.toList();
   }
 
   @override

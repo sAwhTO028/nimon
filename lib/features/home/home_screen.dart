@@ -17,7 +17,9 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   late Future<List<Story>> _future;
   String _rank = 'ALL';
-  final _genres = const ['Love', 'History', 'Comedy', 'Horror', 'Art'];
+  String _category = 'ALL';
+  final _ranks = const ['ALL','N5','N4','N3','N2','N1'];
+  final _categories = const ['ALL','Love','Comedy','Horror','Drama'];
 
   StoryRepo get repo => widget.repo;
 
@@ -78,8 +80,75 @@ class _HomeScreenState extends State<HomeScreen> {
   void _onSelectRank(String v) {
     setState(() {
       _rank = v;
-      _future = (_rank == 'ALL') ? repo.listStories() : repo.listStories(filter: _rank);
+      _reload();
     });
+  }
+
+  void _onSelectCategory(String v) {
+    setState(() {
+      _category = v;
+      _reload();
+    });
+  }
+
+  void _reload() {
+    if (_rank == 'ALL' && _category == 'ALL') {
+      _future = repo.getStories();
+    } else if (_rank != 'ALL' && _category == 'ALL') {
+      _future = repo.getStories(rank: _rank);
+    } else if (_rank == 'ALL' && _category != 'ALL') {
+      _future = repo.getStories(category: _category);
+    } else {
+      _future = repo.getStories(rank: _rank, category: _category);
+    }
+  }
+
+  Widget _rankRow() {
+    return SizedBox(
+      height: 44,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 20),
+        itemCount: _ranks.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 12),
+        itemBuilder: (_, i) {
+          final v = _ranks[i];
+          final selected = _rank == v;
+          return ChoiceChip(
+            label: Text(v),
+            selected: selected,
+            onSelected: (_) {
+              setState(() { _rank = v; });
+              _reload();
+            },
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _categoryRow() {
+    return SizedBox(
+      height: 44,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 20),
+        itemCount: _categories.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 12),
+        itemBuilder: (_, i) {
+          final v = _categories[i];
+          final selected = _category == v;
+          return ChoiceChip(
+            label: Text(v),
+            selected: selected,
+            onSelected: (_) {
+              setState(() { _category = v; });
+              _reload();
+            },
+          );
+        },
+      ),
+    );
   }
 
   void _openDetail(Story s) {
@@ -104,72 +173,21 @@ class _HomeScreenState extends State<HomeScreen> {
                         letterSpacing: 0.8,
                       )),
                   const Spacer(),
-                  _coinBadge(context),
+                  _balancePill('\$ 98'),
                 ],
               ),
             ),
           ),
 
-          // Rank chips — single line
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Wrap(
-                spacing: 12,
-                runSpacing: 0,
-                children: ['ALL', 'D', 'C', 'B', 'A', 'S']
-                    .map((r) => FilterChip(
-                  label: Text(r),
-                  selected: _rank == r,
-                  onSelected: (_) => _onSelectRank(r),
-                  showCheckmark: _rank == r,
-                  selectedColor: cs.surface,
-                  labelStyle: const TextStyle(fontWeight: FontWeight.w600),
-                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                ))
-                    .toList(),
-              ),
-            ),
-          ),
           const SliverToBoxAdapter(child: SizedBox(height: 8)),
 
-          // Genre chips (UI only)
-          SliverToBoxAdapter(
-            child: SizedBox(
-              height: 44,
-              child: ListView.separated(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                scrollDirection: Axis.horizontal,
-                itemCount: _genres.length,
-                separatorBuilder: (_, __) => const SizedBox(width: 12),
-                itemBuilder: (_, i) {
-                  final g = _genres[i];
-                  return InputChip(
-                    label: Text(g),
-                    onPressed: () {}, // UI-only for now
-                    selected: i == 1,  // just to mimic your screenshot tick
-                    showCheckmark: i == 1,
-                  );
-                },
-              ),
-            ),
-          ),
+          // Rank chips — horizontal, single line
+          SliverToBoxAdapter(child: _rankRow()),
+          const SliverToBoxAdapter(child: SizedBox(height: 8)),
+          // Category chips — horizontal, single line
+          SliverToBoxAdapter(child: _categoryRow()),
 
           const SliverToBoxAdapter(child: SizedBox(height: 16)),
-
-          // ── Hero banner (horizontal scroll) ───────────────────────────────
-          SliverToBoxAdapter(
-            child: SizedBox(
-              height: 180,
-              child: ListView.separated(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                scrollDirection: Axis.horizontal,
-                itemBuilder: (_, i) => _heroCard(context, i),
-                separatorBuilder: (_, __) => const SizedBox(width: 12),
-                itemCount: 6,
-              ),
-            ),
-          ),
 
           const SliverToBoxAdapter(child: SizedBox(height: 16)),
 
@@ -261,6 +279,18 @@ class _HomeScreenState extends State<HomeScreen> {
           Text('98', style: TextStyle(fontWeight: FontWeight.w700)),
         ],
       ),
+    );
+  }
+
+  Widget _balancePill(String text) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.9),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: Colors.black12),
+      ),
+      child: Text(text, style: const TextStyle(fontWeight: FontWeight.w600)),
     );
   }
 
