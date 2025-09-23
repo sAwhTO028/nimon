@@ -2,6 +2,8 @@ import 'dart:math';
 import 'package:uuid/uuid.dart';
 import 'package:nimon/data/story_repo.dart';
 import 'package:nimon/models/story.dart';
+import 'story_repo.dart';
+import '../models/story.dart';
 
 final _uuid = const Uuid();
 
@@ -62,6 +64,9 @@ List<Episode> _genEpisodes() {
 }
 
 class StoryRepoMock implements StoryRepo {
+  @override
+  Future<List<Story>> listStories({String? filter}) async => _stories;
+
   @override
   Future<List<Story>> getStories({String? level}) async {
     await Future<void>.delayed(const Duration(milliseconds: 250));
