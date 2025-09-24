@@ -1,10 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:nimon/features/reader/reader_screen.dart';
-import 'package:nimon/data/repo_singleton.dart';
 import '../../data/story_repo.dart';
 import '../../models/story.dart';
-import '../story/story_detail_screen.dart';
+import 'widgets/mono_row_listview.dart';
 
 class HomeScreen extends StatefulWidget {
   final StoryRepo repo;
@@ -18,8 +17,8 @@ class _HomeScreenState extends State<HomeScreen> {
   late Future<List<Story>> _future;
   String _rank = 'ALL';
   String _category = 'ALL';
-  final _ranks = const ['ALL','N5','N4','N3','N2','N1'];
-  final _categories = const ['ALL','Love','Comedy','Horror','Drama'];
+  final _ranks = const ['ALL', 'N5', 'N4', 'N3', 'N2', 'N1'];
+  final _categories = const ['ALL', 'Love', 'Comedy', 'Horror', 'Drama'];
 
   StoryRepo get repo => widget.repo;
 
@@ -77,6 +76,34 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  Future<void> _openEpisode(BuildContext context, Episode episode) async {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => ReaderScreen(episode: episode)),
+    );
+  }
+
+  Future<List<Episode>> _getPopularEpisodes() async {
+    final stories = await _future;
+    final popularStories =
+        stories.take(5).toList(); // Get top 5 popular stories
+    final List<Episode> allEpisodes = [];
+
+    for (final story in popularStories) {
+      try {
+        final episodes = await repo.getEpisodesByStory(story.id);
+        allEpisodes.addAll(episodes);
+      } catch (e) {
+        // Continue with other stories if one fails
+        continue;
+      }
+    }
+
+    // Sort by index and take the first 8 episodes
+    allEpisodes.sort((a, b) => b.index.compareTo(a.index));
+    return allEpisodes.take(8).toList();
+  }
+
   void _onSelectRank(String v) {
     setState(() {
       _rank = v;
@@ -118,7 +145,9 @@ class _HomeScreenState extends State<HomeScreen> {
             label: Text(v),
             selected: selected,
             onSelected: (_) {
-              setState(() { _rank = v; });
+              setState(() {
+                _rank = v;
+              });
               _reload();
             },
           );
@@ -142,7 +171,9 @@ class _HomeScreenState extends State<HomeScreen> {
             label: Text(v),
             selected: selected,
             onSelected: (_) {
-              setState(() { _category = v; });
+              setState(() {
+                _category = v;
+              });
               _reload();
             },
           );
@@ -168,10 +199,11 @@ class _HomeScreenState extends State<HomeScreen> {
               child: Row(
                 children: [
                   Text('NIMON',
-                      style: Theme.of(context).textTheme.headlineMedium!.copyWith(
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: 0.8,
-                      )),
+                      style:
+                          Theme.of(context).textTheme.headlineMedium!.copyWith(
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: 0.8,
+                              )),
                   const Spacer(),
                   _balancePill('\$ 98'),
                 ],
@@ -201,7 +233,8 @@ class _HomeScreenState extends State<HomeScreen> {
               builder: (ctx, snap) {
                 if (snap.connectionState != ConnectionState.done) {
                   return const SizedBox(
-                      height: 180, child: Center(child: CircularProgressIndicator()));
+                      height: 180,
+                      child: Center(child: CircularProgressIndicator()));
                 }
                 final stories = snap.data ?? const <Story>[];
                 return SizedBox(
@@ -223,18 +256,29 @@ class _HomeScreenState extends State<HomeScreen> {
           // Popular Mono writer's collections (See more)
           SliverToBoxAdapter(
             child: _sectionTitle(context, "Popular Mono writer's collections",
-                trailing: TextButton(onPressed: () {}, child: const Text('See more'))),
+                trailing: TextButton(
+                    onPressed: () {}, child: const Text('See more'))),
           ),
           SliverToBoxAdapter(
-            child: FutureBuilder<List<Story>>(
-              future: _future,
+            child: FutureBuilder<List<Episode>>(
+              future: _getPopularEpisodes(),
               builder: (ctx, snap) {
                 if (!snap.hasData) {
                   return const SizedBox(
-                      height: 280, child: Center(child: CircularProgressIndicator()));
+                      height: 200,
+                      child: Center(child: CircularProgressIndicator()));
                 }
-                final stories = snap.data!;
-                return _writerCollections(stories);
+                final episodes = snap.data!;
+                return Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: MonoCollectionsRow(
+                    leftImageUrl:
+                        'https://picsum.photos/seed/mono-collection/400/300',
+                    caption: 'Popular Mono Collections',
+                    items: episodes,
+                    onTap: (episode) => _openEpisode(context, episode),
+                  ),
+                );
               },
             ),
           ),
@@ -300,7 +344,10 @@ class _HomeScreenState extends State<HomeScreen> {
       child: Row(
         children: [
           Text(title,
-              style: Theme.of(ctx).textTheme.titleLarge!.copyWith(fontWeight: FontWeight.w800)),
+              style: Theme.of(ctx)
+                  .textTheme
+                  .titleLarge!
+                  .copyWith(fontWeight: FontWeight.w800)),
           const Spacer(),
           if (trailing != null) trailing,
         ],
@@ -326,9 +373,11 @@ class _HomeScreenState extends State<HomeScreen> {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
               decoration: BoxDecoration(
-                  color: Colors.black54, borderRadius: BorderRadius.circular(12)),
+                  color: Colors.black54,
+                  borderRadius: BorderRadius.circular(12)),
               child: Text('Banner #${i + 1}',
-                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
+                  style: const TextStyle(
+                      color: Colors.white, fontWeight: FontWeight.w600)),
             ),
           ),
         ],
@@ -356,9 +405,11 @@ class _HomeScreenState extends State<HomeScreen> {
               left: 12,
               bottom: 12,
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                 decoration: BoxDecoration(
-                    color: Colors.black54, borderRadius: BorderRadius.circular(12)),
+                    color: Colors.black54,
+                    borderRadius: BorderRadius.circular(12)),
                 child: Text(
                   s.title,
                   style: const TextStyle(
@@ -369,114 +420,6 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
           ],
-        ),
-      ),
-    );
-  }
-
-  Widget _writerCollections(List<Story> items) {
-    return SizedBox(
-      height: 280,
-      child: ListView.separated(
-        padding: const EdgeInsets.symmetric(horizontal: 20),
-        scrollDirection: Axis.horizontal,
-        itemBuilder: (_, i) => _writerCollectionCard(items[i]),
-        separatorBuilder: (_, __) => const SizedBox(width: 16),
-        itemCount: items.length,
-      ),
-    );
-  }
-
-  Widget _writerCollectionCard(Story s) {
-    return SizedBox(
-      width: 320,
-      child: Card(
-        clipBehavior: Clip.antiAlias,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        child: InkWell(
-          onTap: () => _openBestEpisode(context, s),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Stack(
-                children: [
-                  AspectRatio(
-                    aspectRatio: 16 / 9,
-                    child: Image.network(
-                      (s.coverUrl?.isNotEmpty ?? false)
-                          ? s.coverUrl!
-                          : 'https://picsum.photos/800/450?blur=1',
-                      fit: BoxFit.cover,
-                    ),
-                  ),
-                  Positioned.fill(
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.topCenter,
-                          end: Alignment.bottomCenter,
-                          colors: [Colors.transparent, Colors.black.withOpacity(0.35)],
-                        ),
-                      ),
-                    ),
-                  ),
-                  if (s.jlptLevel.isNotEmpty)
-                    Positioned(
-                      top: 8,
-                      right: 8,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: Colors.black.withOpacity(0.6),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Text(
-                          s.jlptLevel,
-                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(12, 10, 12, 6),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'WRITER NAME',
-                      style: TextStyle(
-                        fontSize: 12,
-                        letterSpacing: 0.6,
-                        color: Colors.black54,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      s.title,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
-                    ),
-                    const SizedBox(height: 6),
-                    Row(
-                      children: [
-                        // Episode count is not available in Story; omit to keep contracts.
-                        const Icon(Icons.favorite, size: 14, color: Colors.black45),
-                        const SizedBox(width: 4),
-                        Text(
-                          '${s.likes}',
-                          style: const TextStyle(fontSize: 12, color: Colors.black54),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                  ],
-                ),
-              ),
-            ],
-          ),
         ),
       ),
     );
