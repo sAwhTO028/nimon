@@ -5,6 +5,7 @@ import '../../data/story_repo.dart';
 import '../../models/story.dart';
 import 'widgets/book_cover_card.dart';
 import 'widgets/mono_collection_row.dart';
+import '../widgets/real_book_3d_cover.dart';
 
 class HomeScreen extends StatefulWidget {
   final StoryRepo repo;
@@ -261,13 +262,15 @@ class _HomeScreenState extends State<HomeScreen> {
                     separatorBuilder: (_, __) => const SizedBox(width: 12),
                     itemBuilder: (ctx, i) {
                       final s = stories[i];
-                      return SizedBox(
-                        width: 160,
-                        child: BookCoverCard(
-                          coverUrl: s.coverUrl,
-                          episodes: 0, // Placeholder since Story model doesn't have episodesCount
-                          storyTitle: s.title,
-                          onTap: () => _openDetail(s),
+                      return InkWell(
+                        onTap: () => _openDetail(s),
+                        child: RealBook3DCover(
+                          image: NetworkImage(s.coverUrl ?? 'https://picsum.photos/seed/${s.id}/600/900'),
+                          width: 180,
+                          height: 240,
+                          thickness: 0, // no page edge
+                          tiltDegrees: -16,
+                          overlayTitle: s.title,
                         ),
                       );
                     },
