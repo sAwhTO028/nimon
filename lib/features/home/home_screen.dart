@@ -3,7 +3,8 @@ import 'package:go_router/go_router.dart';
 import 'package:nimon/features/reader/reader_screen.dart';
 import '../../data/story_repo.dart';
 import '../../models/story.dart';
-import 'widgets/mono_row_listview.dart';
+import 'widgets/book_cover_card.dart';
+import 'widgets/mono_collection_row.dart';
 
 class HomeScreen extends StatefulWidget {
   final StoryRepo repo;
@@ -238,13 +239,24 @@ class _HomeScreenState extends State<HomeScreen> {
                 }
                 final stories = snap.data ?? const <Story>[];
                 return SizedBox(
-                  height: 180,
+                  height: 220,
                   child: ListView.separated(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     scrollDirection: Axis.horizontal,
                     itemCount: stories.length,
                     separatorBuilder: (_, __) => const SizedBox(width: 12),
-                    itemBuilder: (_, i) => _storyThumb(context, stories[i]),
+                    itemBuilder: (ctx, i) {
+                      final s = stories[i];
+                      return SizedBox(
+                        width: 160,
+                        child: BookCoverCard(
+                          coverUrl: s.coverUrl,
+                          episodes: 0, // Placeholder since Story model doesn't have episodesCount
+                          storyTitle: s.title,
+                          onTap: () => _openDetail(s),
+                        ),
+                      );
+                    },
                   ),
                 );
               },
@@ -269,16 +281,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       child: Center(child: CircularProgressIndicator()));
                 }
                 final episodes = snap.data!;
-                return Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: MonoCollectionsRow(
-                    leftImageUrl:
-                        'https://picsum.photos/seed/mono-collection/400/300',
-                    caption: 'Popular Mono Collections',
-                    items: episodes,
-                    onTap: (episode) => _openEpisode(context, episode),
-                  ),
-                );
+                return MonoCollectionRow(episodes: episodes);
               },
             ),
           ),
