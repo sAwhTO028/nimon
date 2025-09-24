@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'dart:ui';
 import '../../../models/story.dart';
 import '../../reader/reader_screen.dart';
 
@@ -37,37 +38,58 @@ class _IntroCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final radius = BorderRadius.circular(20); // match current card radius
+    final size = const Size(160, 200); // keep existing size
+
     return Container(
-      width: 160,
+      width: size.width,
+      height: size.height,
       margin: const EdgeInsets.only(right: 12),
-      child: Card(
-        elevation: 0, // no shadow
-        color: Colors.transparent, // fully transparent card
-        clipBehavior: Clip.none, // avoid clipping transparent ink
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
-          side: BorderSide.none, // no outline
-        ),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(20),
-          onTap: () {}, // keep existing handler if needed
-          child: Container(
-            // transparent background, just padding for layout
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                // keep existing icon/asset; remove any cover photo here
-                const Icon(Icons.collections_bookmark_rounded, size: 48),
-                const SizedBox(height: 12),
-                Text(
-                  'Popular Mono\nCollections',
-                  textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.titleMedium,
-                ),
-              ],
+      child: ClipRRect(
+        borderRadius: radius,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            // Frosted blur background
+            Container(
+              color: Theme.of(context).colorScheme.surface.withOpacity(0.55),
             ),
-          ),
+            BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+              child: const SizedBox.expand(), // required to apply the blur
+            ),
+
+            // Foreground content (PNG + caption)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  // Transparent PNG icon
+                  Expanded(
+                    child: Center(
+                      child: Image.asset(
+                        'assets/images/writer.png',
+                        fit: BoxFit.contain,
+                        // Adjust if needed to avoid clipping
+                        width: 96,
+                        height: 96,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Popular Mono\nCollections',
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
+                    maxLines: 2,
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
       ),
     );

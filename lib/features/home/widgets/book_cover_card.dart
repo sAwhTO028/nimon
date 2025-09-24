@@ -124,12 +124,64 @@ class BookCoverCard extends StatelessWidget {
 
     return InkWell(
       onTap: onTap,
-      child: Stack(
-        clipBehavior: Clip.none,
-        children: [
-          fg, // main book
-          titleOverlay, // title overlay at bottom
-        ],
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(radius),
+        child: Stack(
+          children: [
+            // BACK layer: bigger, blurred, slightly shifted down
+            Positioned.fill(
+              // small vertical offset to peek under the foreground
+              top: 8,
+              child: Transform.scale(
+                scale: 1.05, // 5% bigger than the foreground
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    AspectRatio(
+                      aspectRatio: 3 / 4,
+                      child: Image(
+                        image: imgProvider,
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) {
+                          return Container(
+                            color: Colors.grey[300],
+                            child: const Icon(Icons.book, size: 40, color: Colors.grey),
+                          );
+                        },
+                      ),
+                    ),
+                    BackdropFilter(
+                      filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
+                      child: Container(
+                        color: Colors.black.withOpacity(0.15), // subtle tint
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+            // FORE layer: your current image + bottom label
+            Positioned.fill(
+              child: AspectRatio(
+                aspectRatio: 3 / 4,
+                child: Image(
+                  image: imgProvider,
+                  fit: BoxFit.cover,
+                  errorBuilder: (context, error, stackTrace) {
+                    return Container(
+                      color: Colors.grey[300],
+                      child: const Icon(Icons.book, size: 40, color: Colors.grey),
+                    );
+                  },
+                ),
+              ),
+            ),
+
+            // title overlay at bottom
+            titleOverlay,
+          ],
+        ),
       ),
     );
   }

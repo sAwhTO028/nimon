@@ -14,14 +14,26 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
+enum _StoryTab { premium, newRelease }
+
 class _HomeScreenState extends State<HomeScreen> {
   late Future<List<Story>> _future;
   String _rank = 'ALL';
   String _category = 'ALL';
+  _StoryTab _tab = _StoryTab.premium;
   final _ranks = const ['ALL', 'N5', 'N4', 'N3', 'N2', 'N1'];
   final _categories = const ['ALL', 'Love', 'Comedy', 'Horror', 'Drama'];
 
   StoryRepo get repo => widget.repo;
+
+  // Data helpers for premium/new release
+  List<Story> _premiumStories = [];
+  List<Story> _newReleaseStories = [];
+
+  void _updateStoryLists(List<Story> stories) {
+    _premiumStories = stories.take(5).toList();
+    _newReleaseStories = stories.skip(2).take(5).toList();
+  }
 
   @override
   void initState() {
@@ -238,6 +250,8 @@ class _HomeScreenState extends State<HomeScreen> {
                       child: Center(child: CircularProgressIndicator()));
                 }
                 final stories = snap.data ?? const <Story>[];
+                // Update the story lists for premium/new release section
+                _updateStoryLists(stories);
                 return SizedBox(
                   height: 220,
                   child: ListView.separated(
@@ -286,19 +300,11 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
 
-          // Premium/New Release buttons
+          // Premium/New Release section
           SliverPadding(
             padding: const EdgeInsets.fromLTRB(16, 20, 16, 16),
             sliver: SliverToBoxAdapter(
-              child: Row(
-                children: [
-                  _pillButton(context, 'Premium Stories', onTap: () {}),
-                  const SizedBox(width: 12),
-                  _pillButton(context, 'New Release', onTap: () {}),
-                  const Spacer(),
-                  TextButton(onPressed: () {}, child: const Text('Explore>>')),
-                ],
-              ),
+              child: _premiumNewReleaseSection(context),
             ),
           ),
 
@@ -441,6 +447,126 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
         child: Text(text, style: const TextStyle(fontWeight: FontWeight.w700)),
       ),
+    );
+  }
+
+  // Premium/New Release section
+  Widget _premiumNewReleaseSection(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: 16),
+        // Pills row
+        SegmentedButton<_StoryTab>(
+          segments: const [
+            ButtonSegment(
+              value: _StoryTab.premium,
+              label: Text('Premium Stories'),
+            ),
+            ButtonSegment(
+              value: _StoryTab.newRelease,
+              label: Text('New Release'),
+            ),
+          ],
+          selected: {_tab},
+          showSelectedIcon: false,
+          style: ButtonStyle(
+            shape: WidgetStateProperty.all(
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+            ),
+            padding: WidgetStateProperty.all(
+              const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            ),
+          ),
+          onSelectionChanged: (set) => setState(() => _tab = set.first),
+        ),
+
+        const SizedBox(height: 12),
+
+        // List for the selected tab
+        _storyListForTab(context),
+      ],
+    );
+  }
+
+  Widget _storyListForTab(BuildContext context) {
+    final items = _tab == _StoryTab.premium ? _premiumStories : _newReleaseStories;
+    return ListView.separated(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      itemCount: items.length,
+      separatorBuilder: (_, __) => const SizedBox(height: 12),
+      itemBuilder: (_, i) {
+        final s = items[i];
+        final episodeCount = 8 + i; // placeholder
+        final desc = (s.description?.isNotEmpty == true)
+            ? s.description!
+            : 'Description Description Description Description Description Description Description';
+
+        return Card(
+          elevation: 0,
+          color: Theme.of(context).colorScheme.surface,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+          child: Padding(
+            padding: const EdgeInsets.all(14),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Circular thumbnail
+                ClipOval(
+                  child: Image.network(
+                    s.coverUrl ?? 'https://picsum.photos/seed/${s.id}/100/100',
+                    width: 72,
+                    height: 72,
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, error, stackTrace) {
+                      return Container(
+                        width: 72,
+                        height: 72,
+                        color: Colors.grey[300],
+                        child: const Icon(Icons.book, size: 32),
+                      );
+                    },
+                  ),
+                ),
+                const SizedBox(width: 14),
+
+                // Title / description
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        s.title,
+                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.w700,
+                            ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        desc,
+                        maxLines: 3,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.bodyMedium,
+                      ),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(width: 12),
+
+                // Trailing episode count
+                Text(
+                  '$episodeCount Episodes',
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 }
