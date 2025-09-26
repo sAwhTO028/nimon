@@ -306,7 +306,20 @@ class _HomeScreenState extends State<HomeScreen> {
           SliverPadding(
             padding: const EdgeInsets.fromLTRB(16, 20, 16, 16),
             sliver: SliverToBoxAdapter(
-              child: _premiumNewReleaseSection(context),
+              child: FutureBuilder<List<Story>>(
+                future: _future,
+                builder: (ctx, snap) {
+                  if (snap.connectionState != ConnectionState.done) {
+                    return const SizedBox(
+                        height: 200,
+                        child: Center(child: CircularProgressIndicator()));
+                  }
+                  final stories = snap.data ?? const <Story>[];
+                  // Update the story lists for premium/new release section
+                  _updateStoryLists(stories);
+                  return _premiumNewReleaseSection(context);
+                },
+              ),
             ),
           ),
 
@@ -458,32 +471,38 @@ class _HomeScreenState extends State<HomeScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const SizedBox(height: 16),
-        // Pills row
-        SegmentedButton<_StoryTab>(
-          segments: const [
-            ButtonSegment(
-              value: _StoryTab.premium,
-              label: Text('Premium Stories'),
-            ),
-            ButtonSegment(
-              value: _StoryTab.newRelease,
-              label: Text('New Release'),
-            ),
-          ],
-          selected: {_tab},
-          showSelectedIcon: false,
-          style: ButtonStyle(
-            shape: WidgetStateProperty.all(
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-            ),
-            padding: WidgetStateProperty.all(
-              const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-            ),
+        // Pill-style tabs like the image
+        Container(
+          margin: const EdgeInsets.symmetric(horizontal: 16),
+          padding: const EdgeInsets.all(4),
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.3),
+            borderRadius: BorderRadius.circular(24),
           ),
-          onSelectionChanged: (set) => setState(() => _tab = set.first),
+          child: Row(
+            children: [
+              Expanded(
+                child: _buildPillTab(
+                  context,
+                  'Premium Stories',
+                  _StoryTab.premium,
+                  isSelected: _tab == _StoryTab.premium,
+                ),
+              ),
+              const SizedBox(width: 4),
+              Expanded(
+                child: _buildPillTab(
+                  context,
+                  'New Release',
+                  _StoryTab.newRelease,
+                  isSelected: _tab == _StoryTab.newRelease,
+                ),
+              ),
+            ],
+          ),
         ),
 
-        const SizedBox(height: 12),
+        const SizedBox(height: 16),
 
         // List for the selected tab
         _storyListForTab(context),
@@ -491,84 +510,332 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  String _getTabName(_StoryTab tab) {
+    switch (tab) {
+      case _StoryTab.premium:
+        return 'Premium';
+      case _StoryTab.newRelease:
+        return 'New Release';
+    }
+  }
+
+  Widget _buildPillTab(BuildContext context, String label, _StoryTab tab, {required bool isSelected}) {
+    final theme = Theme.of(context);
+    
+    return GestureDetector(
+      onTap: () => setState(() => _tab = tab),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        decoration: BoxDecoration(
+          color: isSelected 
+              ? theme.colorScheme.primary
+              : Colors.transparent,
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Text(
+          label,
+          textAlign: TextAlign.center,
+          style: theme.textTheme.labelLarge?.copyWith(
+            color: isSelected 
+                ? Colors.white
+                : theme.colorScheme.onSurfaceVariant,
+            fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTabChip(BuildContext context, String label, _StoryTab tab, {required bool isSelected}) {
+    final theme = Theme.of(context);
+    
+    return GestureDetector(
+      onTap: () => setState(() => _tab = tab),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+        decoration: BoxDecoration(
+          color: isSelected 
+              ? theme.colorScheme.primary.withOpacity(0.1)
+              : theme.colorScheme.surface,
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(
+            color: isSelected 
+                ? theme.colorScheme.primary
+                : theme.colorScheme.outline.withOpacity(0.3),
+            width: isSelected ? 2 : 1,
+          ),
+        ),
+        child: Text(
+          label,
+          style: theme.textTheme.labelLarge?.copyWith(
+            color: isSelected 
+                ? theme.colorScheme.primary
+                : theme.colorScheme.onSurfaceVariant,
+            fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _storyListForTab(BuildContext context) {
     final items = _tab == _StoryTab.premium ? _premiumStories : _newReleaseStories;
-    return ListView.separated(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      itemCount: items.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 12),
-      itemBuilder: (_, i) {
-        final s = items[i];
-        final episodeCount = 8 + i; // placeholder
-        final desc = (s.description?.isNotEmpty == true)
-            ? s.description!
-            : 'Description Description Description Description Description Description Description';
+    final displayItems = items.take(5).toList(); // Show only 5 items
+    
+    return Column(
+      children: [
+         // Recycler view style - vertical list with 3px margins
+         ListView.separated(
+           shrinkWrap: true,
+           physics: const NeverScrollableScrollPhysics(),
+           padding: const EdgeInsets.symmetric(horizontal: 3), // 3px margin
+           itemCount: displayItems.length,
+           separatorBuilder: (_, __) => const SizedBox(height: 6), // Reduced spacing
+           itemBuilder: (context, index) {
+             final s = displayItems[index];
+             final episodeCount = 8 + index; // placeholder
+             final desc = (s.description?.isNotEmpty == true)
+                 ? s.description!
+                 : 'Description Description Description Description Description Description Description';
 
-        return Card(
-          elevation: 0,
-          color: Theme.of(context).colorScheme.surface,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+             return Container(
+               margin: const EdgeInsets.symmetric(horizontal: 3), // 3px margin on each side
+               child: Card(
+                 elevation: 2,
+                 shadowColor: Colors.black.withOpacity(0.1),
+                 color: Theme.of(context).colorScheme.surface,
+                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                 child: InkWell(
+                   borderRadius: BorderRadius.circular(16),
+                   onTap: () => _openDetail(s),
+                   child: Padding(
+                     padding: const EdgeInsets.all(16),
+                     child: Row(
+                       crossAxisAlignment: CrossAxisAlignment.start,
+                       children: [
+                         // Circular thumbnail
+                         ClipOval(
+                           child: Image.network(
+                             s.coverUrl ?? 'https://picsum.photos/seed/${s.id}/100/100',
+                             width: 64,
+                             height: 64,
+                             fit: BoxFit.cover,
+                             loadingBuilder: (context, child, loadingProgress) {
+                               if (loadingProgress == null) return child;
+                               return Container(
+                                 width: 64,
+                                 height: 64,
+                                 color: Colors.grey[300],
+                                 child: const Center(
+                                   child: CircularProgressIndicator(strokeWidth: 2),
+                                 ),
+                               );
+                             },
+                             errorBuilder: (context, error, stackTrace) {
+                               return Container(
+                                 width: 64,
+                                 height: 64,
+                                 color: Colors.grey[300],
+                                 child: const Icon(Icons.book, size: 32),
+                               );
+                             },
+                           ),
+                         ),
+                         const SizedBox(width: 16),
+
+                         // Title / description
+                         Expanded(
+                           child: Column(
+                             crossAxisAlignment: CrossAxisAlignment.start,
+                             children: [
+                               Text(
+                                 s.title,
+                                 style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                       fontWeight: FontWeight.w700,
+                                     ),
+                                 maxLines: 1,
+                                 overflow: TextOverflow.ellipsis,
+                               ),
+                               const SizedBox(height: 6),
+                               Text(
+                                 desc,
+                                 maxLines: 2,
+                                 overflow: TextOverflow.ellipsis,
+                                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                   color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                 ),
+                               ),
+                             ],
+                           ),
+                         ),
+
+                         const SizedBox(width: 16),
+
+                         // Episode count
+                         Text(
+                           '$episodeCount Episodes',
+                           style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                                 color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                 fontWeight: FontWeight.w600,
+                               ),
+                         ),
+                       ],
+                     ),
+                   ),
+                 ),
+               ),
+             );
+           },
+         ),
+        
+         // See More button at the bottom
+         if (items.length > 5) ...[
+           const SizedBox(height: 12),
+           Container(
+             margin: const EdgeInsets.symmetric(horizontal: 3), // 3px margin to match cards
+             child: _buildSeeMoreButton(context),
+           ),
+         ],
+      ],
+    );
+  }
+
+  Widget _buildSeeMoreButton(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.primary,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Theme.of(context).colorScheme.primary.withOpacity(0.3),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(20),
+          onTap: () {
+            final tabName = _getTabName(_tab);
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('See more $tabName stories coming soon!'),
+                action: SnackBarAction(
+                  label: 'OK',
+                  onPressed: () => ScaffoldMessenger.of(context).hideCurrentSnackBar(),
+                ),
+              ),
+            );
+          },
           child: Padding(
-            padding: const EdgeInsets.all(14),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
               children: [
-                // Circular thumbnail
-                ClipOval(
-                  child: Image.network(
-                    s.coverUrl ?? 'https://picsum.photos/seed/${s.id}/100/100',
-                    width: 72,
-                    height: 72,
-                    fit: BoxFit.cover,
-                    errorBuilder: (context, error, stackTrace) {
-                      return Container(
-                        width: 72,
-                        height: 72,
-                        color: Colors.grey[300],
-                        child: const Icon(Icons.book, size: 32),
-                      );
-                    },
-                  ),
-                ),
-                const SizedBox(width: 14),
-
-                // Title / description
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        s.title,
-                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                              fontWeight: FontWeight.w700,
-                            ),
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        desc,
-                        maxLines: 3,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.bodyMedium,
-                      ),
-                    ],
-                  ),
-                ),
-
-                const SizedBox(width: 12),
-
-                // Trailing episode count
                 Text(
-                  '$episodeCount Episodes',
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        fontWeight: FontWeight.w600,
-                      ),
+                  'See More',
+                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(width: 4),
+                Icon(
+                  Icons.arrow_forward_ios,
+                  size: 12,
+                  color: Colors.white,
                 ),
               ],
             ),
           ),
-        );
-      },
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSeeMoreCard(BuildContext context) {
+    return SizedBox(
+      width: 300, // Same width as story cards
+      child: Card(
+        elevation: 2,
+        shadowColor: Colors.black.withOpacity(0.1),
+        color: Theme.of(context).colorScheme.surface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: () {
+            // Navigate to see more stories
+            final tabName = _getTabName(_tab);
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('See more $tabName stories coming soon!'),
+                action: SnackBarAction(
+                  label: 'OK',
+                  onPressed: () => ScaffoldMessenger.of(context).hideCurrentSnackBar(),
+                ),
+              ),
+            );
+          },
+          child: Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(16),
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  Theme.of(context).colorScheme.primary.withOpacity(0.1),
+                  Theme.of(context).colorScheme.primary.withOpacity(0.05),
+                ],
+              ),
+            ),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                // Icon
+                Container(
+                  width: 80,
+                  height: 80,
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.primary.withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(40),
+                  ),
+                  child: Icon(
+                    Icons.add_circle_outline,
+                    size: 40,
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                
+                // Text content
+                Text(
+                  'See More Stories',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    color: Theme.of(context).colorScheme.primary,
+                    fontWeight: FontWeight.w700,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Discover more ${_getTabName(_tab).toLowerCase()} stories and adventures',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+                  maxLines: 3,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
