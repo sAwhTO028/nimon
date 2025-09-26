@@ -3,7 +3,6 @@ import 'package:go_router/go_router.dart';
 import 'package:nimon/features/reader/reader_screen.dart';
 import '../../data/story_repo.dart';
 import '../../models/story.dart';
-import 'widgets/book_cover_card.dart';
 import 'widgets/mono_collection_row.dart';
 import '../widgets/real_book_3d_cover.dart';
 
