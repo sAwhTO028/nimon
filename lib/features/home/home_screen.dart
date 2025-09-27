@@ -5,7 +5,6 @@ import '../../data/story_repo.dart';
 import '../../models/story.dart';
 import 'widgets/mono_collection_row.dart';
 import 'widgets/book_cover_card.dart';
-import 'widgets/continue_reading_accordion.dart';
 
 class HomeScreen extends StatefulWidget {
   final StoryRepo repo;
@@ -323,18 +322,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           // Category chips — horizontal, single line
           SliverToBoxAdapter(child: _categoryRow()),
 
-          const SliverToBoxAdapter(child: SizedBox(height: 16)),
-
-          const SliverToBoxAdapter(child: SizedBox(height: 16)),
+          const SliverToBoxAdapter(child: SizedBox(height: 24)),
 
           // Continue Reading section
           SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: ContinueReadingAccordion(
-                episodes: _getContinueReadingEpisodes(),
-              ),
-            ),
+            child: _continueReadingSection(),
           ),
 
           const SliverToBoxAdapter(child: SizedBox(height: 24)),
@@ -356,18 +348,17 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 // Update the story lists for premium/new release section
                 _updateStoryLists(stories);
                 return SizedBox(
-                  height: 120 * 3 / 2 + 8, // Calculate height from width and aspect ratio
+                  height: 140 * 3 / 2, // Calculate height from BookCoverCard.md width and aspect ratio
                   child: ListView.separated(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     scrollDirection: Axis.horizontal,
                     itemCount: stories.length,
-                    separatorBuilder: (_, __) => const SizedBox(width: 14),
+                    separatorBuilder: (_, __) => const SizedBox(width: 16),
                     itemBuilder: (ctx, i) {
                       final s = stories[i];
-                      return BookCoverCard(
+                      return BookCoverCard.md(
                         story: s,
                         onTap: () => _openDetail(s),
-                        width: 120,
                       );
                     },
                   ),
@@ -376,7 +367,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             ),
           ),
 
-          const SliverToBoxAdapter(child: SizedBox(height: 20)),
+          const SliverToBoxAdapter(child: SizedBox(height: 24)),
 
           // Popular Mono writer's collections
           SliverToBoxAdapter(
@@ -456,7 +447,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           ),
 
           // bottom spacer to avoid overflow behind nav bar
-          const SliverToBoxAdapter(child: SizedBox(height: 92)),
+          const SliverToBoxAdapter(child: SizedBox(height: 16)),
         ],
       ),
     );
@@ -496,7 +487,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
   Widget _sectionTitle(BuildContext ctx, String title, {Widget? trailing}) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 20, 16, 12),
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
       child: Row(
         children: [
           Text(title,
@@ -504,12 +495,142 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                   .textTheme
                   .titleMedium!
                   .copyWith(
-                    fontWeight: FontWeight.w700,
-                    fontSize: 18,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 20,
                   )),
           const Spacer(),
           if (trailing != null) trailing,
         ],
+      ),
+    );
+  }
+
+  Widget _continueReadingSection() {
+    final episodes = _getContinueReadingEpisodes();
+    
+    // Hide section if no episodes
+    if (episodes.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return Column(
+      children: [
+        // Section Header
+        _sectionTitle(
+          context,
+          'Continue Reading',
+          trailing: TextButton(
+            onPressed: () {
+              // Navigate to continue reading page
+            },
+            child: const Text('See all'),
+          ),
+        ),
+        // Horizontal List
+        SizedBox(
+          height: 180, // Fixed height for better proportions
+          child: ListView.separated(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            scrollDirection: Axis.horizontal,
+            itemCount: episodes.length,
+            separatorBuilder: (_, __) => const SizedBox(width: 16),
+            itemBuilder: (context, index) {
+              final episode = episodes[index];
+              return _buildEpisodeCard(context, episode);
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildEpisodeCard(BuildContext context, Episode episode) {
+    final cs = Theme.of(context).colorScheme;
+    
+    // Placeholder metadata since Episode doesn't link Story details directly
+    const defaultCategory = 'Love';
+    const jlpt = 'N5';
+    const writer = 'WRITER NAME';
+    const likes = 4200;
+
+    return Container(
+      width: 140, // Match Recommend Stories card width
+      height: 180, // Fixed height for better proportions
+      child: InkWell(
+        onTap: () {
+          // Handle episode tap - navigate to reader
+        },
+        child: Card(
+          elevation: 3,
+          clipBehavior: Clip.antiAlias,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // Header
+              Container(
+                height: 40, // Increased height for better proportions
+                color: cs.surfaceContainerHighest,
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                child: Row(
+                  children: [
+                    const CircleAvatar(radius: 12, child: Icon(Icons.person, size: 16)),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        writer,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.labelLarge,
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: cs.primaryContainer,
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Text(jlpt, style: Theme.of(context).textTheme.labelSmall),
+                    ),
+                  ],
+                ),
+              ),
+              // Cover
+              Expanded(
+                child: Image.network(
+                  'https://images.unsplash.com/photo-1519638399535-1b036603ac77?w=800',
+                  fit: BoxFit.cover,
+                ),
+              ),
+              // Footer
+              Container(
+                height: 56, // Increased height for better proportions
+                color: cs.surfaceVariant,
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Episode ${episode.index}  ${episode.preview}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.bodyMedium,
+                    ),
+                    const Spacer(),
+                    Row(
+                      children: [
+                        Icon(Icons.favorite_rounded, size: 18, color: cs.secondary),
+                        const SizedBox(width: 8),
+                        Text('${(likes / 1000).toStringAsFixed(1)}K', 
+                             style: Theme.of(context).textTheme.labelMedium),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

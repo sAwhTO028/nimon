@@ -12,6 +12,20 @@ class BookCoverCard extends StatelessWidget {
     this.isCircular = false,
   });
 
+  const BookCoverCard.sm({
+    super.key,
+    required this.story,
+    this.onTap,
+    this.isCircular = false,
+  }) : width = 116; // Small preset for Continue Reading
+
+  const BookCoverCard.md({
+    super.key,
+    required this.story,
+    this.onTap,
+    this.isCircular = false,
+  }) : width = 140; // Medium preset for Recommend Stories
+
   final Story story;
   final VoidCallback? onTap;
   final double width;

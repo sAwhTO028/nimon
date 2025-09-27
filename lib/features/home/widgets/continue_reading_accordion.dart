@@ -78,7 +78,7 @@ class _ContinueReadingAccordionState extends State<ContinueReadingAccordion>
                       'Continue Reading',
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
                         fontSize: 18,
-                        fontWeight: FontWeight.w700,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                   ),
@@ -126,7 +126,7 @@ class _ContinueReadingAccordionState extends State<ContinueReadingAccordion>
 
     // Show actual content - episode cards like Popular Mono writer's collections
     return SizedBox(
-      height: 200,
+      height: 116 * 3 / 2, // Calculate height from BookCoverCard.sm width and aspect ratio
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         itemCount: widget.episodes.length,
@@ -232,17 +232,17 @@ class _ContinueReadingAccordionState extends State<ContinueReadingAccordion>
 
   Widget _buildSkeleton() {
     return SizedBox(
-      height: 200,
+      height: 116 * 3 / 2, // Calculate height from BookCoverCard.sm width and aspect ratio
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         itemCount: 3,
         separatorBuilder: (_, __) => const SizedBox(width: 12),
         itemBuilder: (context, index) {
           return Container(
-            width: 160,
-            height: 200,
+            width: 116,
+            height: 116 * 3 / 2,
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: BorderRadius.circular(8),
               color: Colors.grey[300],
             ),
           );
