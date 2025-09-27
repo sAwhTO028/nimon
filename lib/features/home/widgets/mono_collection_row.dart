@@ -8,9 +8,11 @@ class MonoCollectionRow extends StatelessWidget {
   const MonoCollectionRow({
     super.key,
     required this.episodes,
+    this.title = 'Popular Mono\nCollections',
   });
 
   final List<Episode> episodes;
+  final String title;
 
   @override
   Widget build(BuildContext context) {
@@ -24,7 +26,7 @@ class MonoCollectionRow extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 16),
         itemCount: episodes.length + 1,
         itemBuilder: (ctx, i) {
-          if (i == 0) return const _IntroCard();
+          if (i == 0) return _IntroCard(title: title);
           final ep = episodes[i - 1];
           return _EpisodeCard(ep: ep);
         },
@@ -34,63 +36,44 @@ class MonoCollectionRow extends StatelessWidget {
 }
 
 class _IntroCard extends StatelessWidget {
-  const _IntroCard();
+  const _IntroCard({required this.title});
+
+  final String title;
 
   @override
   Widget build(BuildContext context) {
-    final radius = BorderRadius.circular(20); // match current card radius
     final size = const Size(160, 200); // keep existing size
 
     return Container(
       width: size.width,
       height: size.height,
       margin: const EdgeInsets.only(right: 12),
-      child: ClipRRect(
-        borderRadius: radius,
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            // Frosted blur background
-            Container(
-              color: Theme.of(context).colorScheme.surface.withOpacity(0.55),
-            ),
-            BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
-              child: const SizedBox.expand(), // required to apply the blur
-            ),
-
-            // Foreground content (PNG + caption)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  // Transparent PNG icon
-                  Expanded(
-                    child: Center(
-                      child: Image.asset(
-                        'assets/images/writer.png',
-                        fit: BoxFit.contain,
-                        // Adjust if needed to avoid clipping
-                        width: 96,
-                        height: 96,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Popular Mono\nCollections',
-                    textAlign: TextAlign.center,
-                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                          fontWeight: FontWeight.w600,
-                        ),
-                    maxLines: 2,
-                  ),
-                ],
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          // Transparent PNG icon
+          Expanded(
+            child: Center(
+              child: Image.asset(
+                'assets/images/writer.png',
+                fit: BoxFit.contain,
+                // Adjust if needed to avoid clipping
+                width: 96,
+                height: 96,
               ),
             ),
-          ],
-        ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            title,
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  fontWeight: FontWeight.w500,
+                  fontSize: 14,
+                ),
+            maxLines: 2,
+          ),
+        ],
       ),
     );
   }

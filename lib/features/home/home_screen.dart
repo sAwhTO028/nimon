@@ -146,6 +146,27 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     return allEpisodes.take(8).toList();
   }
 
+  Future<List<Episode>> _getNewWritersEpisodes() async {
+    final stories = await _future;
+    // Get stories from index 5-9 (different from popular stories) to simulate new writers
+    final newWritersStories = stories.skip(5).take(5).toList();
+    final List<Episode> allEpisodes = [];
+
+    for (final story in newWritersStories) {
+      try {
+        final episodes = await repo.getEpisodesByStory(story.id);
+        allEpisodes.addAll(episodes);
+      } catch (e) {
+        // Continue with other stories if one fails
+        continue;
+      }
+    }
+
+    // Sort by index and take the first 8 episodes
+    allEpisodes.sort((a, b) => b.index.compareTo(a.index));
+    return allEpisodes.take(8).toList();
+  }
+
   void _onSelectRank(String v) {
     setState(() {
       _rank = v;
@@ -312,20 +333,57 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
           // Popular Mono writer's collections
           SliverToBoxAdapter(
-            child: _sectionTitle(context, "Popular Mono writer's collections"),
+            child: Container(
+              color: const Color(0xFFF8F9FA), // Subtle neutral shade
+              child: Column(
+                children: [
+                  _sectionTitle(context, "Popular Mono writer's collections"),
+                  FutureBuilder<List<Episode>>(
+                    future: _getPopularEpisodes(),
+                    builder: (ctx, snap) {
+                      if (!snap.hasData) {
+                        return const SizedBox(
+                            height: 200,
+                            child: Center(child: CircularProgressIndicator()));
+                      }
+                      final episodes = snap.data!;
+                      return MonoCollectionRow(
+                        episodes: episodes,
+                        title: 'Popular Mono\nCollections',
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 24),
+                ],
+              ),
+            ),
           ),
+
+          // New Writers Spotlight
           SliverToBoxAdapter(
-            child: FutureBuilder<List<Episode>>(
-              future: _getPopularEpisodes(),
-              builder: (ctx, snap) {
-                if (!snap.hasData) {
-                  return const SizedBox(
-                      height: 200,
-                      child: Center(child: CircularProgressIndicator()));
-                }
-                final episodes = snap.data!;
-                return MonoCollectionRow(episodes: episodes);
-              },
+            child: Container(
+              color: Colors.white, // Clean white background
+              child: Column(
+                children: [
+                  _sectionTitle(context, "New Writers Spotlight"),
+                  FutureBuilder<List<Episode>>(
+                    future: _getNewWritersEpisodes(),
+                    builder: (ctx, snap) {
+                      if (!snap.hasData) {
+                        return const SizedBox(
+                            height: 200,
+                            child: Center(child: CircularProgressIndicator()));
+                      }
+                      final episodes = snap.data!;
+                      return MonoCollectionRow(
+                        episodes: episodes,
+                        title: 'New Writers\nSpotlight',
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 24),
+                ],
+              ),
             ),
           ),
 
@@ -391,14 +449,17 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
   Widget _sectionTitle(BuildContext ctx, String title, {Widget? trailing}) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+      padding: const EdgeInsets.fromLTRB(16, 20, 16, 12),
       child: Row(
         children: [
           Text(title,
               style: Theme.of(ctx)
                   .textTheme
-                  .titleLarge!
-                  .copyWith(fontWeight: FontWeight.w800)),
+                  .titleMedium!
+                  .copyWith(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 18,
+                  )),
           const Spacer(),
           if (trailing != null) trailing,
         ],
