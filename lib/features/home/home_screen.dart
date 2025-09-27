@@ -308,20 +308,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     scrollDirection: Axis.horizontal,
                     itemCount: stories.length,
-                    separatorBuilder: (_, __) => const SizedBox(width: 12),
+                    separatorBuilder: (_, __) => const SizedBox(width: 14),
                     itemBuilder: (ctx, i) {
                       final s = stories[i];
-                      return InkWell(
-                        onTap: () => _openDetail(s),
-                        child: RealBook3DCover(
-                          image: NetworkImage(s.coverUrl ?? 'https://picsum.photos/seed/${s.id}/600/900'),
-                          width: 180,
-                          height: 240,
-                          thickness: 0, // no page edge
-                          tiltDegrees: -16,
-                          overlayTitle: s.title,
-                        ),
-                      );
+                      return _buildRecommendStoryCard(context, s);
                     },
                   ),
                 );
@@ -463,6 +453,140 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           const Spacer(),
           if (trailing != null) trailing,
         ],
+      ),
+    );
+  }
+
+  Widget _buildRecommendStoryCard(BuildContext context, Story story) {
+    return InkWell(
+      onTap: () => _openDetail(story),
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        width: 150,
+        height: 195,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(8),
+          boxShadow: [
+            // Left spine shadow
+            BoxShadow(
+              color: Colors.black.withOpacity(0.12),
+              blurRadius: 0,
+              offset: const Offset(-2, 0),
+              spreadRadius: 0,
+            ),
+            // Right edge shadow
+            BoxShadow(
+              color: Colors.black.withOpacity(0.08),
+              blurRadius: 0,
+              offset: const Offset(1, 0),
+              spreadRadius: 0,
+            ),
+            // Drop shadow for elevation
+            BoxShadow(
+              color: Colors.black.withOpacity(0.12),
+              blurRadius: 8,
+              offset: const Offset(0, 3),
+              spreadRadius: 0,
+            ),
+          ],
+        ),
+        child: Stack(
+          children: [
+            // Book spine effect
+            Positioned(
+              left: 0,
+              top: 0,
+              bottom: 0,
+              width: 3,
+              child: Container(
+                decoration: BoxDecoration(
+                  borderRadius: const BorderRadius.only(
+                    topLeft: Radius.circular(8),
+                    bottomLeft: Radius.circular(8),
+                  ),
+                  gradient: LinearGradient(
+                    begin: Alignment.centerLeft,
+                    end: Alignment.centerRight,
+                    colors: [
+                      Colors.black.withOpacity(0.15),
+                      Colors.black.withOpacity(0.03),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            // Main book cover
+            Positioned(
+              left: 1,
+              top: 0,
+              right: 0,
+              bottom: 0,
+              child: ClipRRect(
+                borderRadius: const BorderRadius.only(
+                  topRight: Radius.circular(8),
+                  bottomRight: Radius.circular(8),
+                ),
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    // Cover image
+                    Image.network(
+                      story.coverUrl ?? 'https://picsum.photos/seed/${story.id}/600/900',
+                      fit: BoxFit.cover,
+                      loadingBuilder: (context, child, loadingProgress) {
+                        if (loadingProgress == null) return child;
+                        return Container(
+                          color: Colors.grey[300],
+                          child: const Center(
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                        );
+                      },
+                      errorBuilder: (context, error, stackTrace) {
+                        return Container(
+                          color: Colors.grey[300],
+                          child: const Center(
+                            child: Icon(Icons.book, size: 32, color: Colors.grey),
+                          ),
+                        );
+                      },
+                    ),
+                    // Title overlay
+                    Positioned(
+                      left: 0,
+                      right: 0,
+                      bottom: 0,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [
+                              Colors.transparent,
+                              Colors.black.withOpacity(0.5),
+                            ],
+                          ),
+                        ),
+                        child: Text(
+                          story.title,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 15,
+                            fontWeight: FontWeight.w700,
+                          ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
