@@ -30,6 +30,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   List<Story> _premiumStories = [];
   List<Story> _newReleaseStories = [];
 
+  // Tab and Page controllers for swipeable tabs
+  late TabController _tabController;
+  late PageController _pageController;
+
   void _updateStoryLists(List<Story> stories) {
     _premiumStories = stories.take(5).toList();
     _newReleaseStories = stories.skip(2).take(5).toList();
@@ -39,6 +43,31 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   void initState() {
     super.initState();
     _future = repo.listStories();
+    
+    // Initialize controllers
+    _tabController = TabController(length: 2, vsync: this, initialIndex: 0);
+    _pageController = PageController(initialPage: 0);
+    
+    // Sync tab and page controllers
+    _tabController.addListener(() {
+      if (_tabController.indexIsChanging) {
+        _pageController.animateToPage(
+          _tabController.index,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeInOut,
+        );
+        setState(() {
+          _tab = _tabController.index == 0 ? _StoryTab.premium : _StoryTab.newRelease;
+        });
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    _pageController.dispose();
+    super.dispose();
   }
 
   Future<void> _openBestEpisode(BuildContext context, Story s) async {
@@ -473,16 +502,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         Container(
           margin: const EdgeInsets.symmetric(horizontal: 16),
           child: TabBar(
-            controller: TabController(
-              length: 2,
-              vsync: this,
-              initialIndex: _tab == _StoryTab.premium ? 0 : 1,
-            ),
-            onTap: (index) {
-              setState(() {
-                _tab = index == 0 ? _StoryTab.premium : _StoryTab.newRelease;
-              });
-            },
+            controller: _tabController,
             indicator: UnderlineTabIndicator(
               borderSide: BorderSide(
                 width: 2,
@@ -507,8 +527,23 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
         const SizedBox(height: 16),
 
-        // List for the selected tab
-        _storyListForTab(context),
+        // PageView for swipeable content
+        SizedBox(
+          height: _calculatePageViewHeight(),
+          child: PageView(
+            controller: _pageController,
+            onPageChanged: (index) {
+              _tabController.animateTo(index);
+              setState(() {
+                _tab = index == 0 ? _StoryTab.premium : _StoryTab.newRelease;
+              });
+            },
+            children: [
+              _storyListForTab(context, _StoryTab.premium),
+              _storyListForTab(context, _StoryTab.newRelease),
+            ],
+          ),
+        ),
       ],
     );
   }
@@ -522,9 +557,19 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     }
   }
 
+  double _calculatePageViewHeight() {
+    // Calculate height based on content: 5 items * (card height + spacing) + see more button
+    const double cardHeight = 96.0; // Approximate card height
+    const double cardSpacing = 6.0;
+    const double seeMoreButtonHeight = 40.0;
+    const double padding = 16.0;
+    
+    return (5 * cardHeight) + (4 * cardSpacing) + seeMoreButtonHeight + padding;
+  }
 
-  Widget _storyListForTab(BuildContext context) {
-    final items = _tab == _StoryTab.premium ? _premiumStories : _newReleaseStories;
+
+  Widget _storyListForTab(BuildContext context, _StoryTab tab) {
+    final items = tab == _StoryTab.premium ? _premiumStories : _newReleaseStories;
     final displayItems = items.take(5).toList(); // Show only 5 items
     
     return Column(
@@ -638,14 +683,14 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
            const SizedBox(height: 12),
            Container(
              margin: const EdgeInsets.symmetric(horizontal: 3), // 3px margin to match cards
-             child: _buildSeeMoreButton(context),
+             child: _buildSeeMoreButton(context, tab),
            ),
          ],
       ],
     );
   }
 
-  Widget _buildSeeMoreButton(BuildContext context) {
+  Widget _buildSeeMoreButton(BuildContext context, _StoryTab tab) {
     return Container(
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.primary,
@@ -663,7 +708,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         child: InkWell(
           borderRadius: BorderRadius.circular(20),
           onTap: () {
-            final tabName = _getTabName(_tab);
+            final tabName = _getTabName(tab);
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content: Text('See more $tabName stories coming soon!'),
