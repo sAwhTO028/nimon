@@ -16,7 +16,7 @@ class HomeScreen extends StatefulWidget {
 
 enum _StoryTab { premium, newRelease }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   late Future<List<Story>> _future;
   String _rank = 'ALL';
   String _category = 'ALL';
@@ -281,11 +281,9 @@ class _HomeScreenState extends State<HomeScreen> {
 
           const SliverToBoxAdapter(child: SizedBox(height: 20)),
 
-          // Popular Mono writer's collections (See more)
+          // Popular Mono writer's collections
           SliverToBoxAdapter(
-            child: _sectionTitle(context, "Popular Mono writer's collections",
-                trailing: TextButton(
-                    onPressed: () {}, child: const Text('See more'))),
+            child: _sectionTitle(context, "Popular Mono writer's collections"),
           ),
           SliverToBoxAdapter(
             child: FutureBuilder<List<Episode>>(
@@ -471,33 +469,38 @@ class _HomeScreenState extends State<HomeScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const SizedBox(height: 16),
-        // Pill-style tabs like the image
+        // Material 3 Secondary Tabs
         Container(
           margin: const EdgeInsets.symmetric(horizontal: 16),
-          padding: const EdgeInsets.all(4),
-          decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.3),
-            borderRadius: BorderRadius.circular(24),
-          ),
-          child: Row(
-            children: [
-              Expanded(
-                child: _buildPillTab(
-                  context,
-                  'Premium Stories',
-                  _StoryTab.premium,
-                  isSelected: _tab == _StoryTab.premium,
-                ),
+          child: TabBar(
+            controller: TabController(
+              length: 2,
+              vsync: this,
+              initialIndex: _tab == _StoryTab.premium ? 0 : 1,
+            ),
+            onTap: (index) {
+              setState(() {
+                _tab = index == 0 ? _StoryTab.premium : _StoryTab.newRelease;
+              });
+            },
+            indicator: UnderlineTabIndicator(
+              borderSide: BorderSide(
+                width: 2,
+                color: Theme.of(context).colorScheme.primary,
               ),
-              const SizedBox(width: 4),
-              Expanded(
-                child: _buildPillTab(
-                  context,
-                  'New Release',
-                  _StoryTab.newRelease,
-                  isSelected: _tab == _StoryTab.newRelease,
-                ),
-              ),
+              insets: const EdgeInsets.symmetric(horizontal: 16),
+            ),
+            labelColor: Theme.of(context).colorScheme.primary,
+            unselectedLabelColor: Theme.of(context).colorScheme.onSurfaceVariant,
+            labelStyle: Theme.of(context).textTheme.labelLarge?.copyWith(
+              fontWeight: FontWeight.w600,
+            ),
+            unselectedLabelStyle: Theme.of(context).textTheme.labelLarge?.copyWith(
+              fontWeight: FontWeight.w500,
+            ),
+            tabs: const [
+              Tab(text: 'Featured Stories'),
+              Tab(text: 'Latest Releases'),
             ],
           ),
         ),
@@ -513,72 +516,12 @@ class _HomeScreenState extends State<HomeScreen> {
   String _getTabName(_StoryTab tab) {
     switch (tab) {
       case _StoryTab.premium:
-        return 'Premium';
+        return 'Featured';
       case _StoryTab.newRelease:
-        return 'New Release';
+        return 'Latest Releases';
     }
   }
 
-  Widget _buildPillTab(BuildContext context, String label, _StoryTab tab, {required bool isSelected}) {
-    final theme = Theme.of(context);
-    
-    return GestureDetector(
-      onTap: () => setState(() => _tab = tab),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(vertical: 12),
-        decoration: BoxDecoration(
-          color: isSelected 
-              ? theme.colorScheme.primary
-              : Colors.transparent,
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: Text(
-          label,
-          textAlign: TextAlign.center,
-          style: theme.textTheme.labelLarge?.copyWith(
-            color: isSelected 
-                ? Colors.white
-                : theme.colorScheme.onSurfaceVariant,
-            fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildTabChip(BuildContext context, String label, _StoryTab tab, {required bool isSelected}) {
-    final theme = Theme.of(context);
-    
-    return GestureDetector(
-      onTap: () => setState(() => _tab = tab),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-        decoration: BoxDecoration(
-          color: isSelected 
-              ? theme.colorScheme.primary.withOpacity(0.1)
-              : theme.colorScheme.surface,
-          borderRadius: BorderRadius.circular(24),
-          border: Border.all(
-            color: isSelected 
-                ? theme.colorScheme.primary
-                : theme.colorScheme.outline.withOpacity(0.3),
-            width: isSelected ? 2 : 1,
-          ),
-        ),
-        child: Text(
-          label,
-          style: theme.textTheme.labelLarge?.copyWith(
-            color: isSelected 
-                ? theme.colorScheme.primary
-                : theme.colorScheme.onSurfaceVariant,
-            fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
-          ),
-        ),
-      ),
-    );
-  }
 
   Widget _storyListForTab(BuildContext context) {
     final items = _tab == _StoryTab.premium ? _premiumStories : _newReleaseStories;
