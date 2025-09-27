@@ -4,7 +4,8 @@ import 'package:nimon/features/reader/reader_screen.dart';
 import '../../data/story_repo.dart';
 import '../../models/story.dart';
 import 'widgets/mono_collection_row.dart';
-import '../widgets/real_book_3d_cover.dart';
+import 'widgets/book_cover_card.dart';
+import 'widgets/continue_reading_accordion.dart';
 
 class HomeScreen extends StatefulWidget {
   final StoryRepo repo;
@@ -167,6 +168,46 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     return allEpisodes.take(8).toList();
   }
 
+  List<Episode> _getContinueReadingEpisodes() {
+    // Demo content - return 3 episodes for continue reading
+    // In a real app, this would be episodes the user has started reading
+    return [
+      Episode(
+        id: 'continue_ep_1',
+        storyId: 'continue_1',
+        index: 3,
+        blocks: [
+          EpisodeBlock(
+            type: BlockType.narration,
+            text: 'The rain continued to fall on the ancient streets of Kyoto...',
+          ),
+        ],
+      ),
+      Episode(
+        id: 'continue_ep_2',
+        storyId: 'continue_2',
+        index: 5,
+        blocks: [
+          EpisodeBlock(
+            type: BlockType.narration,
+            text: 'As they climbed higher into the mountains, the air grew thinner...',
+          ),
+        ],
+      ),
+      Episode(
+        id: 'continue_ep_3',
+        storyId: 'continue_3',
+        index: 2,
+        blocks: [
+          EpisodeBlock(
+            type: BlockType.narration,
+            text: 'The city lights twinkled like stars in the urban night...',
+          ),
+        ],
+      ),
+    ];
+  }
+
   void _onSelectRank(String v) {
     setState(() {
       _rank = v;
@@ -286,6 +327,18 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
           const SliverToBoxAdapter(child: SizedBox(height: 16)),
 
+          // Continue Reading section
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: ContinueReadingAccordion(
+                episodes: _getContinueReadingEpisodes(),
+              ),
+            ),
+          ),
+
+          const SliverToBoxAdapter(child: SizedBox(height: 24)),
+
           // Recommend Stories section
           SliverToBoxAdapter(
             child: _sectionTitle(context, 'Recommend Stories'),
@@ -303,7 +356,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 // Update the story lists for premium/new release section
                 _updateStoryLists(stories);
                 return SizedBox(
-                  height: 220,
+                  height: 120 * 3 / 2 + 8, // Calculate height from width and aspect ratio
                   child: ListView.separated(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     scrollDirection: Axis.horizontal,
@@ -311,7 +364,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                     separatorBuilder: (_, __) => const SizedBox(width: 14),
                     itemBuilder: (ctx, i) {
                       final s = stories[i];
-                      return _buildRecommendStoryCard(context, s);
+                      return BookCoverCard(
+                        story: s,
+                        onTap: () => _openDetail(s),
+                        width: 120,
+                      );
                     },
                   ),
                 );
@@ -457,139 +514,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     );
   }
 
-  Widget _buildRecommendStoryCard(BuildContext context, Story story) {
-    return InkWell(
-      onTap: () => _openDetail(story),
-      borderRadius: BorderRadius.circular(8),
-      child: Container(
-        width: 150,
-        height: 195,
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(8),
-          boxShadow: [
-            // Left spine shadow
-            BoxShadow(
-              color: Colors.black.withOpacity(0.12),
-              blurRadius: 0,
-              offset: const Offset(-2, 0),
-              spreadRadius: 0,
-            ),
-            // Right edge shadow
-            BoxShadow(
-              color: Colors.black.withOpacity(0.08),
-              blurRadius: 0,
-              offset: const Offset(1, 0),
-              spreadRadius: 0,
-            ),
-            // Drop shadow for elevation
-            BoxShadow(
-              color: Colors.black.withOpacity(0.12),
-              blurRadius: 8,
-              offset: const Offset(0, 3),
-              spreadRadius: 0,
-            ),
-          ],
-        ),
-        child: Stack(
-          children: [
-            // Book spine effect
-            Positioned(
-              left: 0,
-              top: 0,
-              bottom: 0,
-              width: 3,
-              child: Container(
-                decoration: BoxDecoration(
-                  borderRadius: const BorderRadius.only(
-                    topLeft: Radius.circular(8),
-                    bottomLeft: Radius.circular(8),
-                  ),
-                  gradient: LinearGradient(
-                    begin: Alignment.centerLeft,
-                    end: Alignment.centerRight,
-                    colors: [
-                      Colors.black.withOpacity(0.15),
-                      Colors.black.withOpacity(0.03),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-            // Main book cover
-            Positioned(
-              left: 1,
-              top: 0,
-              right: 0,
-              bottom: 0,
-              child: ClipRRect(
-                borderRadius: const BorderRadius.only(
-                  topRight: Radius.circular(8),
-                  bottomRight: Radius.circular(8),
-                ),
-                child: Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    // Cover image
-                    Image.network(
-                      story.coverUrl ?? 'https://picsum.photos/seed/${story.id}/600/900',
-                      fit: BoxFit.cover,
-                      loadingBuilder: (context, child, loadingProgress) {
-                        if (loadingProgress == null) return child;
-                        return Container(
-                          color: Colors.grey[300],
-                          child: const Center(
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          ),
-                        );
-                      },
-                      errorBuilder: (context, error, stackTrace) {
-                        return Container(
-                          color: Colors.grey[300],
-                          child: const Center(
-                            child: Icon(Icons.book, size: 32, color: Colors.grey),
-                          ),
-                        );
-                      },
-                    ),
-                    // Title overlay
-                    Positioned(
-                      left: 0,
-                      right: 0,
-                      bottom: 0,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            begin: Alignment.topCenter,
-                            end: Alignment.bottomCenter,
-                            colors: [
-                              Colors.transparent,
-                              Colors.black.withOpacity(0.5),
-                            ],
-                          ),
-                        ),
-                        child: Text(
-                          story.title,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 15,
-                            fontWeight: FontWeight.w700,
-                          ),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          textAlign: TextAlign.center,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 
   Widget _heroCard(BuildContext context, int i) {
     return ClipRRect(
