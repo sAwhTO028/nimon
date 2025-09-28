@@ -1,5 +1,6 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 class CommunityEpisode {
   final String title;
@@ -43,9 +44,22 @@ class CommunityCollectionCard extends StatelessWidget {
     return InkWell(
       borderRadius: BorderRadius.circular(20),
       onTap: () {
-        // Handle card tap
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Opening $title collection')),
+        // Add haptic feedback
+        HapticFeedback.lightImpact();
+        
+        // Navigate to story details
+        Navigator.pushNamed(
+          context,
+          '/story-details',
+          arguments: {
+            'title': title,
+            'description': description,
+            'coverUrl': coverUrl,
+            'jlptLevel': jlptLevel,
+            'totalEpisodes': totalEpisodes,
+            'storyType': storyType,
+            'episodes': episodes,
+          },
         );
       },
       child: Card(
@@ -153,17 +167,41 @@ class CommunityCollectionCard extends StatelessWidget {
                   ],
                 ),
                 const SizedBox(height: 12),
-                // Latest Episodes section
-                Text(
-                  'Latest Episodes',
-                  style: theme.textTheme.titleMedium,
-                ),
-                const SizedBox(height: 8),
+              // Latest Episodes section with progress indicator
+              Row(
+                children: [
+                  Text(
+                    'Latest Episodes',
+                    style: theme.textTheme.titleMedium,
+                  ),
+                  const Spacer(),
+                  // Progress indicator showing completion
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: color.primaryContainer.withOpacity(0.3),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      '${episodes.length}/$totalEpisodes',
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: color.onPrimaryContainer,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
                 // Episodes list - use Flexible to prevent overflow
                 Flexible(
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
-                    children: episodes.take(3).map((episode) => _EpisodeTile(episode: episode)).toList(),
+                    children: episodes.take(3).map((episode) => _EpisodeTile(
+                      episode: episode,
+                      storyTitle: title,
+                      jlptLevel: jlptLevel,
+                    )).toList(),
                   ),
                 ),
                 const SizedBox(height: 4), // Minimal bottom padding
@@ -204,8 +242,14 @@ class _JlptBadge extends StatelessWidget {
 
 class _EpisodeTile extends StatelessWidget {
   final CommunityEpisode episode;
+  final String storyTitle;
+  final String jlptLevel;
 
-  const _EpisodeTile({required this.episode});
+  const _EpisodeTile({
+    required this.episode,
+    required this.storyTitle,
+    required this.jlptLevel,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -214,9 +258,20 @@ class _EpisodeTile extends StatelessWidget {
 
     return InkWell(
       onTap: () {
-        // Handle episode tap
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Opening ${episode.title}')),
+        // Add haptic feedback
+        HapticFeedback.selectionClick();
+        
+        // Navigate to reader view
+        Navigator.pushNamed(
+          context,
+          '/reader',
+          arguments: {
+            'episodeTitle': episode.title,
+            'episodeNumber': episode.episodeNumber,
+            'thumbnailUrl': episode.thumbnailUrl,
+            'storyTitle': storyTitle, // Pass the parent story title
+            'jlptLevel': jlptLevel, // Pass JLPT level for context
+          },
         );
       },
       borderRadius: BorderRadius.circular(8),
@@ -274,20 +329,39 @@ class _EpisodeTile extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 6),
-            // Episode number
+            // Episode number with progress indicator
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
               decoration: BoxDecoration(
-                color: color.primaryContainer,
+                color: episode.episodeNumber <= 3 
+                    ? color.primaryContainer 
+                    : color.surfaceContainerLow,
                 borderRadius: BorderRadius.circular(999),
+                border: episode.episodeNumber <= 3 
+                    ? null 
+                    : Border.all(color: color.outline.withOpacity(0.3)),
               ),
-              child: Text(
-                'Ep ${episode.episodeNumber}',
-                style: theme.textTheme.labelSmall?.copyWith(
-                  color: color.onPrimaryContainer,
-                  fontWeight: FontWeight.w600,
-                  fontSize: 10,
-                ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (episode.episodeNumber <= 3)
+                    Icon(
+                      Icons.play_circle_outline,
+                      size: 8,
+                      color: color.onPrimaryContainer,
+                    ),
+                  const SizedBox(width: 2),
+                  Text(
+                    'Ep ${episode.episodeNumber}',
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: episode.episodeNumber <= 3 
+                          ? color.onPrimaryContainer 
+                          : color.onSurfaceVariant,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 10,
+                    ),
+                  ),
+                ],
               ),
             ),
           ],
