@@ -18,6 +18,8 @@ enum _StoryTab { premium, newRelease }
 
 class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   late Future<List<Story>> _future;
+  late Future<List<Story>> _featuredFuture;
+  late Future<List<Story>> _latestFuture;
   String _rank = 'ALL';
   String _category = 'ALL';
   _StoryTab _tab = _StoryTab.premium;
@@ -42,6 +44,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   void initState() {
     super.initState();
     _future = repo.listStories();
+    
+    // Preload both tab futures immediately
+    _featuredFuture = repo.listStories(); // Featured stories
+    _latestFuture = repo.listStories(); // Latest releases
     
     // Initialize controllers
     _tabController = TabController(length: 2, vsync: this, initialIndex: 0);
@@ -286,141 +292,201 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     final cs = Theme.of(context).colorScheme;
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      body: SafeArea(
-        bottom: true,
-        child: SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
+        body: SafeArea(
+          bottom: true,
+          child: NestedScrollView(
+            headerSliverBuilder: (ctx, innerBoxIsScrolled) => [
               // Header with title and balance
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-                child: Row(
-                  children: [
-                    Text('NIMON',
-                        style: Theme.of(context).textTheme.headlineLarge?.copyWith(
-                              fontWeight: FontWeight.w700,
-                              fontSize: 28,
-                              letterSpacing: 0.5,
-                            )),
-                    const Spacer(),
-                    _balancePill('\$ 98'),
-                  ],
-                ),
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+              child: Row(
+                children: [
+                  Text('NIMON',
+                          style: Theme.of(context).textTheme.headlineLarge?.copyWith(
+                                fontWeight: FontWeight.w700,
+                                fontSize: 28,
+                                letterSpacing: 0.5,
+                              )),
+                  const Spacer(),
+                  _balancePill('\$ 98'),
+                ],
               ),
+            ),
+          ),
 
               // Rank and Category filters
-              _rankRow(),
-              _categoryRow(),
-
-              const SizedBox(height: 24),
+          SliverToBoxAdapter(child: _rankRow()),
+          SliverToBoxAdapter(child: _categoryRow()),
+          const SliverToBoxAdapter(child: SizedBox(height: 24)),
 
               // 1) Continue Reading section
-              _continueReadingSection(),
-
-              const SizedBox(height: 24),
+              SliverToBoxAdapter(child: _continueReadingSection()),
+          const SliverToBoxAdapter(child: SizedBox(height: 24)),
 
               // 2) Recommend Stories section
-              _sectionTitle(context, 'Recommend Stories'),
-              const SizedBox(height: 16),
-              FutureBuilder<List<Story>>(
-                future: _future,
-                builder: (ctx, snap) {
-                  if (snap.connectionState != ConnectionState.done) {
-                    return const SizedBox(
-                        height: 180,
-                        child: Center(child: CircularProgressIndicator()));
-                  }
-                  final stories = snap.data ?? const <Story>[];
-                  _updateStoryLists(stories);
-                  return SizedBox(
-                    height: 140 * 3 / 2, // Calculate height from BookCoverCard.md width and aspect ratio
-                    child: ListView.separated(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      scrollDirection: Axis.horizontal,
-                      itemCount: stories.length,
-                      separatorBuilder: (_, __) => const SizedBox(width: 16),
-                      itemBuilder: (ctx, i) {
-                        final s = stories[i];
-                        return BookCoverCard.md(
-                          story: s,
-                          onTap: () => _openDetail(s),
-                        );
-                      },
-                    ),
-                  );
-                },
-              ),
-
-              const SizedBox(height: 24),
+              SliverToBoxAdapter(child: _sectionTitle(context, 'Recommend Stories')),
+              const SliverToBoxAdapter(child: SizedBox(height: 16)),
+          SliverToBoxAdapter(
+            child: FutureBuilder<List<Story>>(
+              future: _future,
+              builder: (ctx, snap) {
+                if (snap.connectionState != ConnectionState.done) {
+                  return const SizedBox(
+                      height: 180,
+                      child: Center(child: CircularProgressIndicator()));
+                }
+                final stories = snap.data ?? const <Story>[];
+                _updateStoryLists(stories);
+                return SizedBox(
+                  height: 140 * 3 / 2, // Calculate height from BookCoverCard.md width and aspect ratio
+                  child: ListView.separated(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    scrollDirection: Axis.horizontal,
+                    itemCount: stories.length,
+                    separatorBuilder: (_, __) => const SizedBox(width: 16),
+                    itemBuilder: (ctx, i) {
+                      final s = stories[i];
+                      return BookCoverCard.md(
+                        story: s,
+                        onTap: () => _openDetail(s),
+                      );
+                    },
+                  ),
+                );
+              },
+            ),
+          ),
+          const SliverToBoxAdapter(child: SizedBox(height: 24)),
 
               // 3) Popular Mono writer's collections
-              Container(
-                color: const Color(0xFFF8F9FA), // Subtle neutral shade
-                child: Column(
-                  children: [
-                    _sectionTitle(context, "Popular Mono writer's collections"),
-                    const SizedBox(height: 16),
-                    FutureBuilder<List<Episode>>(
-                      future: _getPopularEpisodes(),
-                      builder: (ctx, snap) {
-                        if (!snap.hasData) {
-                          return const SizedBox(
-                              height: 200,
-                              child: Center(child: CircularProgressIndicator()));
-                        }
-                        final episodes = snap.data!;
-                        return MonoCollectionRow(
-                          episodes: episodes,
-                          title: 'Popular Mono\nCollections',
-                        );
-                      },
-                    ),
-                    const SizedBox(height: 24),
-                  ],
-                ),
+          SliverToBoxAdapter(
+            child: Container(
+              color: const Color(0xFFF8F9FA), // Subtle neutral shade
+              child: Column(
+                children: [
+                  _sectionTitle(context, "Popular Mono writer's collections"),
+                      const SizedBox(height: 16),
+                  FutureBuilder<List<Episode>>(
+                    future: _getPopularEpisodes(),
+                    builder: (ctx, snap) {
+                      if (!snap.hasData) {
+                        return const SizedBox(
+                            height: 200,
+                            child: Center(child: CircularProgressIndicator()));
+                      }
+                      final episodes = snap.data!;
+                      return MonoCollectionRow(
+                        episodes: episodes,
+                        title: 'Popular Mono\nCollections',
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 24),
+                ],
               ),
+            ),
+          ),
 
               // 4) New Writers Spotlight
-              Container(
-                color: Colors.white, // Clean white background
-                child: Column(
-                  children: [
-                    _sectionTitle(context, "New Writers Spotlight"),
-                    const SizedBox(height: 16),
-                    FutureBuilder<List<Episode>>(
-                      future: _getNewWritersEpisodes(),
-                      builder: (ctx, snap) {
-                        if (!snap.hasData) {
-                          return const SizedBox(
-                              height: 200,
-                              child: Center(child: CircularProgressIndicator()));
-                        }
-                        final episodes = snap.data!;
-                        return MonoCollectionRow(
-                          episodes: episodes,
-                          title: 'New Writers\nSpotlight',
-                        );
-                      },
-                    ),
-                    const SizedBox(height: 24),
-                  ],
+          SliverToBoxAdapter(
+            child: Container(
+              color: Colors.white, // Clean white background
+              margin: const EdgeInsets.only(bottom: 0), // No extra bottom margin
+              child: Column(
+                children: [
+                  _sectionTitle(context, "New Writers Spotlight"),
+                      const SizedBox(height: 16),
+                  FutureBuilder<List<Episode>>(
+                    future: _getNewWritersEpisodes(),
+                    builder: (ctx, snap) {
+                      if (!snap.hasData) {
+                        return const SizedBox(
+                            height: 200,
+                            child: Center(child: CircularProgressIndicator()));
+                      }
+                      final episodes = snap.data!;
+                      return MonoCollectionRow(
+                        episodes: episodes,
+                        title: 'New Writers\nSpotlight',
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 24),
+                ],
+              ),
+            ),
+          ),
+
+              // Guaranteed spacing from previous section
+              const SliverToBoxAdapter(child: SizedBox(height: 24)),
+
+              // Top Charts header (isolated)
+              SliverToBoxAdapter(
+                child: SectionHeader(
+                  title: 'Top Charts',
+                  trailing: const SeeAllButton(),
                 ),
               ),
 
-              // 5) Top Charts section (moved to bottom)
-              _topChartsSection(context),
+              // TabBar with proper spacing
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: TabBar(
+                    controller: _tabController,
+                    indicator: UnderlineTabIndicator(
+                      borderSide: BorderSide(
+                        width: 2,
+                        color: Theme.of(context).colorScheme.primary,
+                      ),
+                      insets: const EdgeInsets.symmetric(horizontal: 24),
+                    ),
+                    labelColor: Theme.of(context).colorScheme.primary,
+                    unselectedLabelColor: Theme.of(context).colorScheme.onSurfaceVariant,
+                    labelStyle: Theme.of(context).textTheme.labelLarge?.copyWith(
+                      fontWeight: FontWeight.w500,
+                      fontSize: 14,
+                    ),
+                    unselectedLabelStyle: Theme.of(context).textTheme.labelLarge?.copyWith(
+                      fontWeight: FontWeight.w500,
+                      fontSize: 14,
+                    ),
+                    tabs: const [
+                      Tab(text: 'Featured Stories'),
+                      Tab(text: 'Latest Releases'),
+                    ],
+                  ),
+                ),
+              ),
 
-              // Bottom spacer for navigation - increased to prevent content behind nav
-              const SizedBox(height: 80),
+              // Spacing from TabBar to first list item
+              const SliverToBoxAdapter(child: SizedBox(height: 12)),
+
+              // TabBarView content
+              SliverFillRemaining(
+                child: TabBarView(
+                  controller: _tabController,
+                  physics: const PageScrollPhysics(), // allow horizontal swipe
+                  children: [
+                    _FeaturedTab(future: _featuredFuture),
+                    _LatestTab(future: _latestFuture),
+                  ],
+                ),
+              ),
             ],
+            body: const SizedBox.shrink(), // Empty body since we're using slivers
           ),
-        ),
       ),
     );
   }
 
   // ───────────────────────── widgets ─────────────────────────
+
+  // Top Charts list widget with proper bottom padding
+  Widget _TopChartList({required List<Story> items}) {
+    return _TopChartListWidget(items: items);
+  }
 
   Widget _coinBadge(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
@@ -698,311 +764,545 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     );
   }
 
-  // Top Charts section with header and tabs (positioned at bottom)
-  Widget _topChartsSection(BuildContext context) {
-    return FutureBuilder<List<Story>>(
-      future: _future,
-      builder: (ctx, snap) {
-        if (snap.connectionState != ConnectionState.done) {
-          return const SizedBox(
-              height: 200,
-              child: Center(child: CircularProgressIndicator()));
-        }
-        final stories = snap.data ?? const <Story>[];
-        // Update the story lists for premium/new release section
-        _updateStoryLists(stories);
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Top Charts Header with proper spacing
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
-              child: Row(
-                children: [
-                  Text(
-                    'Top Charts',
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.w600,
-                      fontSize: 20,
-                      color: Theme.of(context).colorScheme.onSurface,
-                    ),
-                  ),
-                  const Spacer(),
-                  Container(
-                    decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.8),
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: Material(
-                      color: Colors.transparent,
-                      child: InkWell(
-                        borderRadius: BorderRadius.circular(16),
-                        onTap: () {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: const Text('See all Top Charts coming soon!'),
-                              action: SnackBarAction(
-                                label: 'OK',
-                                onPressed: () {},
-                              ),
-                            ),
-                          );
-                        },
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                'See all',
-                                style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                                  fontWeight: FontWeight.w500,
-                                  fontSize: 13,
-                                ),
-                              ),
-                              const SizedBox(width: 4),
-                              Icon(
-                                Icons.arrow_forward_ios,
-                                size: 12,
-                                color: Theme.of(context).colorScheme.onSurfaceVariant,
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
+
+
+  Widget _buildSeeMoreCard(BuildContext context) {
+    return SizedBox(
+      width: 300, // Same width as story cards
+      child: Card(
+        elevation: 2,
+        shadowColor: Colors.black.withOpacity(0.1),
+        color: Theme.of(context).colorScheme.surface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: () {
+            // Navigate to see more stories
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: const Text('See more stories coming soon!'),
+                action: SnackBarAction(
+                  label: 'OK',
+                  onPressed: () => ScaffoldMessenger.of(context).hideCurrentSnackBar(),
+                ),
+              ),
+            );
+          },
+          child: Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(16),
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  Theme.of(context).colorScheme.primary.withOpacity(0.1),
+                  Theme.of(context).colorScheme.primary.withOpacity(0.05),
                 ],
               ),
             ),
-            
-            const SizedBox(height: 16),
-            
-            // Material 3 Secondary Tabs
-            Container(
-              margin: const EdgeInsets.symmetric(horizontal: 16),
-              child: TabBar(
-                controller: _tabController,
-                indicator: UnderlineTabIndicator(
-                  borderSide: BorderSide(
-                    width: 2,
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+                // Icon
+        Container(
+                  width: 80,
+                  height: 80,
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.primary.withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(40),
+                  ),
+                  child: Icon(
+                    Icons.add_circle_outline,
+                    size: 40,
+                color: Theme.of(context).colorScheme.primary,
+              ),
+                ),
+                const SizedBox(height: 16),
+                
+                // Text content
+                Text(
+                  'See More Stories',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
                     color: Theme.of(context).colorScheme.primary,
+                    fontWeight: FontWeight.w700,
                   ),
-                  insets: const EdgeInsets.symmetric(horizontal: 24),
+                  textAlign: TextAlign.center,
                 ),
-                labelColor: Theme.of(context).colorScheme.primary,
-                unselectedLabelColor: Theme.of(context).colorScheme.onSurfaceVariant,
-                labelStyle: Theme.of(context).textTheme.labelLarge?.copyWith(
-                  fontWeight: FontWeight.w500,
-                  fontSize: 14,
+                const SizedBox(height: 8),
+                Text(
+                  'Discover more stories and adventures',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+                  maxLines: 3,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
                 ),
-                unselectedLabelStyle: Theme.of(context).textTheme.labelLarge?.copyWith(
-                  fontWeight: FontWeight.w500,
-                  fontSize: 14,
-                ),
-                tabs: const [
-                  Tab(text: 'Featured Stories'),
-                  Tab(text: 'Latest Releases'),
-                ],
-              ),
-            ),
+            ],
+          ),
+        ),
+        ),
+      ),
+    );
+  }
+}
 
-            const SizedBox(height: 16),
+// Top Charts list widget with proper bottom padding
+class _TopChartListWidget extends StatelessWidget {
+  final List<Story> items;
+  
+  const _TopChartListWidget({required this.items});
+  
+  @override
+  Widget build(BuildContext context) {
+    final bottom = MediaQuery.of(context).viewPadding.bottom;
+    final navH = kBottomNavigationBarHeight;
+    final bottomPadding = bottom + navH + 16;
+    
+    final displayItems = items.take(5).toList(); // Show only 5 items
+    
+    return ListView.separated(
+      padding: EdgeInsets.fromLTRB(16, 12, 16, bottomPadding), // Safe bottom padding
+      itemCount: displayItems.length + (items.length > 5 ? 1 : 0), // +1 for See More button
+      separatorBuilder: (_, __) => Divider(
+        height: 1,
+        color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.3),
+        thickness: 0.5,
+      ),
+           itemBuilder: (context, index) {
+        if (index >= displayItems.length) {
+          // See More button
+          return _buildSeeMoreButton(context);
+        }
+        
+             final s = displayItems[index];
+             final episodeCount = 8 + index; // placeholder
+             final desc = (s.description?.isNotEmpty == true)
+                 ? s.description!
+                 : 'Description Description Description Description Description Description Description';
 
-            // TabBarView with horizontal swiping enabled
-            SizedBox(
-              height: _calculateTabContentHeight(),
-              child: TabBarView(
-                controller: _tabController,
-                physics: const PageScrollPhysics(), // Enable horizontal swiping
-                children: [
-                  _storyListForTab(context, _StoryTab.premium),
-                  _storyListForTab(context, _StoryTab.newRelease),
-                ],
+             return Container(
+          decoration: BoxDecoration(
+                 color: Theme.of(context).colorScheme.surface,
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Material(
+            color: Colors.transparent,
+                 child: InkWell(
+              borderRadius: BorderRadius.circular(10),
+              onTap: () {
+                // Navigate to story detail
+                context.push('/story/${s.id}');
+              },
+                   child: Padding(
+                padding: const EdgeInsets.all(12),
+                     child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+                    // Compact book cover thumbnail (72-76dp width, 2:3 ratio)
+                    Container(
+                      width: 72,
+                      height: 108, // 2:3 aspect ratio (72 * 1.5)
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(10),
+                           child: Image.network(
+                          s.coverUrl ?? 'https://picsum.photos/seed/${s.id}/600/900',
+                             fit: BoxFit.cover,
+                             loadingBuilder: (context, child, loadingProgress) {
+                               if (loadingProgress == null) return child;
+                               return Container(
+                              color: Theme.of(context).colorScheme.surfaceVariant,
+                                 child: const Center(
+                                   child: CircularProgressIndicator(strokeWidth: 2),
+                                 ),
+                               );
+                             },
+                             errorBuilder: (context, error, stackTrace) {
+                               return Container(
+                              color: Theme.of(context).colorScheme.surfaceVariant,
+                              child: const Center(
+                                child: Icon(Icons.book, size: 24, color: Colors.grey),
+                              ),
+                               );
+                             },
+                           ),
+                         ),
+                    ),
+                    const SizedBox(width: 12),
+
+                    // Title and description
+                         Expanded(
+                           child: Column(
+                             crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisAlignment: MainAxisAlignment.center,
+                             children: [
+                               Text(
+                                 s.title,
+                                 style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 16,
+                                  color: Theme.of(context).colorScheme.onSurface,
+                                  height: 1.2,
+                                     ),
+                                 maxLines: 1,
+                                 overflow: TextOverflow.ellipsis,
+                            softWrap: false,
+                               ),
+                          const SizedBox(height: 4),
+                               Text(
+                                 desc,
+                                 maxLines: 2,
+                                 overflow: TextOverflow.ellipsis,
+                                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                   color: Theme.of(context).colorScheme.onSurfaceVariant,
+                              fontSize: 13,
+                              height: 1.2,
+                                 ),
+                               ),
+            ],
+          ),
+        ),
+
+                    const SizedBox(width: 12),
+
+                         // Episode count
+                         Text(
+                           '$episodeCount Episodes',
+                      style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                                 color: Theme.of(context).colorScheme.onSurfaceVariant,
+                            fontWeight: FontWeight.w500,
+                            fontSize: 13,
+                               ),
+                      textAlign: TextAlign.right,
+                         ),
+                       ],
+                     ),
+                   ),
+                 ),
+               ),
+             );
+           },
+    );
+  }
+  
+  Widget _buildSeeMoreButton(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.4),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(10),
+          onTap: () {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: const Text('See more stories coming soon!'),
+                action: SnackBarAction(
+                  label: 'OK',
+                  onPressed: () => ScaffoldMessenger.of(context).hideCurrentSnackBar(),
+                ),
               ),
+            );
+          },
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'See More',
+                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    fontWeight: FontWeight.w500,
+                    fontSize: 13,
+                  ),
+                ),
+                const SizedBox(width: 4),
+                Icon(
+                  Icons.arrow_forward_ios,
+                  size: 12,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              ],
             ),
-          ],
-        );
-      },
+          ),
+        ),
+      ),
     );
   }
 
   String _getTabName(_StoryTab tab) {
     switch (tab) {
       case _StoryTab.premium:
-        return 'Featured';
+        return 'Featured Stories';
       case _StoryTab.newRelease:
         return 'Latest Releases';
     }
   }
+}
 
-  double _calculateTabContentHeight() {
-    // Calculate height based on content: 5 items * (card height + spacing) + see more button + padding
-    const double cardHeight = 140.0; // Approximate card height (72dp image + padding)
-    const double cardSpacing = 16.0;
-    const double seeMoreButtonHeight = 40.0;
-    const double padding = 32.0; // Top and bottom padding
-    
-    return (5 * cardHeight) + (4 * cardSpacing) + seeMoreButtonHeight + padding;
-  }
-
-
-
-  Widget _storyListForTab(BuildContext context, _StoryTab tab) {
-    final items = tab == _StoryTab.premium ? _premiumStories : _newReleaseStories;
-    final displayItems = items.take(5).toList(); // Show only 5 items
-    
-    return ListView.separated(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(), // Non-scrollable since outer page scrolls
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      itemCount: displayItems.length + (items.length > 5 ? 1 : 0), // +1 for See More button
-      separatorBuilder: (_, __) => const SizedBox(height: 16),
-      itemBuilder: (context, index) {
-        if (index >= displayItems.length) {
-          // See More button
-          return _buildSeeMoreButton(context, tab);
-        }
-        
-        final s = displayItems[index];
-        final episodeCount = 8 + index; // placeholder
-        final desc = (s.description?.isNotEmpty == true)
-            ? s.description!
-            : 'Description Description Description Description Description Description Description';
-
-        return Card(
-          elevation: 2,
-          shadowColor: Colors.black.withOpacity(0.08),
-          color: Theme.of(context).colorScheme.surface,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          child: InkWell(
-            borderRadius: BorderRadius.circular(12),
-            onTap: () => _openDetail(s),
-            child: Padding(
-              padding: const EdgeInsets.all(12),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Rectangular book cover thumbnail (72-80dp width, 2:3 ratio)
-                  Container(
-                    width: 72,
-                    height: 108, // 2:3 aspect ratio (72 * 1.5)
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(10),
-                      boxShadow: [
-                        // Drop shadow for elevation
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.08),
-                          blurRadius: 6,
-                          offset: const Offset(0, 2),
-                          spreadRadius: 0,
-                        ),
-                      ],
-                    ),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(10),
-                      child: Stack(
-                        fit: StackFit.expand,
-                        children: [
-                          Image.network(
-                            s.coverUrl ?? 'https://picsum.photos/seed/${s.id}/600/900',
-                            fit: BoxFit.cover,
-                            loadingBuilder: (context, child, loadingProgress) {
-                              if (loadingProgress == null) return child;
-                              return Container(
-                                color: Theme.of(context).colorScheme.surfaceVariant,
-                                child: const Center(
-                                  child: CircularProgressIndicator(strokeWidth: 2),
-                                ),
-                              );
-                            },
-                            errorBuilder: (context, error, stackTrace) {
-                              return Container(
-                                color: Theme.of(context).colorScheme.surfaceVariant,
-                                child: const Center(
-                                  child: Icon(Icons.book, size: 24, color: Colors.grey),
-                                ),
-                              );
-                            },
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-
-                  // Title and description
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          s.title,
-                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                fontWeight: FontWeight.w600,
-                                fontSize: 16,
-                                color: Theme.of(context).colorScheme.onSurface,
-                                height: 1.3,
-                              ),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          desc,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            color: Theme.of(context).colorScheme.onSurfaceVariant,
-                            fontSize: 13,
-                            height: 1.3,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  const SizedBox(width: 12),
-
-                  // Episode count
-                  Text(
-                    '$episodeCount Episodes',
-                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
-                          fontWeight: FontWeight.w500,
-                          fontSize: 13,
-                        ),
-                    textAlign: TextAlign.right,
-                  ),
-                ],
-              ),
+// Dedicated SectionHeader widget for Top Charts
+class SectionHeader extends StatelessWidget {
+  final String title;
+  final Widget? trailing;
+  
+  const SectionHeader({
+    Key? key,
+    required this.title,
+    this.trailing,
+  }) : super(key: key);
+  
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 24, 16, 12), // 24 top, 12 bottom
+      child: Row(
+        children: [
+          Text(
+            title,
+            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+              fontWeight: FontWeight.w600,
+              fontSize: 20,
+              color: Theme.of(context).colorScheme.onSurface,
             ),
           ),
-        );
-      },
+          const Spacer(),
+          if (trailing != null) trailing!,
+        ],
+      ),
     );
   }
+}
 
-  Widget _buildSeeMoreButton(BuildContext context, _StoryTab tab) {
+// See All button widget
+class SeeAllButton extends StatelessWidget {
+  final VoidCallback? onTap;
+  
+  const SeeAllButton({Key? key, this.onTap}) : super(key: key);
+  
+  @override
+  Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.8),
         borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 4,
-            offset: const Offset(0, 2),
-          ),
-        ],
       ),
       child: Material(
         color: Colors.transparent,
         child: InkWell(
           borderRadius: BorderRadius.circular(16),
+          onTap: onTap ?? () {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: const Text('See all Top Charts coming soon!'),
+                action: SnackBarAction(
+                  label: 'OK',
+                  onPressed: () {},
+                ),
+              ),
+            );
+          },
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'See all',
+                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    fontWeight: FontWeight.w500,
+                    fontSize: 13,
+                  ),
+                ),
+                const SizedBox(width: 4),
+                Icon(
+                  Icons.arrow_forward_ios,
+                  size: 12,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// Featured Stories Tab with AutomaticKeepAliveClientMixin
+class _FeaturedTab extends StatefulWidget {
+  final Future<List<Story>> future;
+  
+  const _FeaturedTab({required this.future});
+  
+  @override
+  State<_FeaturedTab> createState() => _FeaturedTabState();
+}
+
+class _FeaturedTabState extends State<_FeaturedTab> with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
+  
+  @override
+  Widget build(BuildContext context) {
+    super.build(context); // Required for AutomaticKeepAliveClientMixin
+    
+    final bottomSafe = MediaQuery.of(context).viewPadding.bottom;
+    final listPadding = EdgeInsets.fromLTRB(16, 12, 16, bottomSafe + 56 + 16);
+    
+    return FutureBuilder<List<Story>>(
+      future: widget.future,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState != ConnectionState.done) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        
+        final stories = snapshot.data ?? <Story>[];
+        final displayItems = stories.take(5).toList();
+        
+        return ListView.separated(
+          padding: listPadding,
+          itemCount: displayItems.length + 1, // +1 for See More button
+          separatorBuilder: (_, __) => Divider(
+            height: 1,
+            color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.3),
+            thickness: 0.5,
+          ),
+           itemBuilder: (context, index) {
+            if (index >= displayItems.length) {
+              return _buildSeeMoreButton(context, 'Featured Stories');
+            }
+            
+             final s = displayItems[index];
+            final episodeCount = 8 + index;
+             final desc = (s.description?.isNotEmpty == true)
+                 ? s.description!
+                 : 'Description Description Description Description Description Description Description';
+
+             return Container(
+              decoration: BoxDecoration(
+                 color: Theme.of(context).colorScheme.surface,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Material(
+                color: Colors.transparent,
+                 child: InkWell(
+                  borderRadius: BorderRadius.circular(10),
+                  onTap: () {
+                    // Navigate to story detail
+                    context.push('/story/${s.id}');
+                  },
+                   child: Padding(
+                    padding: const EdgeInsets.all(12),
+                     child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                       children: [
+                        // Compact book cover thumbnail
+                        Container(
+                          width: 72,
+                          height: 108,
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(10),
+                           child: Image.network(
+                              s.coverUrl ?? 'https://picsum.photos/seed/${s.id}/600/900',
+                             fit: BoxFit.cover,
+                             loadingBuilder: (context, child, loadingProgress) {
+                               if (loadingProgress == null) return child;
+                               return Container(
+                                  color: Theme.of(context).colorScheme.surfaceVariant,
+                                 child: const Center(
+                                   child: CircularProgressIndicator(strokeWidth: 2),
+                                 ),
+                               );
+                             },
+                             errorBuilder: (context, error, stackTrace) {
+                               return Container(
+                                  color: Theme.of(context).colorScheme.surfaceVariant,
+                                  child: const Center(
+                                    child: Icon(Icons.book, size: 24, color: Colors.grey),
+                                  ),
+                               );
+                             },
+                           ),
+                         ),
+                        ),
+                        const SizedBox(width: 12),
+                        // Title and description
+                         Expanded(
+                           child: Column(
+                             crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisAlignment: MainAxisAlignment.center,
+                             children: [
+                               Text(
+                                 s.title,
+                                 style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 16,
+                                  color: Theme.of(context).colorScheme.onSurface,
+                                  height: 1.2,
+                                     ),
+                                 maxLines: 1,
+                                 overflow: TextOverflow.ellipsis,
+                                softWrap: false,
+                               ),
+                              const SizedBox(height: 4),
+                               Text(
+                                 desc,
+                                 maxLines: 2,
+                                 overflow: TextOverflow.ellipsis,
+                                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                   color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                  fontSize: 13,
+                                  height: 1.2,
+                                 ),
+                               ),
+                             ],
+                           ),
+                         ),
+                        const SizedBox(width: 12),
+                         // Episode count
+                         Text(
+                           '$episodeCount Episodes',
+                          style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                                 color: Theme.of(context).colorScheme.onSurfaceVariant,
+                            fontWeight: FontWeight.w500,
+                            fontSize: 13,
+                               ),
+                          textAlign: TextAlign.right,
+                         ),
+                       ],
+                     ),
+                   ),
+                 ),
+               ),
+             );
+           },
+        );
+      },
+    );
+  }
+  
+  Widget _buildSeeMoreButton(BuildContext context, String tabName) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.4),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(10),
           onTap: () {
-            final tabName = _getTabName(tab);
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content: Text('See more $tabName stories coming soon!'),
@@ -1014,7 +1314,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             );
           },
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -1039,20 +1339,175 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       ),
     );
   }
+}
 
-  Widget _buildSeeMoreCard(BuildContext context) {
-    return SizedBox(
-      width: 300, // Same width as story cards
-      child: Card(
-        elevation: 2,
-        shadowColor: Colors.black.withOpacity(0.1),
+// Latest Releases Tab with AutomaticKeepAliveClientMixin
+class _LatestTab extends StatefulWidget {
+  final Future<List<Story>> future;
+  
+  const _LatestTab({required this.future});
+  
+  @override
+  State<_LatestTab> createState() => _LatestTabState();
+}
+
+class _LatestTabState extends State<_LatestTab> with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
+  
+  @override
+  Widget build(BuildContext context) {
+    super.build(context); // Required for AutomaticKeepAliveClientMixin
+    
+    final bottomSafe = MediaQuery.of(context).viewPadding.bottom;
+    final listPadding = EdgeInsets.fromLTRB(16, 12, 16, bottomSafe + 56 + 16);
+    
+    return FutureBuilder<List<Story>>(
+      future: widget.future,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState != ConnectionState.done) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        
+        final stories = snapshot.data ?? <Story>[];
+        final displayItems = stories.skip(2).take(5).toList(); // Different subset for latest
+        
+        return ListView.separated(
+          padding: listPadding,
+          itemCount: displayItems.length + 1, // +1 for See More button
+          separatorBuilder: (_, __) => Divider(
+            height: 1,
+            color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.3),
+            thickness: 0.5,
+          ),
+          itemBuilder: (context, index) {
+            if (index >= displayItems.length) {
+              return _buildSeeMoreButton(context, 'Latest Releases');
+            }
+            
+            final s = displayItems[index];
+            final episodeCount = 8 + index;
+            final desc = (s.description?.isNotEmpty == true)
+                ? s.description!
+                : 'Description Description Description Description Description Description Description';
+
+            return Container(
+              decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surface,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Material(
+                color: Colors.transparent,
         child: InkWell(
-          borderRadius: BorderRadius.circular(16),
+                  borderRadius: BorderRadius.circular(10),
           onTap: () {
-            // Navigate to see more stories
-            final tabName = _getTabName(_tab);
+                    // Navigate to story detail
+                    context.push('/story/${s.id}');
+                  },
+                  child: Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        // Compact book cover thumbnail
+                        Container(
+                          width: 72,
+                          height: 108,
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(10),
+                            child: Image.network(
+                              s.coverUrl ?? 'https://picsum.photos/seed/${s.id}/600/900',
+                              fit: BoxFit.cover,
+                              loadingBuilder: (context, child, loadingProgress) {
+                                if (loadingProgress == null) return child;
+                                return Container(
+                                  color: Theme.of(context).colorScheme.surfaceVariant,
+                                  child: const Center(
+                                    child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            );
+          },
+                              errorBuilder: (context, error, stackTrace) {
+                                return Container(
+                                  color: Theme.of(context).colorScheme.surfaceVariant,
+                                  child: const Center(
+                                    child: Icon(Icons.book, size: 24, color: Colors.grey),
+                                  ),
+                                );
+                              },
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        // Title and description
+                        Expanded(
+            child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                              Text(
+                                s.title,
+                                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 16,
+                                  color: Theme.of(context).colorScheme.onSurface,
+                                  height: 1.2,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                softWrap: false,
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                desc,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                  fontSize: 13,
+                                  height: 1.2,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        // Episode count
+                Text(
+                          '$episodeCount Episodes',
+                          style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                            color: Theme.of(context).colorScheme.onSurfaceVariant,
+                            fontWeight: FontWeight.w500,
+                            fontSize: 13,
+                          ),
+                          textAlign: TextAlign.right,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+  
+  Widget _buildSeeMoreButton(BuildContext context, String tabName) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.4),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(10),
+          onTap: () {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content: Text('See more $tabName stories coming soon!'),
@@ -1063,56 +1518,24 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               ),
             );
           },
-          child: Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(16),
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  Theme.of(context).colorScheme.primary.withOpacity(0.1),
-                  Theme.of(context).colorScheme.primary.withOpacity(0.05),
-                ],
-              ),
-            ),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
               children: [
-                // Icon
-                Container(
-                  width: 80,
-                  height: 80,
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.primary.withOpacity(0.2),
-                    borderRadius: BorderRadius.circular(40),
-                  ),
-                  child: Icon(
-                    Icons.add_circle_outline,
-                    size: 40,
-                    color: Theme.of(context).colorScheme.primary,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                
-                // Text content
                 Text(
-                  'See More Stories',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    color: Theme.of(context).colorScheme.primary,
-                    fontWeight: FontWeight.w700,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'Discover more ${_getTabName(_tab).toLowerCase()} stories and adventures',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  'See More',
+                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
                     color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    fontWeight: FontWeight.w500,
+                    fontSize: 13,
                   ),
-                  maxLines: 3,
-                  overflow: TextOverflow.ellipsis,
-                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(width: 4),
+                Icon(
+                  Icons.arrow_forward_ios,
+                  size: 12,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
               ],
             ),
