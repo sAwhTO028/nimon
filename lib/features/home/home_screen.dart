@@ -298,9 +298,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 child: Row(
                   children: [
                     Text('NIMON',
-                        style: Theme.of(context).textTheme.headlineMedium!.copyWith(
-                              fontWeight: FontWeight.w800,
-                              letterSpacing: 0.8,
+                        style: Theme.of(context).textTheme.headlineLarge?.copyWith(
+                              fontWeight: FontWeight.w700,
+                              fontSize: 28,
+                              letterSpacing: 0.5,
                             )),
                     const Spacer(),
                     _balancePill('\$ 98'),
@@ -443,11 +444,18 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.9),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: Colors.black12),
+        color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.8),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Theme.of(context).colorScheme.outline.withOpacity(0.2)),
       ),
-      child: Text(text, style: const TextStyle(fontWeight: FontWeight.w600)),
+      child: Text(
+        text, 
+        style: TextStyle(
+          fontWeight: FontWeight.w600,
+          color: Theme.of(context).colorScheme.onSurfaceVariant,
+          fontSize: 13,
+        ),
+      ),
     );
   }
 
@@ -459,10 +467,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           Text(title,
               style: Theme.of(ctx)
                   .textTheme
-                  .titleMedium!
+                  .titleLarge!
                   .copyWith(
                     fontWeight: FontWeight.w600,
                     fontSize: 20,
+                    color: Theme.of(ctx).colorScheme.onSurface,
                   )),
           const Spacer(),
           if (trailing != null) trailing,
@@ -713,20 +722,21 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                   Text(
                     'Top Charts',
                     style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.w700,
+                      fontWeight: FontWeight.w600,
                       fontSize: 20,
+                      color: Theme.of(context).colorScheme.onSurface,
                     ),
                   ),
                   const Spacer(),
                   Container(
                     decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.primaryContainer,
-                      borderRadius: BorderRadius.circular(20),
+                      color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.8),
+                      borderRadius: BorderRadius.circular(16),
                     ),
                     child: Material(
                       color: Colors.transparent,
                       child: InkWell(
-                        borderRadius: BorderRadius.circular(20),
+                        borderRadius: BorderRadius.circular(16),
                         onTap: () {
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
@@ -746,15 +756,16 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                               Text(
                                 'See all',
                                 style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                                  color: Theme.of(context).colorScheme.onPrimaryContainer,
-                                  fontWeight: FontWeight.w600,
+                                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                  fontWeight: FontWeight.w500,
+                                  fontSize: 13,
                                 ),
                               ),
                               const SizedBox(width: 4),
                               Icon(
                                 Icons.arrow_forward_ios,
                                 size: 12,
-                                color: Theme.of(context).colorScheme.onPrimaryContainer,
+                                color: Theme.of(context).colorScheme.onSurfaceVariant,
                               ),
                             ],
                           ),
@@ -778,15 +789,17 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                     width: 2,
                     color: Theme.of(context).colorScheme.primary,
                   ),
-                  insets: const EdgeInsets.symmetric(horizontal: 16),
+                  insets: const EdgeInsets.symmetric(horizontal: 24),
                 ),
                 labelColor: Theme.of(context).colorScheme.primary,
                 unselectedLabelColor: Theme.of(context).colorScheme.onSurfaceVariant,
                 labelStyle: Theme.of(context).textTheme.labelLarge?.copyWith(
-                  fontWeight: FontWeight.w600,
+                  fontWeight: FontWeight.w500,
+                  fontSize: 14,
                 ),
                 unselectedLabelStyle: Theme.of(context).textTheme.labelLarge?.copyWith(
                   fontWeight: FontWeight.w500,
+                  fontSize: 14,
                 ),
                 tabs: const [
                   Tab(text: 'Featured Stories'),
@@ -860,14 +873,14 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
         return Card(
           elevation: 2,
-          shadowColor: Colors.black.withOpacity(0.1),
+          shadowColor: Colors.black.withOpacity(0.08),
           color: Theme.of(context).colorScheme.surface,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           child: InkWell(
             borderRadius: BorderRadius.circular(12),
             onTap: () => _openDetail(s),
             child: Padding(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(12),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -876,33 +889,19 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                     width: 72,
                     height: 108, // 2:3 aspect ratio (72 * 1.5)
                     decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(8),
+                      borderRadius: BorderRadius.circular(10),
                       boxShadow: [
-                        // Left spine shadow
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.12),
-                          blurRadius: 0,
-                          offset: const Offset(-2, 0),
-                          spreadRadius: 0,
-                        ),
-                        // Right edge shadow
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.08),
-                          blurRadius: 0,
-                          offset: const Offset(1, 0),
-                          spreadRadius: 0,
-                        ),
                         // Drop shadow for elevation
                         BoxShadow(
-                          color: Colors.black.withOpacity(0.12),
-                          blurRadius: 8,
-                          offset: const Offset(0, 3),
+                          color: Colors.black.withOpacity(0.08),
+                          blurRadius: 6,
+                          offset: const Offset(0, 2),
                           spreadRadius: 0,
                         ),
                       ],
                     ),
                     child: ClipRRect(
-                      borderRadius: BorderRadius.circular(8),
+                      borderRadius: BorderRadius.circular(10),
                       child: Stack(
                         fit: StackFit.expand,
                         children: [
@@ -912,7 +911,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                             loadingBuilder: (context, child, loadingProgress) {
                               if (loadingProgress == null) return child;
                               return Container(
-                                color: Colors.grey[300],
+                                color: Theme.of(context).colorScheme.surfaceVariant,
                                 child: const Center(
                                   child: CircularProgressIndicator(strokeWidth: 2),
                                 ),
@@ -920,35 +919,12 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                             },
                             errorBuilder: (context, error, stackTrace) {
                               return Container(
-                                color: Colors.grey[300],
+                                color: Theme.of(context).colorScheme.surfaceVariant,
                                 child: const Center(
                                   child: Icon(Icons.book, size: 24, color: Colors.grey),
                                 ),
                               );
                             },
-                          ),
-                          // Gradient spine on left
-                          Positioned(
-                            left: 0,
-                            top: 0,
-                            bottom: 0,
-                            width: 3,
-                            child: Container(
-                              decoration: BoxDecoration(
-                                borderRadius: const BorderRadius.only(
-                                  topLeft: Radius.circular(8),
-                                  bottomLeft: Radius.circular(8),
-                                ),
-                                gradient: LinearGradient(
-                                  begin: Alignment.centerLeft,
-                                  end: Alignment.centerRight,
-                                  colors: [
-                                    Colors.black.withOpacity(0.12),
-                                    Colors.transparent,
-                                  ],
-                                ),
-                              ),
-                            ),
                           ),
                         ],
                       ),
@@ -964,13 +940,15 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                         Text(
                           s.title,
                           style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                fontWeight: FontWeight.w700,
+                                fontWeight: FontWeight.w600,
                                 fontSize: 16,
+                                color: Theme.of(context).colorScheme.onSurface,
+                                height: 1.3,
                               ),
-                          maxLines: 1,
+                          maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                         ),
-                        const SizedBox(height: 4),
+                        const SizedBox(height: 8),
                         Text(
                           desc,
                           maxLines: 2,
@@ -978,6 +956,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                             color: Theme.of(context).colorScheme.onSurfaceVariant,
                             fontSize: 13,
+                            height: 1.3,
                           ),
                         ),
                       ],
@@ -994,6 +973,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                           fontWeight: FontWeight.w500,
                           fontSize: 13,
                         ),
+                    textAlign: TextAlign.right,
                   ),
                 ],
               ),
@@ -1007,12 +987,12 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   Widget _buildSeeMoreButton(BuildContext context, _StoryTab tab) {
     return Container(
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.primary,
-        borderRadius: BorderRadius.circular(20),
+        color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.8),
+        borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Theme.of(context).colorScheme.primary.withOpacity(0.3),
-            blurRadius: 8,
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 4,
             offset: const Offset(0, 2),
           ),
         ],
@@ -1020,7 +1000,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       child: Material(
         color: Colors.transparent,
         child: InkWell(
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(16),
           onTap: () {
             final tabName = _getTabName(tab);
             ScaffoldMessenger.of(context).showSnackBar(
@@ -1041,15 +1021,16 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 Text(
                   'See More',
                   style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w600,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    fontWeight: FontWeight.w500,
+                    fontSize: 13,
                   ),
                 ),
                 const SizedBox(width: 4),
                 Icon(
                   Icons.arrow_forward_ios,
                   size: 12,
-                  color: Colors.white,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
               ],
             ),
