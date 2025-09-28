@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../writer/writer_screen.dart';
+import '../../data/repo_singleton.dart';
 
 class RedSquare extends StatelessWidget {
   const RedSquare({super.key});
@@ -30,6 +31,6 @@ class _TargetScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // demo: jump to writer with a dummy story id
-    return const WriterScreen(storyId: '1');
+    return WriterScreen(repo: repo, storyId: '1');
   }
 }

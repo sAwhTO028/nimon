@@ -21,12 +21,16 @@ class Episode {
   final String storyId;
   final int index;
   final List<EpisodeBlock> blocks;
+  final String? thumbnailUrl;
+  final String? title;
 
   const Episode({
     required this.id,
     required this.storyId,
     required this.index,
     required this.blocks,
+    this.thumbnailUrl,
+    this.title,
   });
 
   String get preview {
@@ -40,12 +44,16 @@ class Episode {
     String? storyId,
     int? index,
     List<EpisodeBlock>? blocks,
+    String? thumbnailUrl,
+    String? title,
   }) =>
       Episode(
         id: id ?? this.id,
         storyId: storyId ?? this.storyId,
         index: index ?? this.index,
         blocks: blocks ?? this.blocks,
+        thumbnailUrl: thumbnailUrl ?? this.thumbnailUrl,
+        title: title ?? this.title,
       );
 }
 

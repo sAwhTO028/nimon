@@ -3,6 +3,7 @@ import '../features/auth/login_screen.dart';
 import '../features/home/home_screen.dart';
 import '../features/mono/mono_screen.dart';
 import '../features/settings/settings_screen.dart';
+import '../data/repo_singleton.dart';
 
 class AppShell extends StatefulWidget {
   const AppShell({super.key});
@@ -34,10 +35,10 @@ class _AppScaffold extends StatelessWidget {
     return Scaffold(
       body: IndexedStack(
         index: idx,
-        children: const [
-          HomeScreen(),
-          MonoScreen(),
-          SettingsScreen(),
+        children: [
+          HomeScreen(repo: repo),
+          MonoScreen(repo: repo),
+          const SettingsScreen(),
         ],
       ),
       bottomNavigationBar: NavigationBar(

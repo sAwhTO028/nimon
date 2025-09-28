@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../features/home/home_screen.dart';
 import '../features/mono/mono_screen.dart';
 import '../features/settings/settings_screen.dart';
+import '../data/repo_singleton.dart';
 
 class AppShell extends StatefulWidget {
   const AppShell({super.key});
@@ -11,7 +12,7 @@ class AppShell extends StatefulWidget {
 
 class _AppShellState extends State<AppShell> {
   int _index = 0;
-  final _tabs = const [HomeScreen(), MonoScreen(), SettingsScreen()];
+  final _tabs = [HomeScreen(repo: repo), MonoScreen(repo: repo), const SettingsScreen()];
   final _keys = [
     GlobalKey<NavigatorState>(),
     GlobalKey<NavigatorState>(),
