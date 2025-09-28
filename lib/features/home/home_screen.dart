@@ -643,11 +643,16 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               SliverToBoxAdapter(
                 child: _topChartsContent(context),
               ),
+              
+              // Bottom padding to clear navigation bar
+              SliverToBoxAdapter(
+                child: SizedBox(height: 96),
+              ),
             ],
             body: const SizedBox.shrink(), // Empty body since we're using slivers
           ),
-      ),
-    );
+        ),
+      );
   }
 
   // ───────────────────────── widgets ─────────────────────────

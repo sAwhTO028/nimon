@@ -40,163 +40,135 @@ class CommunityCollectionCard extends StatelessWidget {
     final theme = Theme.of(context);
     final color = theme.colorScheme;
 
-    return Material(
-      color: color.surface,
-      elevation: 2,
-      borderRadius: BorderRadius.circular(16),
-      child: InkWell(
-        onTap: () {
-          // Handle card tap
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Opening $title collection')),
-          );
-        },
-        borderRadius: BorderRadius.circular(16),
+    return InkWell(
+      borderRadius: BorderRadius.circular(20),
+      onTap: () {
+        // Handle card tap
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Opening $title collection')),
+        );
+      },
+      child: Card(
+        elevation: 2,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        clipBehavior: Clip.none,
         child: Container(
-          height: 260, // Fixed height to prevent overflow
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Header with cover image and JLPT badge
-              Stack(
-                children: [
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Cover image
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(12),
-                        child: Image.network(
-                          coverUrl,
-                          width: 70,
-                          height: 70,
-                          fit: BoxFit.cover,
-                          loadingBuilder: (context, child, loadingProgress) {
-                            if (loadingProgress == null) return child;
-                            return Container(
-                              width: 70,
-                              height: 70,
-                              color: color.surfaceContainerLow,
-                              child: const Center(
-                                child: CircularProgressIndicator(strokeWidth: 2),
-                              ),
-                            );
-                          },
-                          errorBuilder: (context, error, stackTrace) {
-                            return Container(
-                              width: 70,
-                              height: 70,
-                              color: color.surfaceContainerLow,
-                              child: const Center(
-                                child: Icon(Icons.book, size: 24, color: Colors.grey),
-                              ),
-                            );
-                          },
+          constraints: const BoxConstraints(
+            maxHeight: 380, // Reduced height to prevent overflow
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Top row with thumbnail and JLPT badge
+                Stack(
+                  children: [
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Cover image
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(12),
+                          child: Image.network(
+                            coverUrl,
+                            width: 72,
+                            height: 72,
+                            fit: BoxFit.cover,
+                            loadingBuilder: (context, child, loadingProgress) {
+                              if (loadingProgress == null) return child;
+                              return Container(
+                                width: 72,
+                                height: 72,
+                                color: color.surfaceContainerLow,
+                                child: const Center(
+                                  child: CircularProgressIndicator(strokeWidth: 2),
+                                ),
+                              );
+                            },
+                            errorBuilder: (context, error, stackTrace) {
+                              return Container(
+                                width: 72,
+                                height: 72,
+                                color: color.surfaceContainerLow,
+                                child: const Center(
+                                  child: Icon(Icons.book, size: 24, color: Colors.grey),
+                                ),
+                              );
+                            },
+                          ),
                         ),
-                      ),
-                      const SizedBox(width: 12),
-                      // Title and description
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              title,
-                              style: theme.textTheme.titleMedium?.copyWith(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 16,
+                        const SizedBox(width: 12),
+                        // Title and description
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                title,
+                                style: theme.textTheme.titleLarge,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
                               ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              authorLine,
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                color: color.onSurfaceVariant,
-                                fontSize: 12,
+                              const SizedBox(height: 4),
+                              Text(
+                                authorLine,
+                                style: theme.textTheme.labelMedium?.copyWith(
+                                  color: color.onSurface.withOpacity(0.6),
+                                ),
                               ),
-                            ),
-                            const SizedBox(height: 6),
-                            Text(
-                              description,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                fontSize: 13,
-                                color: color.onSurfaceVariant,
+                              const SizedBox(height: 6),
+                              Text(
+                                description,
+                                style: theme.textTheme.bodyMedium,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
-                      ),
-                    ],
-                  ),
-                  // JLPT badge
-                  Positioned(
-                    top: 0,
-                    right: 0,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: color.primary,
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Text(
-                        jlptLevel,
-                        style: theme.textTheme.labelSmall?.copyWith(
-                          color: color.onPrimary,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 11,
-                        ),
-                      ),
+                      ],
                     ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              // Story type and episodes count
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
+                    // JLPT badge
+                    Align(
+                      alignment: Alignment.topRight,
+                      child: _JlptBadge(level: jlptLevel),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                // Meta row
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
                       'Story type – $storyType',
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: color.onSurfaceVariant,
-                        fontSize: 12,
-                        fontStyle: FontStyle.italic,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.labelMedium,
                     ),
-                  ),
-                  Text(
-                    '$totalEpisodes episodes',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: color.onSurfaceVariant,
-                      fontSize: 12,
+                    Text(
+                      '$totalEpisodes episodes',
+                      style: theme.textTheme.labelMedium,
                     ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                // Latest Episodes section
+                Text(
+                  'Latest Episodes',
+                  style: theme.textTheme.titleMedium,
+                ),
+                const SizedBox(height: 8),
+                // Episodes list - use Flexible to prevent overflow
+                Flexible(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: episodes.take(3).map((episode) => _EpisodeTile(episode: episode)).toList(),
                   ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              // Latest Episodes section
-              Text(
-                'Latest Episodes',
-                style: theme.textTheme.titleSmall?.copyWith(
-                  fontWeight: FontWeight.w600,
-                  fontSize: 14,
                 ),
-              ),
-              const SizedBox(height: 8),
-              // Episodes list (max 2 episodes to prevent overflow)
-              Expanded(
-                child: Column(
-                  children: episodes.take(2).map((episode) => _EpisodeRow(episode: episode)).toList(),
-                ),
-              ),
-            ],
+                const SizedBox(height: 4), // Minimal bottom padding
+              ],
+            ),
           ),
         ),
       ),
@@ -204,105 +176,121 @@ class CommunityCollectionCard extends StatelessWidget {
   }
 }
 
-class _EpisodeRow extends StatelessWidget {
+class _JlptBadge extends StatelessWidget {
+  final String level;
+
+  const _JlptBadge({required this.level});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      margin: const EdgeInsets.only(top: 4, right: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.primary,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        level,
+        style: theme.textTheme.labelSmall?.copyWith(
+          color: Colors.white,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+    );
+  }
+}
+
+class _EpisodeTile extends StatelessWidget {
   final CommunityEpisode episode;
 
-  const _EpisodeRow({required this.episode});
+  const _EpisodeTile({required this.episode});
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final color = theme.colorScheme;
 
-    return Container(
-      height: 50, // Fixed height for episode row
-      margin: const EdgeInsets.only(bottom: 4),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: () {
-            // Handle episode tap
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('Playing ${episode.title}')),
-            );
-          },
+    return InkWell(
+      onTap: () {
+        // Handle episode tap
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Opening ${episode.title}')),
+        );
+      },
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        margin: const EdgeInsets.only(bottom: 4),
+        decoration: BoxDecoration(
+          color: color.surfaceContainerLow,
           borderRadius: BorderRadius.circular(8),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-            decoration: BoxDecoration(
-              color: color.surfaceVariant.withOpacity(0.3),
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(
-                color: color.outline.withOpacity(0.2),
-                width: 1,
-              ),
-            ),
-            child: Row(
-              children: [
-                // Episode thumbnail
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(6),
-                  child: Image.network(
-                    episode.thumbnailUrl,
+          border: Border.all(color: color.outline.withOpacity(0.2)),
+        ),
+        child: Row(
+          children: [
+            // Episode thumbnail
+            ClipRRect(
+              borderRadius: BorderRadius.circular(6),
+              child: Image.network(
+                episode.thumbnailUrl,
+                width: 36,
+                height: 36,
+                fit: BoxFit.cover,
+                loadingBuilder: (context, child, loadingProgress) {
+                  if (loadingProgress == null) return child;
+                  return Container(
                     width: 36,
                     height: 36,
-                    fit: BoxFit.cover,
-                    loadingBuilder: (context, child, loadingProgress) {
-                      if (loadingProgress == null) return child;
-                      return Container(
-                        width: 36,
-                        height: 36,
-                        color: color.surfaceContainerLow,
-                        child: const Center(
-                          child: CircularProgressIndicator(strokeWidth: 1),
-                        ),
-                      );
-                    },
-                    errorBuilder: (context, error, stackTrace) {
-                      return Container(
-                        width: 36,
-                        height: 36,
-                        color: color.surfaceContainerLow,
-                        child: const Center(
-                          child: Icon(Icons.play_circle_outline, size: 14, color: Colors.grey),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-                const SizedBox(width: 10),
-                // Episode title
-                Expanded(
-                  child: Text(
-                    episode.title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      fontWeight: FontWeight.w600,
-                      fontSize: 13,
+                    color: color.surfaceContainerLow,
+                    child: const Center(
+                      child: CircularProgressIndicator(strokeWidth: 1),
                     ),
-                  ),
-                ),
-                const SizedBox(width: 6),
-                // Episode number
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: color.primaryContainer.withOpacity(0.3),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Text(
-                    'Ep ${episode.episodeNumber}',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: color.onSurfaceVariant,
-                      fontSize: 10,
-                      fontWeight: FontWeight.w500,
+                  );
+                },
+                errorBuilder: (context, error, stackTrace) {
+                  return Container(
+                    width: 36,
+                    height: 36,
+                    color: color.surfaceContainerLow,
+                    child: const Center(
+                      child: Icon(Icons.play_circle_outline, size: 14, color: Colors.grey),
                     ),
-                  ),
-                ),
-              ],
+                  );
+                },
+              ),
             ),
-          ),
+            const SizedBox(width: 8),
+            // Episode title
+            Expanded(
+              child: Text(
+                episode.title,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  fontWeight: FontWeight.w500,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            const SizedBox(width: 6),
+            // Episode number
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+              decoration: BoxDecoration(
+                color: color.primaryContainer,
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: Text(
+                'Ep ${episode.episodeNumber}',
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: color.onPrimaryContainer,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 10,
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );

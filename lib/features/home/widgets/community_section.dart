@@ -137,25 +137,28 @@ class CommunitySection extends StatelessWidget {
         ),
         // Horizontal scrolling community collections
         SizedBox(
-          height: 280, // Fixed height to prevent overflow
-          child: ListView.separated(
+          height: 350, // Set a fixed height to prevent overflow
+          child: ListView.builder(
             scrollDirection: Axis.horizontal,
+            physics: const BouncingScrollPhysics(),
             padding: const EdgeInsets.symmetric(horizontal: 16),
             itemCount: _demoCollections.length,
-            separatorBuilder: (context, index) => const SizedBox(width: 16),
             itemBuilder: (context, index) {
               final collection = _demoCollections[index];
-              return SizedBox(
-                width: MediaQuery.of(context).size.width * 0.85, // 85% of screen width
-                child: CommunityCollectionCard(
-                  title: collection.title,
-                  authorLine: 'by Community Writers',
-                  description: collection.description,
-                  coverUrl: collection.coverUrl,
-                  jlptLevel: collection.jlptLevel,
-                  totalEpisodes: collection.totalEpisodes,
-                  storyType: collection.storyType,
-                  episodes: collection.episodes,
+              return ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 360),
+                child: Padding(
+                  padding: const EdgeInsets.only(right: 16),
+                  child: CommunityCollectionCard(
+                    title: collection.title,
+                    authorLine: 'by Community Writers',
+                    description: collection.description,
+                    coverUrl: collection.coverUrl,
+                    jlptLevel: collection.jlptLevel,
+                    totalEpisodes: collection.totalEpisodes,
+                    storyType: collection.storyType,
+                    episodes: collection.episodes,
+                  ),
                 ),
               );
             },
