@@ -515,32 +515,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               // 2) From the Community section
               SliverToBoxAdapter(
                 child: CommunitySection(
-                  communities: CommunityDemoData.getCommunities(),
-                  onCardTap: (community) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('Opening ${community.title} collection...'),
-                        action: SnackBarAction(
-                          label: 'OK',
-                          onPressed: () => ScaffoldMessenger.of(context).hideCurrentSnackBar(),
-                        ),
-                      ),
-                    );
-                  },
-                  onEpisodeTap: (episode) {
-                    // Navigate to episode reader
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (_) => ReaderScreen(episode: Episode(
-                        id: 'demo-${episode.number}',
-                        storyId: 'demo-story',
-                        index: episode.number,
-                        blocks: [],
-                        title: episode.title,
-                        thumbnailUrl: episode.thumb,
-                      ))),
-                    );
-                  },
                   onSeeAllTap: () {
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
