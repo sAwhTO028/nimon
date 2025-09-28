@@ -1,3 +1,4 @@
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:nimon/features/reader/reader_screen.dart';
@@ -34,6 +35,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
   // Tab controller for tabs
   late TabController _tabController;
+  late PageController _pageController;
 
   void _updateStoryLists(List<Story> stories) {
     _premiumStories = stories.take(5).toList();
@@ -45,25 +47,26 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     super.initState();
     _future = repo.listStories();
     
-    // Preload both tab futures immediately
-    _featuredFuture = repo.listStories(); // Featured stories
-    _latestFuture = repo.listStories(); // Latest releases
+    // Preload both tab futures immediately with different data sources
+    _featuredFuture = repo.getStories(rank: 'N5'); // Featured stories (N5 level)
+    _latestFuture = repo.getStories(rank: 'N4'); // Latest releases (N4 level)
     
     // Initialize controllers
     _tabController = TabController(length: 2, vsync: this, initialIndex: 0);
+    _pageController = PageController(initialPage: 0);
     
-    // Sync tab controller with TabBarView
-    _tabController.addListener(() {
-      if (_tabController.indexIsChanging) {
-        setState(() {
-          _tab = _tabController.index == 0 ? _StoryTab.premium : _StoryTab.newRelease;
-        });
+    // Keep TabBar in sync when user swipes pages
+    _pageController.addListener(() {
+      final newIndex = _pageController.page?.round() ?? 0;
+      if (_tabController.index != newIndex) {
+        _tabController.animateTo(newIndex);
       }
     });
   }
 
   @override
   void dispose() {
+    _pageController.dispose();
     _tabController.dispose();
     super.dispose();
   }
@@ -422,7 +425,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               const SliverToBoxAdapter(child: SizedBox(height: 24)),
 
               // Top Charts header (isolated)
-              SliverToBoxAdapter(
+          SliverToBoxAdapter(
                 child: SectionHeader(
                   title: 'Top Charts',
                   trailing: const SeeAllButton(),
@@ -435,6 +438,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   child: TabBar(
                     controller: _tabController,
+                    onTap: (i) => _pageController.animateToPage(
+                      i,
+                      duration: const Duration(milliseconds: 250),
+                      curve: Curves.easeOut,
+                    ),
                     indicator: UnderlineTabIndicator(
                       borderSide: BorderSide(
                         width: 2,
@@ -463,16 +471,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               // Spacing from TabBar to first list item
               const SliverToBoxAdapter(child: SizedBox(height: 12)),
 
-              // TabBarView content
-              SliverFillRemaining(
-                child: TabBarView(
-                  controller: _tabController,
-                  physics: const PageScrollPhysics(), // allow horizontal swipe
-                  children: [
-                    _FeaturedTab(future: _featuredFuture),
-                    _LatestTab(future: _latestFuture),
-                  ],
-                ),
+              // PageView with fixed height (no inner scrolling)
+              SliverToBoxAdapter(
+                child: _topChartsContent(context),
               ),
             ],
             body: const SizedBox.shrink(), // Empty body since we're using slivers
@@ -482,6 +483,45 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   }
 
   // ───────────────────────── widgets ─────────────────────────
+
+  // Top Charts content with PageView and fixed height
+  Widget _topChartsContent(BuildContext context) {
+    final bottom = MediaQuery.of(context).viewPadding.bottom;
+    const rowH = 96.0;   // height of one compact row
+    const gap = 12.0;    // space between rows
+    const maxCount = 5;  // maximum rows to show
+    final contentHeight = (rowH * maxCount) + (gap * (maxCount - 1)) + 16 + bottom;
+
+    return SizedBox(
+      height: contentHeight,
+      child: PageView(
+        controller: _pageController,
+        onPageChanged: (i) => _tabController.animateTo(i),
+        children: [
+          FutureBuilder<List<Story>>(
+            future: _featuredFuture,
+            builder: (context, snapshot) {
+              if (snapshot.connectionState != ConnectionState.done) {
+                return const Center(child: CircularProgressIndicator());
+              }
+              final stories = snapshot.data ?? <Story>[];
+              return _TopChartFixed(items: stories);
+            },
+          ),
+          FutureBuilder<List<Story>>(
+            future: _latestFuture,
+            builder: (context, snapshot) {
+              if (snapshot.connectionState != ConnectionState.done) {
+                return const Center(child: CircularProgressIndicator());
+              }
+              final stories = snapshot.data ?? <Story>[];
+              return _TopChartFixed(items: stories);
+            },
+          ),
+        ],
+      ),
+    );
+  }
 
   // Top Charts list widget with proper bottom padding
   Widget _TopChartList({required List<Story> items}) {
@@ -852,7 +892,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 class _TopChartListWidget extends StatelessWidget {
   final List<Story> items;
   
-  const _TopChartListWidget({required this.items});
+  _TopChartListWidget({required this.items});
   
   @override
   Widget build(BuildContext context) {
@@ -1112,7 +1152,7 @@ class SeeAllButton extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
             child: Row(
               mainAxisSize: MainAxisSize.min,
-              children: [
+      children: [
                 Text(
                   'See all',
                   style: Theme.of(context).textTheme.labelMedium?.copyWith(
@@ -1136,406 +1176,143 @@ class SeeAllButton extends StatelessWidget {
   }
 }
 
-// Featured Stories Tab with AutomaticKeepAliveClientMixin
-class _FeaturedTab extends StatefulWidget {
-  final Future<List<Story>> future;
+// Fixed Top Chart widget showing exactly 5 rows without scrolling
+class _TopChartFixed extends StatelessWidget {
+  final List<Story> items;
   
-  const _FeaturedTab({required this.future});
-  
-  @override
-  State<_FeaturedTab> createState() => _FeaturedTabState();
-}
-
-class _FeaturedTabState extends State<_FeaturedTab> with AutomaticKeepAliveClientMixin {
-  @override
-  bool get wantKeepAlive => true;
+  _TopChartFixed({required this.items});
   
   @override
   Widget build(BuildContext context) {
-    super.build(context); // Required for AutomaticKeepAliveClientMixin
+    final visible = items.take(5).toList();
     
-    final bottomSafe = MediaQuery.of(context).viewPadding.bottom;
-    final listPadding = EdgeInsets.fromLTRB(16, 12, 16, bottomSafe + 56 + 16);
-    
-    return FutureBuilder<List<Story>>(
-      future: widget.future,
-      builder: (context, snapshot) {
-        if (snapshot.connectionState != ConnectionState.done) {
-          return const Center(child: CircularProgressIndicator());
-        }
-        
-        final stories = snapshot.data ?? <Story>[];
-        final displayItems = stories.take(5).toList();
-        
-        return ListView.separated(
-          padding: listPadding,
-          itemCount: displayItems.length + 1, // +1 for See More button
-          separatorBuilder: (_, __) => Divider(
-            height: 1,
-            color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.3),
-            thickness: 0.5,
-          ),
-           itemBuilder: (context, index) {
-            if (index >= displayItems.length) {
-              return _buildSeeMoreButton(context, 'Featured Stories');
-            }
-            
-             final s = displayItems[index];
-            final episodeCount = 8 + index;
-             final desc = (s.description?.isNotEmpty == true)
-                 ? s.description!
-                 : 'Description Description Description Description Description Description Description';
-
-             return Container(
-              decoration: BoxDecoration(
-                 color: Theme.of(context).colorScheme.surface,
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Material(
-                color: Colors.transparent,
-                 child: InkWell(
-                  borderRadius: BorderRadius.circular(10),
-                  onTap: () {
-                    // Navigate to story detail
-                    context.push('/story/${s.id}');
-                  },
-                   child: Padding(
-                    padding: const EdgeInsets.all(12),
-                     child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                       children: [
-                        // Compact book cover thumbnail
-                        Container(
-                          width: 72,
-                          height: 108,
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(10),
-                           child: Image.network(
-                              s.coverUrl ?? 'https://picsum.photos/seed/${s.id}/600/900',
-                             fit: BoxFit.cover,
-                             loadingBuilder: (context, child, loadingProgress) {
-                               if (loadingProgress == null) return child;
-                               return Container(
-                                  color: Theme.of(context).colorScheme.surfaceVariant,
-                                 child: const Center(
-                                   child: CircularProgressIndicator(strokeWidth: 2),
-                                 ),
-                               );
-                             },
-                             errorBuilder: (context, error, stackTrace) {
-                               return Container(
-                                  color: Theme.of(context).colorScheme.surfaceVariant,
-                                  child: const Center(
-                                    child: Icon(Icons.book, size: 24, color: Colors.grey),
-                                  ),
-                               );
-                             },
-                           ),
-                         ),
-                        ),
-                        const SizedBox(width: 12),
-                        // Title and description
-                         Expanded(
-                           child: Column(
-                             crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisAlignment: MainAxisAlignment.center,
-                             children: [
-                               Text(
-                                 s.title,
-                                 style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 16,
-                                  color: Theme.of(context).colorScheme.onSurface,
-                                  height: 1.2,
-                                     ),
-                                 maxLines: 1,
-                                 overflow: TextOverflow.ellipsis,
-                                softWrap: false,
-                               ),
-                              const SizedBox(height: 4),
-                               Text(
-                                 desc,
-                                 maxLines: 2,
-                                 overflow: TextOverflow.ellipsis,
-                                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                   color: Theme.of(context).colorScheme.onSurfaceVariant,
-                                  fontSize: 13,
-                                  height: 1.2,
-                                 ),
-                               ),
-                             ],
-                           ),
-                         ),
-                        const SizedBox(width: 12),
-                         // Episode count
-                         Text(
-                           '$episodeCount Episodes',
-                          style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                                 color: Theme.of(context).colorScheme.onSurfaceVariant,
-                            fontWeight: FontWeight.w500,
-                            fontSize: 13,
-                               ),
-                          textAlign: TextAlign.right,
-                         ),
-                       ],
-                     ),
-                   ),
-                 ),
-               ),
-             );
-           },
-        );
-      },
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Column(
+        children: [
+          for (int i = 0; i < visible.length; i++) ...[
+            _TopChartRow(story: visible[i], episodeCount: 8 + i),
+            if (i != visible.length - 1) const SizedBox(height: 12),
+          ],
+          const SizedBox(height: 16), // breathing space above bottom nav
+        ],
+      ),
     );
   }
+}
+
+// Individual Top Chart row widget with compact design
+class _TopChartRow extends StatelessWidget {
+  final Story story;
+  final int episodeCount;
   
-  Widget _buildSeeMoreButton(BuildContext context, String tabName) {
+  _TopChartRow({
+    required this.story,
+    required this.episodeCount,
+  });
+  
+  @override
+  Widget build(BuildContext context) {
+    final desc = (story.description?.isNotEmpty == true)
+        ? story.description!
+        : 'Description Description Description Description Description Description Description';
+
     return Container(
+      height: 96, // Fixed height for compact row
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.4),
-        borderRadius: BorderRadius.circular(10),
+        color: Theme.of(context).colorScheme.surface,
+        borderRadius: BorderRadius.circular(12),
       ),
       child: Material(
         color: Colors.transparent,
+        elevation: 0,
+        borderRadius: BorderRadius.circular(12),
         child: InkWell(
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: BorderRadius.circular(12),
           onTap: () {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text('See more $tabName stories coming soon!'),
-                action: SnackBarAction(
-                  label: 'OK',
-                  onPressed: () => ScaffoldMessenger.of(context).hideCurrentSnackBar(),
-                ),
-              ),
-            );
+            // Navigate to story detail
+            context.push('/story/${story.id}');
           },
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            padding: const EdgeInsets.all(12),
             child: Row(
-              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                Text(
-                  'See More',
-                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    fontWeight: FontWeight.w500,
-                    fontSize: 13,
+                // Compact book cover thumbnail (2:3 ratio, 76x114)
+                Container(
+                  width: 76,
+                  height: 114,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(10),
                   ),
-                ),
-                const SizedBox(width: 4),
-                Icon(
-                  Icons.arrow_forward_ios,
-                  size: 12,
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// Latest Releases Tab with AutomaticKeepAliveClientMixin
-class _LatestTab extends StatefulWidget {
-  final Future<List<Story>> future;
-  
-  const _LatestTab({required this.future});
-  
-  @override
-  State<_LatestTab> createState() => _LatestTabState();
-}
-
-class _LatestTabState extends State<_LatestTab> with AutomaticKeepAliveClientMixin {
-  @override
-  bool get wantKeepAlive => true;
-  
-  @override
-  Widget build(BuildContext context) {
-    super.build(context); // Required for AutomaticKeepAliveClientMixin
-    
-    final bottomSafe = MediaQuery.of(context).viewPadding.bottom;
-    final listPadding = EdgeInsets.fromLTRB(16, 12, 16, bottomSafe + 56 + 16);
-    
-    return FutureBuilder<List<Story>>(
-      future: widget.future,
-      builder: (context, snapshot) {
-        if (snapshot.connectionState != ConnectionState.done) {
-          return const Center(child: CircularProgressIndicator());
-        }
-        
-        final stories = snapshot.data ?? <Story>[];
-        final displayItems = stories.skip(2).take(5).toList(); // Different subset for latest
-        
-        return ListView.separated(
-          padding: listPadding,
-          itemCount: displayItems.length + 1, // +1 for See More button
-          separatorBuilder: (_, __) => Divider(
-            height: 1,
-            color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.3),
-            thickness: 0.5,
-          ),
-          itemBuilder: (context, index) {
-            if (index >= displayItems.length) {
-              return _buildSeeMoreButton(context, 'Latest Releases');
-            }
-            
-            final s = displayItems[index];
-            final episodeCount = 8 + index;
-            final desc = (s.description?.isNotEmpty == true)
-                ? s.description!
-                : 'Description Description Description Description Description Description Description';
-
-            return Container(
-              decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Material(
-                color: Colors.transparent,
-        child: InkWell(
-                  borderRadius: BorderRadius.circular(10),
-          onTap: () {
-                    // Navigate to story detail
-                    context.push('/story/${s.id}');
-                  },
-                  child: Padding(
-                    padding: const EdgeInsets.all(12),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: [
-                        // Compact book cover thumbnail
-                        Container(
-                          width: 72,
-                          height: 108,
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(10),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(10),
+                    child: Image.network(
+                      story.coverUrl ?? 'https://picsum.photos/seed/${story.id}/600/900',
+                      fit: BoxFit.cover,
+                      loadingBuilder: (context, child, loadingProgress) {
+                        if (loadingProgress == null) return child;
+                        return Container(
+                          color: Theme.of(context).colorScheme.surfaceVariant,
+                          child: const Center(
+                            child: CircularProgressIndicator(strokeWidth: 2),
                           ),
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(10),
-                            child: Image.network(
-                              s.coverUrl ?? 'https://picsum.photos/seed/${s.id}/600/900',
-                              fit: BoxFit.cover,
-                              loadingBuilder: (context, child, loadingProgress) {
-                                if (loadingProgress == null) return child;
-                                return Container(
-                                  color: Theme.of(context).colorScheme.surfaceVariant,
-                                  child: const Center(
-                                    child: CircularProgressIndicator(strokeWidth: 2),
-              ),
-            );
-          },
-                              errorBuilder: (context, error, stackTrace) {
-                                return Container(
-                                  color: Theme.of(context).colorScheme.surfaceVariant,
-                                  child: const Center(
-                                    child: Icon(Icons.book, size: 24, color: Colors.grey),
-                                  ),
-                                );
-                              },
-                            ),
+                        );
+                      },
+                      errorBuilder: (context, error, stackTrace) {
+                        return Container(
+                          color: Theme.of(context).colorScheme.surfaceVariant,
+                          child: const Center(
+                            child: Icon(Icons.book, size: 24, color: Colors.grey),
                           ),
-                        ),
-                        const SizedBox(width: 12),
-                        // Title and description
-                        Expanded(
-            child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                              Text(
-                                s.title,
-                                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 16,
-                                  color: Theme.of(context).colorScheme.onSurface,
-                                  height: 1.2,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                softWrap: false,
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                desc,
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                                  fontSize: 13,
-                                  height: 1.2,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        // Episode count
-                Text(
-                          '$episodeCount Episodes',
-                          style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                            color: Theme.of(context).colorScheme.onSurfaceVariant,
-                            fontWeight: FontWeight.w500,
-                            fontSize: 13,
-                          ),
-                          textAlign: TextAlign.right,
-                        ),
-                      ],
+                        );
+                      },
                     ),
                   ),
                 ),
-              ),
-            );
-          },
-        );
-      },
-    );
-  }
-  
-  Widget _buildSeeMoreButton(BuildContext context, String tabName) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.4),
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(10),
-          onTap: () {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text('See more $tabName stories coming soon!'),
-                action: SnackBarAction(
-                  label: 'OK',
-                  onPressed: () => ScaffoldMessenger.of(context).hideCurrentSnackBar(),
+                const SizedBox(width: 12),
+                // Title and description
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        story.title,
+                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 16,
+                          color: Theme.of(context).colorScheme.onSurface,
+                          height: 1.2,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        softWrap: false,
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        desc,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                          fontSize: 13,
+                          height: 1.2,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-            );
-          },
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
+                const SizedBox(width: 12),
+                // Episode count
                 Text(
-                  'See More',
+                  '$episodeCount Episodes',
                   style: Theme.of(context).textTheme.labelMedium?.copyWith(
                     color: Theme.of(context).colorScheme.onSurfaceVariant,
                     fontWeight: FontWeight.w500,
                     fontSize: 13,
                   ),
-                ),
-                const SizedBox(width: 4),
-                Icon(
-                  Icons.arrow_forward_ios,
-                  size: 12,
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  textAlign: TextAlign.right,
                 ),
               ],
             ),
