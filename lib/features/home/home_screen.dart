@@ -30,9 +30,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   List<Story> _premiumStories = [];
   List<Story> _newReleaseStories = [];
 
-  // Tab and Page controllers for swipeable tabs
+  // Tab controller for tabs
   late TabController _tabController;
-  late PageController _pageController;
 
   void _updateStoryLists(List<Story> stories) {
     _premiumStories = stories.take(5).toList();
@@ -46,16 +45,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     
     // Initialize controllers
     _tabController = TabController(length: 2, vsync: this, initialIndex: 0);
-    _pageController = PageController(initialPage: 0);
     
-    // Sync tab and page controllers
+    // Sync tab controller with TabBarView
     _tabController.addListener(() {
       if (_tabController.indexIsChanging) {
-        _pageController.animateToPage(
-          _tabController.index,
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.easeInOut,
-        );
         setState(() {
           _tab = _tabController.index == 0 ? _StoryTab.premium : _StoryTab.newRelease;
         });
@@ -66,7 +59,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   @override
   void dispose() {
     _tabController.dispose();
-    _pageController.dispose();
     super.dispose();
   }
 
@@ -238,7 +230,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       height: 44,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 20),
+        padding: const EdgeInsets.symmetric(horizontal: 16),
         itemCount: _ranks.length,
         separatorBuilder: (_, __) => const SizedBox(width: 12),
         itemBuilder: (_, i) {
@@ -264,7 +256,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       height: 44,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 20),
+        padding: const EdgeInsets.symmetric(horizontal: 16),
         itemCount: _categories.length,
         separatorBuilder: (_, __) => const SizedBox(width: 12),
         itemBuilder: (_, i) {
@@ -294,161 +286,135 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     final cs = Theme.of(context).colorScheme;
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      body: CustomScrollView(
-        slivers: [
-          SliverPadding(
-            padding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
-            sliver: SliverToBoxAdapter(
-              child: Row(
-                children: [
-                  Text('NIMON',
-                      style:
-                          Theme.of(context).textTheme.headlineMedium!.copyWith(
-                                fontWeight: FontWeight.w800,
-                                letterSpacing: 0.8,
-                              )),
-                  const Spacer(),
-                  _balancePill('\$ 98'),
-                ],
+      body: SafeArea(
+        bottom: true,
+        child: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Header with title and balance
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+                child: Row(
+                  children: [
+                    Text('NIMON',
+                        style: Theme.of(context).textTheme.headlineMedium!.copyWith(
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: 0.8,
+                            )),
+                    const Spacer(),
+                    _balancePill('\$ 98'),
+                  ],
+                ),
               ),
-            ),
-          ),
 
-          const SliverToBoxAdapter(child: SizedBox(height: 8)),
+              // Rank and Category filters
+              _rankRow(),
+              _categoryRow(),
 
-          // Rank chips — horizontal, single line
-          SliverToBoxAdapter(child: _rankRow()),
-          const SliverToBoxAdapter(child: SizedBox(height: 8)),
-          // Category chips — horizontal, single line
-          SliverToBoxAdapter(child: _categoryRow()),
+              const SizedBox(height: 24),
 
-          const SliverToBoxAdapter(child: SizedBox(height: 24)),
+              // 1) Continue Reading section
+              _continueReadingSection(),
 
-          // Continue Reading section
-          SliverToBoxAdapter(
-            child: _continueReadingSection(),
-          ),
+              const SizedBox(height: 24),
 
-          const SliverToBoxAdapter(child: SizedBox(height: 24)),
-
-          // Recommend Stories section
-          SliverToBoxAdapter(
-            child: _sectionTitle(context, 'Recommend Stories'),
-          ),
-          SliverToBoxAdapter(
-            child: FutureBuilder<List<Story>>(
-              future: _future,
-              builder: (ctx, snap) {
-                if (snap.connectionState != ConnectionState.done) {
-                  return const SizedBox(
-                      height: 180,
-                      child: Center(child: CircularProgressIndicator()));
-                }
-                final stories = snap.data ?? const <Story>[];
-                // Update the story lists for premium/new release section
-                _updateStoryLists(stories);
-                return SizedBox(
-                  height: 140 * 3 / 2, // Calculate height from BookCoverCard.md width and aspect ratio
-                  child: ListView.separated(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    scrollDirection: Axis.horizontal,
-                    itemCount: stories.length,
-                    separatorBuilder: (_, __) => const SizedBox(width: 16),
-                    itemBuilder: (ctx, i) {
-                      final s = stories[i];
-                      return BookCoverCard.md(
-                        story: s,
-                        onTap: () => _openDetail(s),
-                      );
-                    },
-                  ),
-                );
-              },
-            ),
-          ),
-
-          const SliverToBoxAdapter(child: SizedBox(height: 24)),
-
-          // Popular Mono writer's collections
-          SliverToBoxAdapter(
-            child: Container(
-              color: const Color(0xFFF8F9FA), // Subtle neutral shade
-              child: Column(
-                children: [
-                  _sectionTitle(context, "Popular Mono writer's collections"),
-                  FutureBuilder<List<Episode>>(
-                    future: _getPopularEpisodes(),
-                    builder: (ctx, snap) {
-                      if (!snap.hasData) {
-                        return const SizedBox(
-                            height: 200,
-                            child: Center(child: CircularProgressIndicator()));
-                      }
-                      final episodes = snap.data!;
-                      return MonoCollectionRow(
-                        episodes: episodes,
-                        title: 'Popular Mono\nCollections',
-                      );
-                    },
-                  ),
-                  const SizedBox(height: 24),
-                ],
-              ),
-            ),
-          ),
-
-          // New Writers Spotlight
-          SliverToBoxAdapter(
-            child: Container(
-              color: Colors.white, // Clean white background
-              child: Column(
-                children: [
-                  _sectionTitle(context, "New Writers Spotlight"),
-                  FutureBuilder<List<Episode>>(
-                    future: _getNewWritersEpisodes(),
-                    builder: (ctx, snap) {
-                      if (!snap.hasData) {
-                        return const SizedBox(
-                            height: 200,
-                            child: Center(child: CircularProgressIndicator()));
-                      }
-                      final episodes = snap.data!;
-                      return MonoCollectionRow(
-                        episodes: episodes,
-                        title: 'New Writers\nSpotlight',
-                      );
-                    },
-                  ),
-                  const SizedBox(height: 24),
-                ],
-              ),
-            ),
-          ),
-
-          // Premium/New Release section
-          SliverPadding(
-            padding: const EdgeInsets.fromLTRB(16, 20, 16, 16),
-            sliver: SliverToBoxAdapter(
-              child: FutureBuilder<List<Story>>(
+              // 2) Recommend Stories section
+              _sectionTitle(context, 'Recommend Stories'),
+              const SizedBox(height: 16),
+              FutureBuilder<List<Story>>(
                 future: _future,
                 builder: (ctx, snap) {
                   if (snap.connectionState != ConnectionState.done) {
                     return const SizedBox(
-                        height: 200,
+                        height: 180,
                         child: Center(child: CircularProgressIndicator()));
                   }
                   final stories = snap.data ?? const <Story>[];
-                  // Update the story lists for premium/new release section
                   _updateStoryLists(stories);
-                  return _premiumNewReleaseSection(context);
+                  return SizedBox(
+                    height: 140 * 3 / 2, // Calculate height from BookCoverCard.md width and aspect ratio
+                    child: ListView.separated(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      scrollDirection: Axis.horizontal,
+                      itemCount: stories.length,
+                      separatorBuilder: (_, __) => const SizedBox(width: 16),
+                      itemBuilder: (ctx, i) {
+                        final s = stories[i];
+                        return BookCoverCard.md(
+                          story: s,
+                          onTap: () => _openDetail(s),
+                        );
+                      },
+                    ),
+                  );
                 },
               ),
-            ),
-          ),
 
-          // bottom spacer to avoid overflow behind nav bar
-          const SliverToBoxAdapter(child: SizedBox(height: 16)),
-        ],
+              const SizedBox(height: 24),
+
+              // 3) Popular Mono writer's collections
+              Container(
+                color: const Color(0xFFF8F9FA), // Subtle neutral shade
+                child: Column(
+                  children: [
+                    _sectionTitle(context, "Popular Mono writer's collections"),
+                    const SizedBox(height: 16),
+                    FutureBuilder<List<Episode>>(
+                      future: _getPopularEpisodes(),
+                      builder: (ctx, snap) {
+                        if (!snap.hasData) {
+                          return const SizedBox(
+                              height: 200,
+                              child: Center(child: CircularProgressIndicator()));
+                        }
+                        final episodes = snap.data!;
+                        return MonoCollectionRow(
+                          episodes: episodes,
+                          title: 'Popular Mono\nCollections',
+                        );
+                      },
+                    ),
+                    const SizedBox(height: 24),
+                  ],
+                ),
+              ),
+
+              // 4) New Writers Spotlight
+              Container(
+                color: Colors.white, // Clean white background
+                child: Column(
+                  children: [
+                    _sectionTitle(context, "New Writers Spotlight"),
+                    const SizedBox(height: 16),
+                    FutureBuilder<List<Episode>>(
+                      future: _getNewWritersEpisodes(),
+                      builder: (ctx, snap) {
+                        if (!snap.hasData) {
+                          return const SizedBox(
+                              height: 200,
+                              child: Center(child: CircularProgressIndicator()));
+                        }
+                        final episodes = snap.data!;
+                        return MonoCollectionRow(
+                          episodes: episodes,
+                          title: 'New Writers\nSpotlight',
+                        );
+                      },
+                    ),
+                    const SizedBox(height: 24),
+                  ],
+                ),
+              ),
+
+              // 5) Top Charts section (moved to bottom)
+              _topChartsSection(context),
+
+              // Bottom spacer for navigation - increased to prevent content behind nav
+              const SizedBox(height: 80),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -487,7 +453,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
   Widget _sectionTitle(BuildContext ctx, String title, {Widget? trailing}) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
       child: Row(
         children: [
           Text(title,
@@ -526,6 +492,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             child: const Text('See all'),
           ),
         ),
+        const SizedBox(height: 16),
         // Horizontal List
         SizedBox(
           height: 180, // Fixed height for better proportions
@@ -722,59 +689,129 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     );
   }
 
-  // Premium/New Release section
-  Widget _premiumNewReleaseSection(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const SizedBox(height: 16),
-        // Material 3 Secondary Tabs
-        Container(
-          margin: const EdgeInsets.symmetric(horizontal: 16),
-          child: TabBar(
-            controller: _tabController,
-            indicator: UnderlineTabIndicator(
-              borderSide: BorderSide(
-                width: 2,
-                color: Theme.of(context).colorScheme.primary,
+  // Top Charts section with header and tabs (positioned at bottom)
+  Widget _topChartsSection(BuildContext context) {
+    return FutureBuilder<List<Story>>(
+      future: _future,
+      builder: (ctx, snap) {
+        if (snap.connectionState != ConnectionState.done) {
+          return const SizedBox(
+              height: 200,
+              child: Center(child: CircularProgressIndicator()));
+        }
+        final stories = snap.data ?? const <Story>[];
+        // Update the story lists for premium/new release section
+        _updateStoryLists(stories);
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Top Charts Header with proper spacing
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
+              child: Row(
+                children: [
+                  Text(
+                    'Top Charts',
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 20,
+                    ),
+                  ),
+                  const Spacer(),
+                  Container(
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.primaryContainer,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(20),
+                        onTap: () {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: const Text('See all Top Charts coming soon!'),
+                              action: SnackBarAction(
+                                label: 'OK',
+                                onPressed: () {},
+                              ),
+                            ),
+                          );
+                        },
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                'See all',
+                                style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                                  color: Theme.of(context).colorScheme.onPrimaryContainer,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              const SizedBox(width: 4),
+                              Icon(
+                                Icons.arrow_forward_ios,
+                                size: 12,
+                                color: Theme.of(context).colorScheme.onPrimaryContainer,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ),
-              insets: const EdgeInsets.symmetric(horizontal: 16),
             ),
-            labelColor: Theme.of(context).colorScheme.primary,
-            unselectedLabelColor: Theme.of(context).colorScheme.onSurfaceVariant,
-            labelStyle: Theme.of(context).textTheme.labelLarge?.copyWith(
-              fontWeight: FontWeight.w600,
+            
+            const SizedBox(height: 16),
+            
+            // Material 3 Secondary Tabs
+            Container(
+              margin: const EdgeInsets.symmetric(horizontal: 16),
+              child: TabBar(
+                controller: _tabController,
+                indicator: UnderlineTabIndicator(
+                  borderSide: BorderSide(
+                    width: 2,
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
+                  insets: const EdgeInsets.symmetric(horizontal: 16),
+                ),
+                labelColor: Theme.of(context).colorScheme.primary,
+                unselectedLabelColor: Theme.of(context).colorScheme.onSurfaceVariant,
+                labelStyle: Theme.of(context).textTheme.labelLarge?.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
+                unselectedLabelStyle: Theme.of(context).textTheme.labelLarge?.copyWith(
+                  fontWeight: FontWeight.w500,
+                ),
+                tabs: const [
+                  Tab(text: 'Featured Stories'),
+                  Tab(text: 'Latest Releases'),
+                ],
+              ),
             ),
-            unselectedLabelStyle: Theme.of(context).textTheme.labelLarge?.copyWith(
-              fontWeight: FontWeight.w500,
-            ),
-            tabs: const [
-              Tab(text: 'Featured Stories'),
-              Tab(text: 'Latest Releases'),
-            ],
-          ),
-        ),
 
-        const SizedBox(height: 16),
+            const SizedBox(height: 16),
 
-        // PageView for swipeable content
-        SizedBox(
-          height: _calculatePageViewHeight(),
-          child: PageView(
-            controller: _pageController,
-            onPageChanged: (index) {
-              _tabController.animateTo(index);
-              setState(() {
-                _tab = index == 0 ? _StoryTab.premium : _StoryTab.newRelease;
-              });
-            },
-            children: [
-              _storyListForTab(context, _StoryTab.premium),
-              _storyListForTab(context, _StoryTab.newRelease),
-            ],
-          ),
-        ),
-      ],
+            // TabBarView with horizontal swiping enabled
+            SizedBox(
+              height: _calculateTabContentHeight(),
+              child: TabBarView(
+                controller: _tabController,
+                physics: const PageScrollPhysics(), // Enable horizontal swiping
+                children: [
+                  _storyListForTab(context, _StoryTab.premium),
+                  _storyListForTab(context, _StoryTab.newRelease),
+                ],
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 
@@ -787,136 +824,183 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     }
   }
 
-  double _calculatePageViewHeight() {
-    // Calculate height based on content: 5 items * (card height + spacing) + see more button
-    const double cardHeight = 96.0; // Approximate card height
-    const double cardSpacing = 6.0;
+  double _calculateTabContentHeight() {
+    // Calculate height based on content: 5 items * (card height + spacing) + see more button + padding
+    const double cardHeight = 140.0; // Approximate card height (72dp image + padding)
+    const double cardSpacing = 16.0;
     const double seeMoreButtonHeight = 40.0;
-    const double padding = 16.0;
+    const double padding = 32.0; // Top and bottom padding
     
     return (5 * cardHeight) + (4 * cardSpacing) + seeMoreButtonHeight + padding;
   }
+
 
 
   Widget _storyListForTab(BuildContext context, _StoryTab tab) {
     final items = tab == _StoryTab.premium ? _premiumStories : _newReleaseStories;
     final displayItems = items.take(5).toList(); // Show only 5 items
     
-    return Column(
-      children: [
-         // Recycler view style - vertical list with 3px margins
-         ListView.separated(
-           shrinkWrap: true,
-           physics: const NeverScrollableScrollPhysics(),
-           padding: const EdgeInsets.symmetric(horizontal: 3), // 3px margin
-           itemCount: displayItems.length,
-           separatorBuilder: (_, __) => const SizedBox(height: 6), // Reduced spacing
-           itemBuilder: (context, index) {
-             final s = displayItems[index];
-             final episodeCount = 8 + index; // placeholder
-             final desc = (s.description?.isNotEmpty == true)
-                 ? s.description!
-                 : 'Description Description Description Description Description Description Description';
-
-             return Container(
-               margin: const EdgeInsets.symmetric(horizontal: 3), // 3px margin on each side
-               child: Card(
-                 elevation: 2,
-                 shadowColor: Colors.black.withOpacity(0.1),
-                 color: Theme.of(context).colorScheme.surface,
-                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                 child: InkWell(
-                   borderRadius: BorderRadius.circular(16),
-                   onTap: () => _openDetail(s),
-                   child: Padding(
-                     padding: const EdgeInsets.all(16),
-                     child: Row(
-                       crossAxisAlignment: CrossAxisAlignment.start,
-                       children: [
-                         // Circular thumbnail
-                         ClipOval(
-                           child: Image.network(
-                             s.coverUrl ?? 'https://picsum.photos/seed/${s.id}/100/100',
-                             width: 64,
-                             height: 64,
-                             fit: BoxFit.cover,
-                             loadingBuilder: (context, child, loadingProgress) {
-                               if (loadingProgress == null) return child;
-                               return Container(
-                                 width: 64,
-                                 height: 64,
-                                 color: Colors.grey[300],
-                                 child: const Center(
-                                   child: CircularProgressIndicator(strokeWidth: 2),
-                                 ),
-                               );
-                             },
-                             errorBuilder: (context, error, stackTrace) {
-                               return Container(
-                                 width: 64,
-                                 height: 64,
-                                 color: Colors.grey[300],
-                                 child: const Icon(Icons.book, size: 32),
-                               );
-                             },
-                           ),
-                         ),
-                         const SizedBox(width: 16),
-
-                         // Title / description
-                         Expanded(
-                           child: Column(
-                             crossAxisAlignment: CrossAxisAlignment.start,
-                             children: [
-                               Text(
-                                 s.title,
-                                 style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                       fontWeight: FontWeight.w700,
-                                     ),
-                                 maxLines: 1,
-                                 overflow: TextOverflow.ellipsis,
-                               ),
-                               const SizedBox(height: 6),
-                               Text(
-                                 desc,
-                                 maxLines: 2,
-                                 overflow: TextOverflow.ellipsis,
-                                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                   color: Theme.of(context).colorScheme.onSurfaceVariant,
-                                 ),
-                               ),
-                             ],
-                           ),
-                         ),
-
-                         const SizedBox(width: 16),
-
-                         // Episode count
-                         Text(
-                           '$episodeCount Episodes',
-                           style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                                 color: Theme.of(context).colorScheme.onSurfaceVariant,
-                                 fontWeight: FontWeight.w600,
-                               ),
-                         ),
-                       ],
-                     ),
-                   ),
-                 ),
-               ),
-             );
-           },
-         ),
+    return ListView.separated(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(), // Non-scrollable since outer page scrolls
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      itemCount: displayItems.length + (items.length > 5 ? 1 : 0), // +1 for See More button
+      separatorBuilder: (_, __) => const SizedBox(height: 16),
+      itemBuilder: (context, index) {
+        if (index >= displayItems.length) {
+          // See More button
+          return _buildSeeMoreButton(context, tab);
+        }
         
-         // See More button at the bottom
-         if (items.length > 5) ...[
-           const SizedBox(height: 12),
-           Container(
-             margin: const EdgeInsets.symmetric(horizontal: 3), // 3px margin to match cards
-             child: _buildSeeMoreButton(context, tab),
-           ),
-         ],
-      ],
+        final s = displayItems[index];
+        final episodeCount = 8 + index; // placeholder
+        final desc = (s.description?.isNotEmpty == true)
+            ? s.description!
+            : 'Description Description Description Description Description Description Description';
+
+        return Card(
+          elevation: 2,
+          shadowColor: Colors.black.withOpacity(0.1),
+          color: Theme.of(context).colorScheme.surface,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(12),
+            onTap: () => _openDetail(s),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Rectangular book cover thumbnail (72-80dp width, 2:3 ratio)
+                  Container(
+                    width: 72,
+                    height: 108, // 2:3 aspect ratio (72 * 1.5)
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(8),
+                      boxShadow: [
+                        // Left spine shadow
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.12),
+                          blurRadius: 0,
+                          offset: const Offset(-2, 0),
+                          spreadRadius: 0,
+                        ),
+                        // Right edge shadow
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.08),
+                          blurRadius: 0,
+                          offset: const Offset(1, 0),
+                          spreadRadius: 0,
+                        ),
+                        // Drop shadow for elevation
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.12),
+                          blurRadius: 8,
+                          offset: const Offset(0, 3),
+                          spreadRadius: 0,
+                        ),
+                      ],
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: Stack(
+                        fit: StackFit.expand,
+                        children: [
+                          Image.network(
+                            s.coverUrl ?? 'https://picsum.photos/seed/${s.id}/600/900',
+                            fit: BoxFit.cover,
+                            loadingBuilder: (context, child, loadingProgress) {
+                              if (loadingProgress == null) return child;
+                              return Container(
+                                color: Colors.grey[300],
+                                child: const Center(
+                                  child: CircularProgressIndicator(strokeWidth: 2),
+                                ),
+                              );
+                            },
+                            errorBuilder: (context, error, stackTrace) {
+                              return Container(
+                                color: Colors.grey[300],
+                                child: const Center(
+                                  child: Icon(Icons.book, size: 24, color: Colors.grey),
+                                ),
+                              );
+                            },
+                          ),
+                          // Gradient spine on left
+                          Positioned(
+                            left: 0,
+                            top: 0,
+                            bottom: 0,
+                            width: 3,
+                            child: Container(
+                              decoration: BoxDecoration(
+                                borderRadius: const BorderRadius.only(
+                                  topLeft: Radius.circular(8),
+                                  bottomLeft: Radius.circular(8),
+                                ),
+                                gradient: LinearGradient(
+                                  begin: Alignment.centerLeft,
+                                  end: Alignment.centerRight,
+                                  colors: [
+                                    Colors.black.withOpacity(0.12),
+                                    Colors.transparent,
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+
+                  // Title and description
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          s.title,
+                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                fontWeight: FontWeight.w700,
+                                fontSize: 16,
+                              ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          desc,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            color: Theme.of(context).colorScheme.onSurfaceVariant,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(width: 12),
+
+                  // Episode count
+                  Text(
+                    '$episodeCount Episodes',
+                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                          fontWeight: FontWeight.w500,
+                          fontSize: 13,
+                        ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 
