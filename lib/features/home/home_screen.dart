@@ -8,6 +8,8 @@ import 'widgets/book_cover_card.dart';
 import 'widgets/community_section.dart';
 import 'widgets/trending_for_you.dart';
 import 'widgets/premium_banner.dart';
+import 'sections/reading_challenges_section.dart';
+import 'data/challenges.dart';
 
 class HomeScreen extends StatefulWidget {
   final StoryRepo repo;
@@ -308,13 +310,12 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
+    final pad = MediaQuery.viewPaddingOf(context).bottom;
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-        body: SafeArea(
-          bottom: true,
-          child: NestedScrollView(
-            headerSliverBuilder: (ctx, innerBoxIsScrolled) => [
+      body: SafeArea(
+        child: CustomScrollView(
+          slivers: [
               // Header with title and balance
               SliverToBoxAdapter(
                 child: Padding(
@@ -541,12 +542,26 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 child: _topChartsContent(context),
               ),
               
-              // Bottom padding to clear navigation bar
+              // Reading Challenges (the last one)
               SliverToBoxAdapter(
-                child: SizedBox(height: 96),
+                child: ReadingChallengesSection(
+                  onSelect: (c) {
+                    // TODO: hook to your filtering / discovery route.
+                    // Example (adapt to your router):
+                    // context.push('/discover?category=${Uri.encodeComponent(c.title)}');
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('${c.title} challenge selected!'),
+                        duration: const Duration(seconds: 2),
+                      ),
+                    );
+                  },
+                ),
               ),
+              
+              // tiny bottom space only
+              SliverToBoxAdapter(child: SizedBox(height: pad + 16)),
             ],
-            body: const SizedBox.shrink(), // Empty body since we're using slivers
           ),
         ),
       );
