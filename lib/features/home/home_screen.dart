@@ -7,6 +7,7 @@ import 'widgets/mono_collection_row.dart';
 import 'widgets/book_cover_card.dart';
 import 'widgets/community_section.dart';
 import 'widgets/trending_for_you.dart';
+import 'widgets/premium_banner.dart';
 
 class HomeScreen extends StatefulWidget {
   final StoryRepo repo;
@@ -376,6 +377,22 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             ),
           ),
           const SliverToBoxAdapter(child: SizedBox(height: 24)),
+
+              // PREMIUM HIGHLIGHT BANNER
+              SliverToBoxAdapter(
+                child: PremiumBanner(
+                  onTap: () {
+                    // TODO: navigate to Premium / Paywall (leave as is if route not ready)
+                    // context.push('/premium');
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Premium upgrade coming soon!'),
+                        duration: Duration(seconds: 2),
+                      ),
+                    );
+                  },
+                ),
+              ),
 
               // 2) Trending For You section
               SliverToBoxAdapter(
