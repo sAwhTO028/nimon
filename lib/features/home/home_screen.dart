@@ -29,7 +29,19 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   String _category = 'ALL';
   _StoryTab _tab = _StoryTab.premium;
   final _ranks = const ['ALL', 'N5', 'N4', 'N3', 'N2', 'N1'];
-  final _categories = const ['ALL', 'Love', 'Comedy', 'Horror', 'Drama'];
+  final _categories = const [
+    'ALL',
+    'Love',
+    'Comedy',
+    'Horror',
+    'Cultural',
+    'Adventure',
+    'Fantasy',
+    'Drama',
+    'Business',
+    'Sci-Fi',
+    'Mystery',
+  ];
 
   StoryRepo get repo => widget.repo;
 
@@ -527,22 +539,23 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               ),
           const SliverToBoxAdapter(child: SizedBox(height: 24)),
 
-              // 3) From the Community section
-              SliverToBoxAdapter(
-                child: CommunitySection(
-                  onSeeAllTap: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: const Text('See all community collections coming soon!'),
-                        action: SnackBarAction(
-                          label: 'OK',
-                          onPressed: () => ScaffoldMessenger.of(context).hideCurrentSnackBar(),
-                        ),
-                      ),
-                    );
-                  },
-                ),
-              ),
+          // 3) From the Community section
+          SliverToBoxAdapter(
+            child: CommunitySection(
+              repo: repo,
+              onSeeAllTap: () {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: const Text('See all community collections coming soon!'),
+                    action: SnackBarAction(
+                      label: 'OK',
+                      onPressed: () => ScaffoldMessenger.of(context).hideCurrentSnackBar(),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
           const SliverToBoxAdapter(child: SizedBox(height: 24)),
 
               // 3) Popular Mono writer's collections

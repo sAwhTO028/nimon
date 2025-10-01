@@ -18,7 +18,19 @@ late final List<Episode> _episodes = _genEpisodes();
 List<Story> _genStories() {
   final rnd = Random(7);
   final lv = ['N5', 'N4', 'N3', 'N2'];
-  final tags = ['Love', 'School', 'Kyoto', 'Work', 'Cafe', 'Rain', 'Trip'];
+  // 10 story type categories
+  final categories = [
+    'Love',
+    'Comedy',
+    'Horror',
+    'Cultural',
+    'Adventure',
+    'Fantasy',
+    'Drama',
+    'Business',
+    'Sci-Fi',
+    'Mystery',
+  ];
   return List.generate(50, (i) {
     return Story(
       id: _uuid.v4(),
@@ -27,7 +39,7 @@ List<Story> _genStories() {
       'A rainy-day encounter in Kyoto leads to small conversations, warm umbrellas, and gentle lessons.',
       coverUrl: _covers[i % _covers.length],
       jlptLevel: lv[i % lv.length],
-      tags: [tags[i % tags.length], tags[(i + 3) % tags.length]],
+      tags: [categories[i % categories.length]],
       likes: rnd.nextInt(500) + 10,
     );
   });

@@ -1,192 +1,181 @@
 import 'package:flutter/material.dart';
+import 'package:nimon/data/story_repo.dart';
+import 'package:nimon/models/story.dart';
+import 'package:nimon/core/story_categories.dart';
 import 'community_collection_card.dart';
 
-class CommunitySection extends StatelessWidget {
+class CommunitySection extends StatefulWidget {
+  final StoryRepo repo;
   final VoidCallback? onSeeAllTap;
 
   const CommunitySection({
     super.key,
+    required this.repo,
     this.onSeeAllTap,
   });
 
-  // Demo data for community collections
-  static final List<CommunityCollectionData> _demoCollections = [
-    CommunityCollectionData(
-      title: 'Myanmar Hits',
-      description: 'Stories from Myanmar community writers with authentic cultural insights and language learning.',
-      coverUrl: 'https://picsum.photos/seed/1/200/300',
-      jlptLevel: 'N2',
-      storyType: 'Cultural',
-      totalEpisodes: 20,
-      episodes: [
-        CommunityEpisode(
-          title: 'Traditional Festival',
-          episodeNumber: 1,
-          thumbnailUrl: 'https://picsum.photos/seed/101/100/100',
-        ),
-        CommunityEpisode(
-          title: 'Market Stories',
-          episodeNumber: 2,
-          thumbnailUrl: 'https://picsum.photos/seed/102/100/100',
-        ),
-        CommunityEpisode(
-          title: 'Family Traditions',
-          episodeNumber: 3,
-          thumbnailUrl: 'https://picsum.photos/seed/103/100/100',
-        ),
-      ],
-    ),
-    CommunityCollectionData(
-      title: 'Tokyo Adventures',
-      description: 'Explore modern Tokyo through engaging stories and everyday conversations.',
-      coverUrl: 'https://picsum.photos/seed/2/200/300',
-      jlptLevel: 'N3',
-      storyType: 'Adventure',
-      totalEpisodes: 15,
-      episodes: [
-        CommunityEpisode(
-          title: 'Train Station Chaos',
-          episodeNumber: 1,
-          thumbnailUrl: 'https://picsum.photos/seed/201/100/100',
-        ),
-        CommunityEpisode(
-          title: 'Café Culture',
-          episodeNumber: 2,
-          thumbnailUrl: 'https://picsum.photos/seed/202/100/100',
-        ),
-        CommunityEpisode(
-          title: 'Night Life',
-          episodeNumber: 3,
-          thumbnailUrl: 'https://picsum.photos/seed/203/100/100',
-        ),
-      ],
-    ),
-    CommunityCollectionData(
-      title: 'Business Japanese',
-      description: 'Professional Japanese conversations and business etiquette for workplace success.',
-      coverUrl: 'https://picsum.photos/seed/3/200/300',
-      jlptLevel: 'N1',
-      storyType: 'Professional',
-      totalEpisodes: 25,
-      episodes: [
-        CommunityEpisode(
-          title: 'Meeting Etiquette',
-          episodeNumber: 1,
-          thumbnailUrl: 'https://picsum.photos/seed/301/100/100',
-        ),
-        CommunityEpisode(
-          title: 'Email Writing',
-          episodeNumber: 2,
-          thumbnailUrl: 'https://picsum.photos/seed/302/100/100',
-        ),
-        CommunityEpisode(
-          title: 'Client Relations',
-          episodeNumber: 3,
-          thumbnailUrl: 'https://picsum.photos/seed/303/100/100',
-        ),
-      ],
-    ),
-  ];
+  @override
+  State<CommunitySection> createState() => _CommunitySectionState();
+}
+
+class _CommunitySectionState extends State<CommunitySection> {
+  late Future<List<_CommunityCollectionData>> _collectionsFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _collectionsFuture = _loadCommunityCollections();
+  }
+
+  Future<List<_CommunityCollectionData>> _loadCommunityCollections() async {
+    // Get a subset of stories for the community section
+    final stories = await widget.repo.getStories();
+    final collections = <_CommunityCollectionData>[];
+
+    // Take the first 3 stories for the community section
+    for (final story in stories.take(3)) {
+      final episodes = await widget.repo.getEpisodesByStory(story.id);
+      
+      collections.add(_CommunityCollectionData(
+        story: story,
+        episodes: episodes,
+      ));
+    }
+
+    return collections;
+  }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // Section Header
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 20, 16, 12),
-          child: Row(
-            children: [
-              Text(
-                'From the Community',
-                style: theme.textTheme.titleLarge?.copyWith(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: theme.colorScheme.onSurface,
-                ),
-              ),
-              const Spacer(),
-              // "See all" button
-              Material(
-                color: theme.colorScheme.primaryContainer.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(20),
-                child: InkWell(
-                  onTap: onSeeAllTap,
-                  borderRadius: BorderRadius.circular(20),
-                  child: Container(
-                    height: 36,
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: Center(
-                      child: Text(
-                        'See all >',
-                        style: theme.textTheme.labelLarge?.copyWith(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                          color: theme.colorScheme.primary,
+    return FutureBuilder<List<_CommunityCollectionData>>(
+      future: _collectionsFuture,
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) {
+          return const SizedBox(
+            height: 350,
+            child: Center(child: CircularProgressIndicator()),
+          );
+        }
+
+        final collections = snapshot.data!;
+        if (collections.isEmpty) {
+          return const SizedBox.shrink();
+        }
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Section Header
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 20, 16, 12),
+              child: Row(
+                children: [
+                  Text(
+                    'From the Community',
+                    style: theme.textTheme.titleLarge?.copyWith(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: theme.colorScheme.onSurface,
+                    ),
+                  ),
+                  const Spacer(),
+                  // "See all" button
+                  Material(
+                    color: theme.colorScheme.primaryContainer.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(20),
+                    child: InkWell(
+                      onTap: widget.onSeeAllTap,
+                      borderRadius: BorderRadius.circular(20),
+                      child: Container(
+                        height: 36,
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        child: Center(
+                          child: Text(
+                            'See all >',
+                            style: theme.textTheme.labelLarge?.copyWith(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              color: theme.colorScheme.primary,
+                            ),
+                          ),
                         ),
                       ),
                     ),
                   ),
-                ),
+                ],
               ),
-            ],
-          ),
-        ),
-        // Horizontal scrolling community collections
-        SizedBox(
-          height: 350, // Set a fixed height to prevent overflow
-          child: ListView.builder(
-            scrollDirection: Axis.horizontal,
-            physics: const BouncingScrollPhysics(),
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            itemCount: _demoCollections.length,
-            itemBuilder: (context, index) {
-              final collection = _demoCollections[index];
-              return ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 360),
-                child: Padding(
-                  padding: const EdgeInsets.only(right: 16),
-                  child: CommunityCollectionCard(
-                    title: collection.title,
-                    authorLine: 'by Community Writers',
-                    description: collection.description,
-                    coverUrl: collection.coverUrl,
-                    jlptLevel: collection.jlptLevel,
-                    totalEpisodes: collection.totalEpisodes,
-                    storyType: collection.storyType,
-                    episodes: collection.episodes,
-                  ),
-                ),
-              );
-            },
-          ),
-        ),
-        const SizedBox(height: 16),
-      ],
+            ),
+            // Horizontal scrolling community collections
+            SizedBox(
+              height: 350, // Set a fixed height to prevent overflow
+              child: ListView.builder(
+                scrollDirection: Axis.horizontal,
+                physics: const BouncingScrollPhysics(),
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                itemCount: collections.length,
+                itemBuilder: (context, index) {
+                  final collection = collections[index];
+                  final story = collection.story;
+                  final episodes = collection.episodes;
+                  final category = story.tags.isNotEmpty ? story.tags.first : 'Story';
+                  
+                  // Map episodes to CommunityEpisode format
+                  // Use local assets if available, otherwise fall back to placeholder URLs
+                  final communityEpisodes = episodes.take(3).map((ep) {
+                    String thumbnailUrl;
+                    if (ep.thumbnailUrl != null && ep.thumbnailUrl!.isNotEmpty) {
+                      thumbnailUrl = ep.thumbnailUrl!;
+                    } else {
+                      // Try to use local asset based on category
+                      final assetPath = StoryCategories.getEpisodeThumbnailPath(category, ep.index);
+                      thumbnailUrl = assetPath ?? 
+                          'https://picsum.photos/seed/${story.id}_${ep.index}/100/100';
+                    }
+                    
+                    return CommunityEpisode(
+                      title: ep.title ?? 'Episode ${ep.index}',
+                      episodeNumber: ep.index,
+                      thumbnailUrl: thumbnailUrl,
+                    );
+                  }).toList();
+
+                  return ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 360),
+                    child: Padding(
+                      padding: const EdgeInsets.only(right: 16),
+                      child: CommunityCollectionCard(
+                        title: story.title,
+                        authorLine: 'by Community Writers',
+                        description: story.description,
+                        coverUrl: story.coverUrl ?? 
+                            'https://picsum.photos/seed/${story.id}/200/300',
+                        jlptLevel: story.jlptLevel,
+                        totalEpisodes: episodes.length,
+                        storyType: category,
+                        episodes: communityEpisodes,
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+            const SizedBox(height: 16),
+          ],
+        );
+      },
     );
   }
 }
 
-// Data model for community collections
-class CommunityCollectionData {
-  final String title;
-  final String description;
-  final String coverUrl;
-  final String jlptLevel;
-  final String storyType;
-  final int totalEpisodes;
-  final List<CommunityEpisode> episodes;
+// Internal data holder for community collections
+class _CommunityCollectionData {
+  final Story story;
+  final List<Episode> episodes;
 
-  CommunityCollectionData({
-    required this.title,
-    required this.description,
-    required this.coverUrl,
-    required this.jlptLevel,
-    required this.storyType,
-    required this.totalEpisodes,
+  _CommunityCollectionData({
+    required this.story,
     required this.episodes,
   });
 }
