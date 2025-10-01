@@ -9,6 +9,7 @@ import 'widgets/community_card.dart';
 import 'widgets/community_section.dart';
 import 'widgets/community_demo_data.dart';
 import 'widgets/community_models.dart';
+import 'widgets/trending_for_you.dart';
 
 class HomeScreen extends StatefulWidget {
   final StoryRepo repo;
@@ -512,7 +513,21 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           ),
           const SliverToBoxAdapter(child: SizedBox(height: 24)),
 
-              // 2) From the Community section
+              // 2) Trending For You section
+              SliverToBoxAdapter(
+                child: FutureBuilder<List<Story>>(
+                  future: _future,
+                  builder: (ctx, snap) {
+                    if (snap.hasData) {
+                      return TrendingForYou(stories: snap.data!.take(5).toList());
+                    }
+                    return const SizedBox.shrink();
+                  },
+                ),
+              ),
+          const SliverToBoxAdapter(child: SizedBox(height: 24)),
+
+              // 3) From the Community section
               SliverToBoxAdapter(
                 child: CommunitySection(
                   onSeeAllTap: () {
