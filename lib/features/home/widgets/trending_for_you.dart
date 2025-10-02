@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../../models/story.dart';
 import 'book_cover_card.dart';
+import 'section_header.dart';
 
 class TrendingForYou extends StatefulWidget {
   final List<Story> stories;
@@ -102,28 +103,9 @@ class _TrendingForYouState extends State<TrendingForYou>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'Trending For You',
-                style: Theme.of(context).textTheme.titleMedium!.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              TextButton(
-                onPressed: () {},
-                style: TextButton.styleFrom(
-                  minimumSize: const Size(44, 44),
-                ),
-                child: Text(
-                  'See all >',
-                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                    color: Theme.of(context).colorScheme.primary,
-                  ),
-                ),
-              ),
-            ],
+          const SectionHeader(
+            title: 'Trending For You',
+            padding: EdgeInsets.zero, // No padding since container already has 16px
           ),
           const SizedBox(height: 12),
           SizedBox(

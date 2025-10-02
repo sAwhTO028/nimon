@@ -3,6 +3,7 @@ import 'package:nimon/data/story_repo.dart';
 import 'package:nimon/models/story.dart';
 import 'package:nimon/core/story_categories.dart';
 import 'community_collection_card.dart';
+import 'section_header.dart';
 
 class CommunitySection extends StatefulWidget {
   final StoryRepo repo;
@@ -69,42 +70,10 @@ class _CommunitySectionState extends State<CommunitySection> {
           children: [
             // Section Header
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 20, 16, 12),
-              child: Row(
-                children: [
-                  Text(
-                    'From the Community',
-                    style: theme.textTheme.titleLarge?.copyWith(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: theme.colorScheme.onSurface,
-                    ),
-                  ),
-                  const Spacer(),
-                  // "See all" button
-                  Material(
-                    color: theme.colorScheme.primaryContainer.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(20),
-                    child: InkWell(
-                      onTap: widget.onSeeAllTap,
-                      borderRadius: BorderRadius.circular(20),
-                      child: Container(
-                        height: 36,
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        child: Center(
-                          child: Text(
-                            'See all >',
-                            style: theme.textTheme.labelLarge?.copyWith(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w600,
-                              color: theme.colorScheme.primary,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
+              padding: const EdgeInsets.fromLTRB(0, 20, 0, 12),
+              child: SectionHeader(
+                title: 'From the Community',
+                onSeeAllTap: widget.onSeeAllTap,
               ),
             ),
             // Horizontal scrolling community collections

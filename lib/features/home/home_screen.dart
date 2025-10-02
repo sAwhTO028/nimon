@@ -10,6 +10,7 @@ import 'widgets/book_cover_card.dart';
 import 'widgets/community_section.dart';
 import 'widgets/trending_for_you.dart';
 import 'widgets/premium_banner.dart';
+import 'widgets/section_header.dart';
 import 'sections/reading_challenges_section.dart';
 import 'data/challenges.dart';
 
@@ -315,42 +316,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     final pad = MediaQuery.viewPaddingOf(context).bottom;
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () {
-          // Demo episode bottom sheet with sample data
-          final sampleMeta = EpisodeMeta(
-            id: 'demo_episode_7',
-            title: 'Sample Story Title',
-            episodeNo: 'Episode 7',
-            authorName: 'WRITER NAME',
-            coverUrl: 'https://images.unsplash.com/photo-1519638399535-1b036603ac77?w=800',
-            jlpt: 'N5',
-            likes: 4200,
-            readTime: '5 min',
-            category: 'Love',
-            preview: 'Rain was falling softly in Kyoto. Aya stood under her umbrella. (Ep 7)',
-          );
-          
-          showEpisodeModalFromMeta(
-            context,
-            sampleMeta,
-            onSave: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Saved for later!')),
-              );
-            },
-            onStartReading: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Starting reading...')),
-              );
-            },
-          );
-        },
-        icon: const Icon(Icons.play_arrow),
-        label: const Text('Demo Sheet'),
-        backgroundColor: Theme.of(context).colorScheme.primary,
-        foregroundColor: Theme.of(context).colorScheme.onPrimary,
-      ),
       body: SafeArea(
         child: CustomScrollView(
           slivers: [
@@ -383,7 +348,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           const SliverToBoxAdapter(child: SizedBox(height: 24)),
 
               // 2) Recommend Stories section
-              SliverToBoxAdapter(child: _sectionTitle(context, 'Recommend Stories')),
+              const SliverToBoxAdapter(child: SectionHeader(title: 'Recommend Stories')),
               const SliverToBoxAdapter(child: SizedBox(height: 16)),
           SliverToBoxAdapter(
             child: FutureBuilder<List<Story>>(
@@ -472,7 +437,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               color: const Color(0xFFF8F9FA), // Subtle neutral shade
               child: Column(
                 children: [
-                  _sectionTitle(context, "Popular Mono writer's collections"),
+                  const SectionHeader(
+                    title: "Popular Mono Writer's Collections",
+                    showSeeAll: false,
+                  ),
                       const SizedBox(height: 16),
                   FutureBuilder<List<Episode>>(
                     future: _getPopularEpisodes(),
@@ -502,7 +470,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               margin: const EdgeInsets.only(bottom: 0), // No extra bottom margin
               child: Column(
                 children: [
-                  _sectionTitle(context, "New Writers Spotlight"),
+                  const SectionHeader(
+                    title: "New Writers Spotlight",
+                    showSeeAll: false,
+                  ),
                       const SizedBox(height: 16),
                   FutureBuilder<List<Episode>>(
                     future: _getNewWritersEpisodes(),
@@ -529,11 +500,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               const SliverToBoxAdapter(child: SizedBox(height: 24)),
 
               // Top Charts header (isolated)
-          SliverToBoxAdapter(
-                child: SectionHeader(
-                  title: 'Top Charts',
-                  trailing: const SeeAllButton(),
-                ),
+          const SliverToBoxAdapter(
+                child: SectionHeader(title: 'Top Charts'),
               ),
 
               // TabBar with proper spacing
@@ -688,26 +656,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     );
   }
 
-  Widget _sectionTitle(BuildContext ctx, String title, {Widget? trailing}) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
-      child: Row(
-        children: [
-          Text(title,
-              style: Theme.of(ctx)
-                  .textTheme
-                  .titleLarge!
-                  .copyWith(
-                    fontWeight: FontWeight.w600,
-                    fontSize: 20,
-                    color: Theme.of(ctx).colorScheme.onSurface,
-                  )),
-          const Spacer(),
-          if (trailing != null) trailing,
-        ],
-      ),
-    );
-  }
 
   Widget _continueReadingSection() {
     final episodes = _getContinueReadingEpisodes();
@@ -718,18 +666,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     }
 
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         // Section Header
-        _sectionTitle(
-          context,
-          'Continue Reading',
-          trailing: TextButton(
-            onPressed: () {
-              // Navigate to continue reading page
-            },
-            child: const Text('See all'),
-          ),
-        ),
+        const SectionHeader(title: 'Continue Reading'),
         const SizedBox(height: 16),
         // Horizontal List
         SizedBox(
@@ -1240,38 +1180,6 @@ class _TopChartListWidget extends StatelessWidget {
   }
 }
 
-// Dedicated SectionHeader widget for Top Charts
-class SectionHeader extends StatelessWidget {
-  final String title;
-  final Widget? trailing;
-  
-  const SectionHeader({
-    Key? key,
-    required this.title,
-    this.trailing,
-  }) : super(key: key);
-  
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 24, 16, 12), // 24 top, 12 bottom
-      child: Row(
-        children: [
-          Text(
-            title,
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-              fontWeight: FontWeight.w600,
-              fontSize: 20,
-              color: Theme.of(context).colorScheme.onSurface,
-            ),
-          ),
-          const Spacer(),
-          if (trailing != null) trailing!,
-        ],
-      ),
-    );
-  }
-}
 
 // See All button widget
 class SeeAllButton extends StatelessWidget {

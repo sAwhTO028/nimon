@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import '../data/challenges.dart';
+import '../widgets/section_header.dart';
 import '../widgets/challenge_card.dart';
 
 class ReadingChallengesSection extends StatelessWidget {
@@ -67,9 +68,10 @@ class ReadingChallengesSection extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                'Reading Challenges',
-                style: textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800),
+              const SectionHeader(
+                title: 'Reading Challenges',
+                showSeeAll: false,
+                padding: EdgeInsets.zero, // No padding since container already has 16px left
               ),
               const SizedBox(height: 12),
               SizedBox(
