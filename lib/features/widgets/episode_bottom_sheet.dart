@@ -1,11 +1,14 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/services.dart';
 import '../../models/episode_meta.dart';
+import '../../ui/widgets/episode_action_bar.dart';
 
 /// Callback types for episode bottom sheet actions
 typedef OnSaveLaterCallback = Future<void> Function(String episodeId);
 typedef OnStartReadingCallback = void Function(String episodeId);
+typedef OnShareCallback = void Function(String episodeId);
 typedef OnOpenCategoryCallback = void Function(String category);
 typedef OnOpenAuthorCallback = void Function(String authorName);
 
@@ -15,6 +18,7 @@ Future<void> showEpisodeBottomSheet(
   EpisodeMeta meta, {
   OnSaveLaterCallback? onSaveLater,
   OnStartReadingCallback? onStartReading,
+  OnShareCallback? onShare,
   OnOpenCategoryCallback? onOpenCategory,
   OnOpenAuthorCallback? onOpenAuthor,
 }) {
@@ -29,6 +33,7 @@ Future<void> showEpisodeBottomSheet(
         meta: meta,
         onSaveLater: onSaveLater,
         onStartReading: onStartReading,
+        onShare: onShare,
         onOpenCategory: onOpenCategory,
         onOpenAuthor: onOpenAuthor,
       ),
@@ -40,6 +45,7 @@ class EpisodeBottomSheet extends StatefulWidget {
   final EpisodeMeta meta;
   final OnSaveLaterCallback? onSaveLater;
   final OnStartReadingCallback? onStartReading;
+  final OnShareCallback? onShare;
   final OnOpenCategoryCallback? onOpenCategory;
   final OnOpenAuthorCallback? onOpenAuthor;
 
@@ -48,6 +54,7 @@ class EpisodeBottomSheet extends StatefulWidget {
     required this.meta,
     this.onSaveLater,
     this.onStartReading,
+    this.onShare,
     this.onOpenCategory,
     this.onOpenAuthor,
   });
@@ -185,8 +192,8 @@ class _EpisodeBottomSheetState extends State<EpisodeBottomSheet>
                           
                           const SizedBox(height: 24),
                           
-                          // Actions row
-                          _buildActionsRow(context, colorScheme, textTheme),
+                          // Episode action bar
+                          _buildActionBar(context, mediaQuery),
                           
                           // Bottom padding for safe area
                           SizedBox(height: mediaQuery.padding.bottom + 16),
@@ -376,43 +383,38 @@ class _EpisodeBottomSheetState extends State<EpisodeBottomSheet>
 
   Widget _buildStatsRow(BuildContext context, ColorScheme colorScheme, TextTheme textTheme) {
     return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
       children: [
-        // Likes
-        Expanded(
-          child: _buildStatItem(
-            icon: Icons.favorite,
-            label: _formatLikes(widget.meta.likes),
-            caption: 'Likes',
-            colorScheme: colorScheme,
-            textTheme: textTheme,
-          ),
+        // Likes - static size
+        _buildStatItem(
+          icon: Icons.favorite,
+          label: _formatLikes(widget.meta.likes),
+          caption: 'Likes',
+          colorScheme: colorScheme,
+          textTheme: textTheme,
         ),
         
-        // Read time
-        Expanded(
-          child: _buildStatItem(
-            icon: Icons.schedule,
-            label: widget.meta.readTime,
-            caption: 'Read time',
-            colorScheme: colorScheme,
-            textTheme: textTheme,
-          ),
+        // Read time - static size
+        _buildStatItem(
+          icon: Icons.schedule,
+          label: widget.meta.readTime,
+          caption: 'Read time',
+          colorScheme: colorScheme,
+          textTheme: textTheme,
         ),
         
-        // Category (clickable)
-        Expanded(
-          child: InkWell(
-            onTap: () => widget.onOpenCategory?.call(widget.meta.category),
-            borderRadius: BorderRadius.circular(8),
-            child: Padding(
-              padding: const EdgeInsets.all(8),
-              child: _buildStatItem(
-                icon: CupertinoIcons.tag,
-                label: widget.meta.category,
-                caption: 'Category',
-                colorScheme: colorScheme,
-                textTheme: textTheme,
-              ),
+        // Category (clickable) - static size
+        InkWell(
+          onTap: () => widget.onOpenCategory?.call(widget.meta.category),
+          borderRadius: BorderRadius.circular(8),
+          child: Padding(
+            padding: const EdgeInsets.all(8),
+            child: _buildStatItem(
+              icon: CupertinoIcons.tag,
+              label: widget.meta.category,
+              caption: 'Category',
+              colorScheme: colorScheme,
+              textTheme: textTheme,
             ),
           ),
         ),
@@ -455,59 +457,27 @@ class _EpisodeBottomSheetState extends State<EpisodeBottomSheet>
     );
   }
 
-  Widget _buildActionsRow(BuildContext context, ColorScheme colorScheme, TextTheme textTheme) {
-    return Row(
-      children: [
-        // Save for Later button
-        Expanded(
-          child: OutlinedButton.icon(
-            onPressed: _isLoading ? null : () async {
-              if (widget.onSaveLater != null) {
-                setState(() => _isLoading = true);
-                try {
-                  await widget.onSaveLater!(widget.meta.id);
-                } finally {
-                  if (mounted) setState(() => _isLoading = false);
-                }
-              }
-            },
-            icon: Icon(
-              Icons.bookmark_border,
-              size: 20,
-            ),
-            label: Text('Save for Later'),
-            style: OutlinedButton.styleFrom(
-              minimumSize: const Size(0, 52),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(14),
-              ),
-            ),
-          ),
-        ),
-        
-        const SizedBox(width: 16),
-        
-        // Start Reading button
-        Expanded(
-          child: FilledButton.icon(
-            onPressed: () {
-              Navigator.of(context).pop();
-              widget.onStartReading?.call(widget.meta.id);
-            },
-            icon: Icon(
-              Icons.play_arrow,
-              size: 20,
-            ),
-            label: Text('Start Reading'),
-            style: FilledButton.styleFrom(
-              minimumSize: const Size(0, 52),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(14),
-              ),
-            ),
-          ),
-        ),
-      ],
+  Widget _buildActionBar(BuildContext context, MediaQueryData mediaQuery) {
+    return EpisodeActionBar(
+      onSave: () async {
+        if (widget.onSaveLater != null) {
+          setState(() => _isLoading = true);
+          try {
+            await widget.onSaveLater!(widget.meta.id);
+          } finally {
+            if (mounted) setState(() => _isLoading = false);
+          }
+        }
+      },
+      onShare: widget.onShare != null 
+          ? () => widget.onShare!(widget.meta.id)
+          : null,
+      onStart: () {
+        Navigator.of(context).pop();
+        widget.onStartReading?.call(widget.meta.id);
+      },
+      isLoading: _isLoading,
+      episodeMeta: widget.meta,
     );
   }
 }

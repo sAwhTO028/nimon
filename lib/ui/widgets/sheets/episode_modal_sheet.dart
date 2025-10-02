@@ -90,14 +90,13 @@ class EpisodeModalSheet extends StatelessWidget {
           ),
         ),
         
-        // Sticky footer with CTA buttons
+        // Sticky footer with CTA buttons - positioned at bottom
         SliverFillRemaining(
           hasScrollBody: false,
-          child: Column(
-            children: [
-              const Spacer(),
-              _buildStickyFooter(context, colorScheme, textTheme, bottomPadding),
-            ],
+          fillOverscroll: false,
+          child: Align(
+            alignment: Alignment.bottomCenter,
+            child: _buildStickyFooter(context, colorScheme, textTheme, bottomPadding),
           ),
         ),
       ],
@@ -174,8 +173,53 @@ class EpisodeModalSheet extends StatelessWidget {
           
           const SizedBox(width: 12),
           
-          // JLPT chip
-          _buildJLPTChip(colorScheme, textTheme),
+          // JLPT chip and Share button row
+          Column(
+            children: [
+              _buildJLPTChip(colorScheme, textTheme),
+              const SizedBox(height: 8),
+              // Share button
+              SizedBox(
+                width: 32,
+                height: 32,
+                child: OutlinedButton(
+                  onPressed: () {
+                    HapticFeedback.lightImpact();
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: const Row(
+                          children: [
+                            Icon(Icons.check_circle, color: Colors.white, size: 20),
+                            SizedBox(width: 8),
+                            Expanded(child: Text('Episode link copied to clipboard!')),
+                          ],
+                        ),
+                        backgroundColor: colorScheme.primary,
+                        behavior: SnackBarBehavior.floating,
+                        margin: const EdgeInsets.all(16),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        duration: const Duration(seconds: 2),
+                      ),
+                    );
+                  },
+                  style: OutlinedButton.styleFrom(
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    padding: EdgeInsets.zero,
+                    minimumSize: const Size(32, 32),
+                  ),
+                  child: Icon(
+                    Icons.ios_share_rounded,
+                    size: 16,
+                    color: colorScheme.onSurface,
+                  ),
+                ),
+              ),
+            ],
+          ),
         ],
       ),
     );
@@ -286,33 +330,42 @@ class EpisodeModalSheet extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 16),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
         children: [
           // Likes metric
-          _buildMetricCard(
-            icon: Icons.favorite,
-            value: episode.likesFormatted,
-            caption: 'Likes',
-            colorScheme: colorScheme,
-            textTheme: textTheme,
+          Expanded(
+            child: _buildMetricCard(
+              icon: Icons.favorite,
+              value: episode.likesFormatted,
+              caption: 'Likes',
+              colorScheme: colorScheme,
+              textTheme: textTheme,
+            ),
           ),
+          
+          const SizedBox(width: 12),
           
           // Read time metric
-          _buildMetricCard(
-            icon: Icons.access_time,
-            value: episode.readTimeFormatted,
-            caption: 'Read time',
-            colorScheme: colorScheme,
-            textTheme: textTheme,
+          Expanded(
+            child: _buildMetricCard(
+              icon: Icons.access_time,
+              value: episode.readTimeFormatted,
+              caption: 'Read time',
+              colorScheme: colorScheme,
+              textTheme: textTheme,
+            ),
           ),
           
+          const SizedBox(width: 12),
+          
           // Category metric
-          _buildMetricCard(
-            icon: Icons.bookmark_outline,
-            value: episode.category,
-            caption: 'Category',
-            colorScheme: colorScheme,
-            textTheme: textTheme,
+          Expanded(
+            child: _buildMetricCard(
+              icon: Icons.bookmark_outline,
+              value: episode.category,
+              caption: 'Category',
+              colorScheme: colorScheme,
+              textTheme: textTheme,
+            ),
           ),
         ],
       ),
@@ -327,21 +380,24 @@ class EpisodeModalSheet extends StatelessWidget {
     required TextTheme textTheme,
   }) {
     return Container(
-      constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
       decoration: BoxDecoration(
-        color: colorScheme.secondaryContainer.withOpacity(0.3),
-        borderRadius: BorderRadius.circular(8),
+        color: colorScheme.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: colorScheme.outlineVariant,
+          width: 1,
+        ),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           Icon(
             icon,
-            size: 20,
+            size: 24,
             color: colorScheme.onSurfaceVariant,
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: 6),
           Text(
             value,
             style: textTheme.labelLarge?.copyWith(
@@ -354,7 +410,7 @@ class EpisodeModalSheet extends StatelessWidget {
           const SizedBox(height: 2),
           Text(
             caption,
-            style: textTheme.bodySmall?.copyWith(
+            style: textTheme.labelSmall?.copyWith(
               color: colorScheme.onSurfaceVariant,
             ),
             textAlign: TextAlign.center,
@@ -370,31 +426,30 @@ class EpisodeModalSheet extends StatelessWidget {
     TextTheme textTheme,
     double bottomPadding,
   ) {
-    return SafeArea(
-      bottom: true,
-      child: Container(
-        padding: EdgeInsets.only(
-          left: 20,
-          right: 20,
-          top: 12,
-          bottom: bottomPadding + 8,
-        ),
-        decoration: BoxDecoration(
-          color: colorScheme.surface,
-          boxShadow: [
-            BoxShadow(
-              color: colorScheme.shadow.withOpacity(0.1),
-              blurRadius: 8,
-              offset: const Offset(0, -2),
-            ),
-          ],
-          border: Border(
-            top: BorderSide(
-              color: colorScheme.outlineVariant,
-              width: 0.5,
-            ),
+    return Container(
+      padding: EdgeInsets.only(
+        left: 20,
+        right: 20,
+        top: 16,
+        bottom: bottomPadding + 16,
+      ),
+      decoration: BoxDecoration(
+        color: colorScheme.surface,
+        boxShadow: [
+          BoxShadow(
+            color: colorScheme.shadow.withOpacity(0.1),
+            blurRadius: 8,
+            offset: const Offset(0, -2),
+          ),
+        ],
+        border: Border(
+          top: BorderSide(
+            color: colorScheme.outlineVariant,
+            width: 0.5,
           ),
         ),
+      ),
+      child: SafeArea(
         child: Row(
           children: [
             // Save for Later button

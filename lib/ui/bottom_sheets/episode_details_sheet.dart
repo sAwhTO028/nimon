@@ -1,6 +1,8 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../../models/episode_meta.dart';
+import '../widgets/episode_action_bar.dart';
 
 /// Shows a floating card Episode Details bottom sheet with Material 3 design.
 /// 
@@ -17,6 +19,7 @@ import '../../models/episode_meta.dart';
 /// - [meta]: Episode metadata containing all display information
 /// - [onStartReading]: Optional callback when user taps "Start Reading"
 /// - [onSaveForLater]: Optional callback when user taps "Save for Later"
+/// - [onShare]: Optional callback when user taps "Share"
 /// - [onTapAuthor]: Optional callback when user taps the author name
 /// - [onTapCategory]: Optional callback when user taps the category
 /// 
@@ -26,6 +29,7 @@ Future<void> showEpisodeDetailsSheet(
   required EpisodeMeta meta,
   VoidCallback? onStartReading,
   VoidCallback? onSaveForLater,
+  VoidCallback? onShare,
   VoidCallback? onTapAuthor,
   VoidCallback? onTapCategory,
 }) {
@@ -42,6 +46,7 @@ Future<void> showEpisodeDetailsSheet(
         meta: meta,
         onStartReading: onStartReading,
         onSaveForLater: onSaveForLater,
+        onShare: onShare,
         onTapAuthor: onTapAuthor,
         onTapCategory: onTapCategory,
       ),
@@ -53,6 +58,7 @@ class EpisodeDetailsSheet extends StatefulWidget {
   final EpisodeMeta meta;
   final VoidCallback? onStartReading;
   final VoidCallback? onSaveForLater;
+  final VoidCallback? onShare;
   final VoidCallback? onTapAuthor;
   final VoidCallback? onTapCategory;
 
@@ -61,6 +67,7 @@ class EpisodeDetailsSheet extends StatefulWidget {
     required this.meta,
     this.onStartReading,
     this.onSaveForLater,
+    this.onShare,
     this.onTapAuthor,
     this.onTapCategory,
   });
@@ -172,8 +179,8 @@ class _EpisodeDetailsSheetState extends State<EpisodeDetailsSheet> {
                             ),
                           ),
                           
-                      // Sticky actions row
-                      _buildStickyActions(context, colorScheme, textTheme, bottomPadding, keyboardHeight),
+                      // Episode action bar
+                      _buildActionBar(context, bottomPadding, keyboardHeight),
                     ],
                   ),
                 ),
@@ -385,7 +392,7 @@ class _EpisodeDetailsSheetState extends State<EpisodeDetailsSheet> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
         children: [
-          // Likes
+          // Likes - static size
           _buildStatItem(
             icon: Icons.favorite,
             value: _formatLikes(widget.meta.likes),
@@ -394,7 +401,7 @@ class _EpisodeDetailsSheetState extends State<EpisodeDetailsSheet> {
             textTheme: textTheme,
           ),
           
-          // Read time
+          // Read time - static size
           _buildStatItem(
             icon: Icons.access_time,
             value: widget.meta.readTime,
@@ -403,7 +410,7 @@ class _EpisodeDetailsSheetState extends State<EpisodeDetailsSheet> {
             textTheme: textTheme,
           ),
           
-          // Category (tappable)
+          // Category (tappable) - static size
           InkWell(
             onTap: widget.onTapCategory,
             borderRadius: BorderRadius.circular(8),
@@ -460,94 +467,40 @@ class _EpisodeDetailsSheetState extends State<EpisodeDetailsSheet> {
     );
   }
 
-  Widget _buildStickyActions(
+  Widget _buildActionBar(
     BuildContext context,
-    ColorScheme colorScheme,
-    TextTheme textTheme,
     double bottomPadding,
     double keyboardHeight,
   ) {
     return Container(
-      padding: EdgeInsets.fromLTRB(16, 12, 16, bottomPadding + keyboardHeight + 12),
+      padding: EdgeInsets.fromLTRB(0, 12, 0, bottomPadding + keyboardHeight + 4),
       decoration: BoxDecoration(
-        color: colorScheme.surface,
+        color: Theme.of(context).colorScheme.surface,
         border: Border(
           top: BorderSide(
-            color: colorScheme.onSurface.withOpacity(0.06),
+            color: Theme.of(context).colorScheme.onSurface.withOpacity(0.06),
             width: 1,
           ),
         ),
       ),
-      child: Row(
-        children: [
-          // Save for Later button
-          Expanded(
-            child: OutlinedButton.icon(
-              onPressed: _isLoading ? null : () async {
-                if (widget.onSaveForLater != null) {
-                  setState(() => _isLoading = true);
-                  try {
-                    widget.onSaveForLater!();
-                  } finally {
-                    if (mounted) setState(() => _isLoading = false);
-                  }
-                }
-              },
-              icon: Icon(
-                Icons.bookmark_border,
-                size: 18,
-              ),
-              label: Text(
-                'Save for Later',
-                style: textTheme.labelLarge?.copyWith(
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-              style: OutlinedButton.styleFrom(
-                minimumSize: const Size(0, 52),
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                side: BorderSide(
-                  color: colorScheme.outline.withOpacity(0.5),
-                  width: 1,
-                ),
-              ),
-            ),
-          ),
-          
-          const SizedBox(width: 12),
-          
-          // Start Reading button
-          Expanded(
-            child: FilledButton.icon(
-              onPressed: () {
-                Navigator.of(context).pop();
-                widget.onStartReading?.call();
-              },
-              icon: Icon(
-                Icons.play_arrow,
-                size: 18,
-              ),
-              label: Text(
-                'Start Reading',
-                style: textTheme.labelLarge?.copyWith(
-                  fontWeight: FontWeight.w500,
-                  color: colorScheme.onPrimary,
-                ),
-              ),
-              style: FilledButton.styleFrom(
-                minimumSize: const Size(0, 52),
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                backgroundColor: colorScheme.primary,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
-                ),
-              ),
-            ),
-          ),
-        ],
+      child: EpisodeActionBar(
+        onSave: () async {
+          if (widget.onSaveForLater != null) {
+            setState(() => _isLoading = true);
+            try {
+              widget.onSaveForLater!();
+            } finally {
+              if (mounted) setState(() => _isLoading = false);
+            }
+          }
+        },
+        onShare: widget.onShare,
+        onStart: () {
+          Navigator.of(context).pop();
+          widget.onStartReading?.call();
+        },
+        isLoading: _isLoading,
+        episodeMeta: widget.meta,
       ),
     );
   }
