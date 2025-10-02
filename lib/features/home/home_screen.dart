@@ -3,6 +3,8 @@ import 'package:go_router/go_router.dart';
 import 'package:nimon/features/reader/reader_screen.dart';
 import '../../data/story_repo.dart';
 import '../../models/story.dart';
+import '../../models/episode_meta.dart';
+import '../../ui/widgets/sheets/show_episode_modal.dart';
 import 'widgets/mono_collection_row.dart';
 import 'widgets/book_cover_card.dart';
 import 'widgets/community_section.dart';
@@ -313,6 +315,42 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     final pad = MediaQuery.viewPaddingOf(context).bottom;
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () {
+          // Demo episode bottom sheet with sample data
+          final sampleMeta = EpisodeMeta(
+            id: 'demo_episode_7',
+            title: 'Sample Story Title',
+            episodeNo: 'Episode 7',
+            authorName: 'WRITER NAME',
+            coverUrl: 'https://images.unsplash.com/photo-1519638399535-1b036603ac77?w=800',
+            jlpt: 'N5',
+            likes: 4200,
+            readTime: '5 min',
+            category: 'Love',
+            preview: 'Rain was falling softly in Kyoto. Aya stood under her umbrella. (Ep 7)',
+          );
+          
+          showEpisodeModalFromMeta(
+            context,
+            sampleMeta,
+            onSave: () {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Saved for later!')),
+              );
+            },
+            onStartReading: () {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Starting reading...')),
+              );
+            },
+          );
+        },
+        icon: const Icon(Icons.play_arrow),
+        label: const Text('Demo Sheet'),
+        backgroundColor: Theme.of(context).colorScheme.primary,
+        foregroundColor: Theme.of(context).colorScheme.onPrimary,
+      ),
       body: SafeArea(
         child: CustomScrollView(
           slivers: [
@@ -725,7 +763,35 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       height: 180, // Fixed height for better proportions
       child: InkWell(
         onTap: () {
-          // Handle episode tap - navigate to reader
+          // Show episode bottom sheet with sample data
+          final episodeMeta = EpisodeMeta(
+            id: episode.id,
+            title: episode.title ?? 'Sample Story Title',
+            episodeNo: 'Episode ${episode.index}',
+            authorName: writer,
+            coverUrl: 'https://images.unsplash.com/photo-1519638399535-1b036603ac77?w=800',
+            jlpt: jlpt,
+            likes: likes,
+            readTime: '5 min',
+            category: defaultCategory,
+            preview: episode.preview.isNotEmpty 
+                ? episode.preview 
+                : 'Rain was falling softly in Kyoto. Aya stood under her umbrella. (Ep ${episode.index})',
+          );
+          
+          showEpisodeModalFromMeta(
+            context,
+            episodeMeta,
+            onSave: () {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Saved for later!')),
+              );
+            },
+            onStartReading: () {
+              // Navigate to reader
+              _openEpisode(context, episode);
+            },
+          );
         },
         child: Card(
           elevation: 3,

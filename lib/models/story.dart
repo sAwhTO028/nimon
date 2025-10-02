@@ -77,3 +77,4 @@ class Story {
     required this.likes,
   });
 }
+

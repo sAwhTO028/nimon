@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'dart:ui';
 import '../../../models/story.dart';
+import '../../../models/episode_meta.dart';
+import '../../../ui/widgets/sheets/show_episode_modal.dart';
 import '../../reader/reader_screen.dart';
 
 /// MonoCollectionRow — Left static cover + right horizontal episode cards (Kahoot-style row).
@@ -99,9 +101,7 @@ class _EpisodeCard extends StatelessWidget {
       width: 160,
       margin: const EdgeInsets.only(right: 12),
       child: InkWell(
-        onTap: () => Navigator.of(context).push(
-          MaterialPageRoute(builder: (_) => ReaderScreen(episode: ep)),
-        ),
+        onTap: () => _showEpisodeBottomSheet(context, ep),
         child: Card(
           elevation: 3,
           clipBehavior: Clip.antiAlias,
@@ -186,5 +186,41 @@ const kCategoryCover = {
   'Horror': 'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?w=800',
   'Drama': 'https://images.unsplash.com/photo-1500534314209-a25ddb2bd429?w=800',
 };
+
+void _showEpisodeBottomSheet(BuildContext context, Episode episode) {
+  // Create EpisodeMeta from Episode data
+  final episodeMeta = EpisodeMeta(
+    id: episode.id,
+    title: episode.title ?? 'Sample Story Title',
+    episodeNo: 'Episode ${episode.index}',
+    authorName: 'WRITER NAME',
+    coverUrl: kCategoryCover['Love'] ?? '',
+    jlpt: 'N5',
+    likes: 4200,
+    readTime: '5 min',
+    category: 'Love',
+    preview: episode.preview.isNotEmpty 
+        ? episode.preview 
+        : 'Rain was falling softly in Kyoto. Aya stood under her umbrella. (Ep ${episode.index})',
+  );
+  
+  showEpisodeModalFromMeta(
+    context,
+    episodeMeta,
+    onSave: () {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Saved for later!')),
+      );
+    },
+    onStartReading: () {
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => ReaderScreen(episode: episode),
+        ),
+      );
+    },
+  );
+}
+
 
 
