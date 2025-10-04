@@ -2,6 +2,9 @@ import 'dart:math';
 import 'package:uuid/uuid.dart';
 import 'package:nimon/data/story_repo.dart';
 import 'package:nimon/models/story.dart';
+import '../models/section_key.dart';
+import '../models/filter_state.dart';
+import '../models/oneshot.dart';
 import 'story_repo.dart';
 import '../models/story.dart';
 
@@ -14,6 +17,7 @@ final List<String> _covers = List.generate(
 
 late final List<Story> _stories = _genStories();
 late final List<Episode> _episodes = _genEpisodes();
+late final List<OneShot> _oneShots = _genOneShots();
 
 List<Story> _genStories() {
   final rnd = Random(7);
@@ -75,6 +79,24 @@ List<Episode> _genEpisodes() {
   return list;
 }
 
+List<OneShot> _genOneShots() {
+  final rnd = Random(13);
+  final lv = ['N5', 'N4', 'N3', 'N2', 'N1'];
+  final writers = ['Writer Tanaka', 'Writer Sato', 'Writer Kimura', 'Writer Yamamoto', 'Writer Suzuki'];
+  
+  return List.generate(20, (i) {
+    return OneShot(
+      id: _uuid.v4(),
+      title: 'Mono Story #${i + 1} – Quick Adventure',
+      coverUrl: _covers[i % _covers.length],
+      writerName: writers[i % writers.length],
+      jlpt: lv[i % lv.length],
+      likes: rnd.nextInt(5000) + 100,
+      monoNo: i + 1,
+    );
+  });
+}
+
 class StoryRepoMock implements StoryRepo {
   @override
   Future<List<Story>> listStories({String? filter}) async => _stories;
@@ -126,4 +148,93 @@ class StoryRepoMock implements StoryRepo {
 
   @override
   Future<List<dynamic>> getQuizByStory(String storyId) async => [];
+
+  @override
+  Future<List<Story>> getStoriesBySection(SectionKey section) async {
+    await Future<void>.delayed(const Duration(milliseconds: 300));
+    
+    // Return different subsets based on section
+    switch (section) {
+      case SectionKey.continueReading:
+        // Return stories user has started reading (mock: first 5 stories)
+        return _stories.take(5).toList();
+      
+      case SectionKey.recommendStories:
+        // Return recommended stories (mock: stories with high likes)
+        final recommended = _stories.where((s) => s.likes > 200).toList();
+        recommended.shuffle(Random(42));
+        return recommended;
+      
+      case SectionKey.trendingForYou:
+        // Return trending stories (mock: most liked stories)
+        final trending = List<Story>.from(_stories);
+        trending.sort((a, b) => b.likes.compareTo(a.likes));
+        return trending.take(20).toList();
+      
+      case SectionKey.fromTheCommunity:
+        // Return community stories (mock: random selection)
+        final community = List<Story>.from(_stories);
+        community.shuffle(Random(123));
+        return community.take(15).toList();
+      
+      case SectionKey.topCharts:
+        // Return top chart stories (mock: highest liked)
+        final topCharts = List<Story>.from(_stories);
+        topCharts.sort((a, b) => b.likes.compareTo(a.likes));
+        return topCharts;
+      
+      case SectionKey.popularMonoCollections:
+      case SectionKey.newWritersSpotlight:
+      case SectionKey.readingChallenges:
+        // These sections don't support see more
+        return [];
+    }
+  }
+
+  @override
+  Future<List<Story>> getFilteredStories(SectionKey section, FilterState filter) async {
+    await Future<void>.delayed(const Duration(milliseconds: 400));
+    
+    // Get base stories for the section
+    List<Story> stories = await getStoriesBySection(section);
+    
+    // Apply level filter
+    if (filter.selectedLevel != null) {
+      stories = stories.where((s) => s.jlptLevel == filter.selectedLevel).toList();
+    }
+    
+    // Apply category filter
+    if (filter.selectedCategory != null) {
+      stories = stories.where((s) => s.tags.contains(filter.selectedCategory)).toList();
+    }
+    
+    // Apply sorting
+    switch (filter.sortBy) {
+      case SortBy.newest:
+        // Mock: reverse order (assuming newer stories have higher indices)
+        stories = stories.reversed.toList();
+        break;
+      case SortBy.oldest:
+        // Keep original order
+        break;
+      case SortBy.mostPopular:
+      case SortBy.mostLiked:
+        stories.sort((a, b) => b.likes.compareTo(a.likes));
+        break;
+      case SortBy.alphabetical:
+        stories.sort((a, b) => a.title.compareTo(b.title));
+        break;
+    }
+    
+    return stories;
+  }
+
+  @override
+  Future<List<OneShot>> fetchQuickOneShots() async {
+    await Future<void>.delayed(const Duration(milliseconds: 300));
+    // Return personalized one-shots (mock: shuffle and take first 10)
+    final personalized = List<OneShot>.from(_oneShots);
+    personalized.shuffle(Random(456));
+    return personalized.take(10).toList();
+  }
 }

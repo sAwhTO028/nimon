@@ -1,4 +1,7 @@
 import 'package:nimon/models/story.dart';
+import '../models/section_key.dart';
+import '../models/filter_state.dart';
+import '../models/oneshot.dart';
 
 abstract class StoryRepo {
   Future<List<Story>> listStories({String? filter});
@@ -10,4 +13,11 @@ abstract class StoryRepo {
 
   // Placeholder for later (Quiz)
   Future<List<dynamic>> getQuizByStory(String storyId);
+
+  // New methods for See More functionality
+  Future<List<Story>> getStoriesBySection(SectionKey section);
+  Future<List<Story>> getFilteredStories(SectionKey section, FilterState filter);
+  
+  // OneShot methods
+  Future<List<OneShot>> fetchQuickOneShots(); // personalized one-shots
 }

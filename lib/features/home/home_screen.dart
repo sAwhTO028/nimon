@@ -4,6 +4,7 @@ import 'package:nimon/features/reader/reader_screen.dart';
 import '../../data/story_repo.dart';
 import '../../models/story.dart';
 import '../../models/episode_meta.dart';
+import '../../models/section_key.dart';
 import '../../ui/widgets/sheets/show_episode_modal.dart';
 import 'widgets/mono_collection_row.dart';
 import 'widgets/book_cover_card.dart';
@@ -12,6 +13,7 @@ import 'widgets/trending_for_you.dart';
 import 'widgets/premium_banner.dart';
 import 'widgets/section_header.dart';
 import 'sections/reading_challenges_section.dart';
+import 'sections/quick_one_shot_section.dart';
 import 'data/challenges.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -348,7 +350,13 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           const SliverToBoxAdapter(child: SizedBox(height: 24)),
 
               // 2) Recommend Stories section
-              const SliverToBoxAdapter(child: SectionHeader(title: 'Recommend Stories')),
+              SliverToBoxAdapter(
+                child: SectionHeader(
+                  title: 'Recommend Stories',
+                  sectionKey: SectionKey.recommendStories,
+                  storyRepo: widget.repo,
+                ),
+              ),
               const SliverToBoxAdapter(child: SizedBox(height: 16)),
           SliverToBoxAdapter(
             child: FutureBuilder<List<Story>>(
@@ -404,7 +412,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                   future: _future,
                   builder: (ctx, snap) {
                     if (snap.hasData) {
-                      return TrendingForYou(stories: snap.data!.take(5).toList());
+                      return TrendingForYou(
+                        stories: snap.data!.take(5).toList(),
+                        storyRepo: widget.repo,
+                      );
                     }
                     return const SizedBox.shrink();
                   },
@@ -412,7 +423,13 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               ),
           const SliverToBoxAdapter(child: SizedBox(height: 24)),
 
-          // 3) From the Community section
+          // 3) Quick One-Shot For You section
+          SliverToBoxAdapter(
+            child: QuickOneShotSection(storyRepo: widget.repo),
+          ),
+          const SliverToBoxAdapter(child: SizedBox(height: 24)),
+
+          // 4) From the Community section
           SliverToBoxAdapter(
             child: CommunitySection(
               repo: repo,
@@ -437,8 +454,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               color: const Color(0xFFF8F9FA), // Subtle neutral shade
               child: Column(
                 children: [
-                  const SectionHeader(
+                  SectionHeader(
                     title: "Popular Mono Writer's Collections",
+                    sectionKey: SectionKey.popularMonoCollections,
+                    storyRepo: widget.repo,
                     showSeeAll: false,
                   ),
                       const SizedBox(height: 16),
@@ -470,8 +489,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               margin: const EdgeInsets.only(bottom: 0), // No extra bottom margin
               child: Column(
                 children: [
-                  const SectionHeader(
+                  SectionHeader(
                     title: "New Writers Spotlight",
+                    sectionKey: SectionKey.newWritersSpotlight,
+                    storyRepo: widget.repo,
                     showSeeAll: false,
                   ),
                       const SizedBox(height: 16),
@@ -500,8 +521,12 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               const SliverToBoxAdapter(child: SizedBox(height: 24)),
 
               // Top Charts header (isolated)
-          const SliverToBoxAdapter(
-                child: SectionHeader(title: 'Top Charts'),
+          SliverToBoxAdapter(
+                child: SectionHeader(
+                  title: 'Top Charts',
+                  sectionKey: SectionKey.topCharts,
+                  storyRepo: widget.repo,
+                ),
               ),
 
               // TabBar with proper spacing
@@ -669,7 +694,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         // Section Header
-        const SectionHeader(title: 'Continue Reading'),
+        SectionHeader(
+          title: 'Continue Reading',
+          sectionKey: SectionKey.continueReading,
+          storyRepo: widget.repo,
+        ),
         const SizedBox(height: 16),
         // Horizontal List
         SizedBox(

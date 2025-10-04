@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:nimon/data/story_repo.dart';
 import 'package:nimon/models/story.dart';
 import 'package:nimon/core/story_categories.dart';
+import '../../../models/section_key.dart';
 import 'community_collection_card.dart';
 import 'section_header.dart';
 
@@ -73,6 +74,8 @@ class _CommunitySectionState extends State<CommunitySection> {
               padding: const EdgeInsets.fromLTRB(0, 20, 0, 12),
               child: SectionHeader(
                 title: 'From the Community',
+                sectionKey: SectionKey.fromTheCommunity,
+                storyRepo: widget.repo,
                 onSeeAllTap: widget.onSeeAllTap,
               ),
             ),

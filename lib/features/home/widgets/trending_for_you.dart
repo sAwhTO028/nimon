@@ -1,15 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../../models/story.dart';
+import '../../../models/section_key.dart';
+import '../../../data/story_repo.dart';
 import 'book_cover_card.dart';
 import 'section_header.dart';
 
 class TrendingForYou extends StatefulWidget {
   final List<Story> stories;
+  final StoryRepo? storyRepo;
 
   const TrendingForYou({
     super.key,
     required this.stories,
+    this.storyRepo,
   });
 
   @override
@@ -103,8 +107,10 @@ class _TrendingForYouState extends State<TrendingForYou>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const SectionHeader(
+          SectionHeader(
             title: 'Trending For You',
+            sectionKey: SectionKey.trendingForYou,
+            storyRepo: widget.storyRepo,
             padding: EdgeInsets.zero, // No padding since container already has 16px
           ),
           const SizedBox(height: 12),
