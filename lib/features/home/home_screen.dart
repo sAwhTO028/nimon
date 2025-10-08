@@ -704,7 +704,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         const SizedBox(height: 16),
         // Horizontal List
         SizedBox(
-          height: 220, // Updated height to match one-shot card design
+          height: 200, // Reduced height for better proportion
           child: ListView.builder(
             padding: const EdgeInsets.symmetric(horizontal: 16),
             scrollDirection: Axis.horizontal,
@@ -732,7 +732,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     final cover = 'https://images.unsplash.com/photo-1519638399535-1b036603ac77?w=800';
 
     return Container(
-      width: 160,
+      width: 150,
       margin: const EdgeInsets.only(right: 12),
       child: InkWell(
         onTap: () {
@@ -821,7 +821,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               Expanded(
                 flex: 25,
                 child: Container(
-                  padding: const EdgeInsets.all(12),
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                   decoration: BoxDecoration(
                     color: colorScheme.surface,
                     borderRadius: const BorderRadius.only(
@@ -833,18 +833,18 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                     children: [
                       // Writer avatar
                       CircleAvatar(
-                        radius: 14,
+                        radius: 12,
                         backgroundColor: colorScheme.primary,
                         child: Text(
                           writer.isNotEmpty ? writer[0].toUpperCase() : 'W',
                           style: TextStyle(
-                            fontSize: 12,
+                            fontSize: 10,
                             fontWeight: FontWeight.w600,
                             color: colorScheme.onPrimary,
                           ),
                         ),
                       ),
-                      const SizedBox(width: 8),
+                      const SizedBox(width: 6),
                       
                       // Writer info
                       Expanded(
@@ -857,6 +857,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                               style: theme.textTheme.bodySmall?.copyWith(
                                 fontWeight: FontWeight.w600,
                                 color: colorScheme.onSurface,
+                                fontSize: 11,
                               ),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
@@ -865,6 +866,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                               'Episode ${episode.index}',
                               style: theme.textTheme.bodySmall?.copyWith(
                                 color: colorScheme.onSurface.withOpacity(0.7),
+                                fontSize: 10,
                               ),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
