@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'dart:ui';
 import 'package:go_router/go_router.dart';
 import 'package:nimon/features/reader/reader_screen.dart';
 import '../../data/story_repo.dart';
@@ -406,30 +407,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 ),
               ),
 
-              // 2) Trending For You section
-              SliverToBoxAdapter(
-                child: FutureBuilder<List<Story>>(
-                  future: _future,
-                  builder: (ctx, snap) {
-                    if (snap.hasData) {
-                      return TrendingForYou(
-                        stories: snap.data!.take(5).toList(),
-                        storyRepo: widget.repo,
-                      );
-                    }
-                    return const SizedBox.shrink();
-                  },
-                ),
-              ),
-          const SliverToBoxAdapter(child: SizedBox(height: 24)),
 
-          // 3) Quick One-Shot For You section
-          SliverToBoxAdapter(
-            child: QuickOneShotSection(storyRepo: widget.repo),
-          ),
-          const SliverToBoxAdapter(child: SizedBox(height: 24)),
-
-          // 4) From the Community section
+          // 3) From the Community section
           SliverToBoxAdapter(
             child: CommunitySection(
               repo: repo,
@@ -445,6 +424,12 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 );
               },
             ),
+          ),
+          const SliverToBoxAdapter(child: SizedBox(height: 24)),
+
+          // 4) Quick One-Shot For You section
+          SliverToBoxAdapter(
+            child: QuickOneShotSection(storyRepo: widget.repo),
           ),
           const SliverToBoxAdapter(child: SizedBox(height: 24)),
 
@@ -572,6 +557,23 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               SliverToBoxAdapter(
                 child: _topChartsContent(context),
               ),
+              
+              // Trending For You section
+              SliverToBoxAdapter(
+                child: FutureBuilder<List<Story>>(
+                  future: _future,
+                  builder: (ctx, snap) {
+                    if (snap.hasData) {
+                      return TrendingForYou(
+                        stories: snap.data!.take(5).toList(),
+                        storyRepo: widget.repo,
+                      );
+                    }
+                    return const SizedBox.shrink();
+                  },
+                ),
+              ),
+              const SliverToBoxAdapter(child: SizedBox(height: 24)),
               
               // Reading Challenges (the last one)
               SliverToBoxAdapter(
@@ -702,12 +704,12 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         const SizedBox(height: 16),
         // Horizontal List
         SizedBox(
-          height: 180, // Fixed height for better proportions
-          child: ListView.separated(
+          height: 220, // Updated height to match one-shot card design
+          child: ListView.builder(
             padding: const EdgeInsets.symmetric(horizontal: 16),
             scrollDirection: Axis.horizontal,
+            physics: const BouncingScrollPhysics(),
             itemCount: episodes.length,
-            separatorBuilder: (_, __) => const SizedBox(width: 16),
             itemBuilder: (context, index) {
               final episode = episodes[index];
               return _buildEpisodeCard(context, episode);
@@ -719,17 +721,19 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   }
 
   Widget _buildEpisodeCard(BuildContext context, Episode episode) {
-    final cs = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
     
     // Placeholder metadata since Episode doesn't link Story details directly
     const defaultCategory = 'Love';
     const jlpt = 'N5';
     const writer = 'WRITER NAME';
     const likes = 4200;
+    final cover = 'https://images.unsplash.com/photo-1519638399535-1b036603ac77?w=800';
 
     return Container(
-      width: 140, // Match Recommend Stories card width
-      height: 180, // Fixed height for better proportions
+      width: 160,
+      margin: const EdgeInsets.only(right: 12),
       child: InkWell(
         onTap: () {
           // Show episode bottom sheet with sample data
@@ -738,7 +742,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             title: episode.title ?? 'Sample Story Title',
             episodeNo: 'Episode ${episode.index}',
             authorName: writer,
-            coverUrl: 'https://images.unsplash.com/photo-1519638399535-1b036603ac77?w=800',
+            coverUrl: cover,
             jlpt: jlpt,
             likes: likes,
             readTime: '5 min',
@@ -762,75 +766,240 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             },
           );
         },
+        borderRadius: BorderRadius.circular(12),
         child: Card(
-          elevation: 3,
+          elevation: 1,
           clipBehavior: Clip.antiAlias,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // Header
-              Container(
-                height: 40, // Increased height for better proportions
-                color: cs.surfaceContainerHighest,
-                padding: const EdgeInsets.symmetric(horizontal: 10),
-                child: Row(
-                  children: [
-                    const CircleAvatar(radius: 12, child: Icon(Icons.person, size: 16)),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        writer,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.labelLarge,
-                      ),
-                    ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                      decoration: BoxDecoration(
-                        color: cs.primaryContainer,
-                        borderRadius: BorderRadius.circular(999),
-                      ),
-                      child: Text(jlpt, style: Theme.of(context).textTheme.labelSmall),
-                    ),
-                  ],
-                ),
-              ),
-              // Cover
+              // Image area with overlays
               Expanded(
-                child: Image.network(
-                  'https://images.unsplash.com/photo-1519638399535-1b036603ac77?w=800',
-                  fit: BoxFit.cover,
+                flex: 71,
+                child: Stack(
+                  children: [
+                    // Cover image - fills entire image space
+                    ClipRRect(
+                      borderRadius: const BorderRadius.only(
+                        topLeft: Radius.circular(12),
+                        topRight: Radius.circular(12),
+                      ),
+                      child: Image.network(
+                        cover,
+                        width: double.infinity,
+                        height: double.infinity,
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) =>
+                            _buildPlaceholder(context),
+                      ),
+                    ),
+                    
+                    // Top-left badge
+                    Positioned(
+                      top: 8,
+                      left: 8,
+                      child: _buildTypeBadge(context, 'Episode'),
+                    ),
+                    
+                    // Top-right JLPT chip
+                    Positioned(
+                      top: 8,
+                      right: 8,
+                      child: _buildJLPTChip(context, jlpt),
+                    ),
+                    
+                    // Blur title band overlay
+                    _buildTitleBandWithBlur(context, episode),
+                  ],
                 ),
               ),
-              // Footer
-              Container(
-                height: 56, // Increased height for better proportions
-                color: cs.surfaceVariant,
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Episode ${episode.index}  ${episode.preview}',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.bodyMedium,
+              
+              // Footer/Base Card
+              Expanded(
+                flex: 25,
+                child: Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: colorScheme.surface,
+                    borderRadius: const BorderRadius.only(
+                      bottomLeft: Radius.circular(12),
+                      bottomRight: Radius.circular(12),
                     ),
-                    const Spacer(),
-                    Row(
-                      children: [
-                        Icon(Icons.favorite_rounded, size: 18, color: cs.secondary),
-                        const SizedBox(width: 8),
-                        Text('${(likes / 1000).toStringAsFixed(1)}K', 
-                             style: Theme.of(context).textTheme.labelMedium),
-                      ],
-                    ),
-                  ],
+                  ),
+                  child: Row(
+                    children: [
+                      // Writer avatar
+                      CircleAvatar(
+                        radius: 14,
+                        backgroundColor: colorScheme.primary,
+                        child: Text(
+                          writer.isNotEmpty ? writer[0].toUpperCase() : 'W',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: colorScheme.onPrimary,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      
+                      // Writer info
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text(
+                              writer,
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                fontWeight: FontWeight.w600,
+                                color: colorScheme.onSurface,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            Text(
+                              'Episode ${episode.index}',
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: colorScheme.onSurface.withOpacity(0.7),
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTypeBadge(BuildContext context, String label) {
+    final colorScheme = Theme.of(context).colorScheme;
+    
+    return Container(
+      height: 28,
+      padding: const EdgeInsets.symmetric(horizontal: 10),
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceVariant,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            Icons.short_text_rounded,
+            size: 14,
+            color: colorScheme.onSurfaceVariant,
+          ),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+              color: colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildJLPTChip(BuildContext context, String jlpt) {
+    final colorScheme = Theme.of(context).colorScheme;
+    
+    return Container(
+      height: 28,
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      decoration: BoxDecoration(
+        color: colorScheme.primaryContainer,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Center(
+        child: Text(
+          jlpt,
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.bold,
+            color: colorScheme.onPrimaryContainer,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPlaceholder(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    
+    return Container(
+      color: colorScheme.surfaceVariant,
+      child: Center(
+        child: Icon(
+          Icons.image_outlined,
+          size: 48,
+          color: colorScheme.onSurfaceVariant.withOpacity(0.5),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTitleBandWithBlur(BuildContext context, Episode episode) {
+    final theme = Theme.of(context);
+    final isDarkMode = theme.brightness == Brightness.dark;
+    
+    return Positioned(
+      bottom: 10,
+      left: 12,
+      right: 12,
+      child: Container(
+        height: 36,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(6),
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(6),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+            child: Container(
+              width: double.infinity,
+              height: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: isDarkMode 
+                    ? Colors.black.withOpacity(0.4)
+                    : Colors.black.withOpacity(0.3),
+              ),
+              child: Center(
+                child: Text(
+                  episode.title ?? 'Episode ${episode.index}',
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 16,
+                    color: Colors.white,
+                    shadows: [
+                      Shadow(
+                        offset: const Offset(0, 1),
+                        blurRadius: 2,
+                        color: Colors.black.withOpacity(0.6),
+                      ),
+                    ],
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            ),
           ),
         ),
       ),

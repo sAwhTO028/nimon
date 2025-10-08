@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import '../../../models/oneshot.dart';
+import '../../../models/episode_meta.dart';
 import '../../../data/story_repo.dart';
 import '../widgets/section_header.dart';
 import '../../../shared/widgets/cards/oneshot_badged_card.dart';
+import '../../../ui/widgets/sheets/show_episode_modal.dart';
 
 /// Quick One-Shot For You section displaying personalized one-shot stories
 class QuickOneShotSection extends StatefulWidget {
@@ -231,16 +233,41 @@ class _QuickOneShotSectionState extends State<QuickOneShotSection> {
   }
 
   void _onOneShotTap(OneShot oneShot) {
-    // TODO: Navigate to one-shot reader or details
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Opening ${oneShot.title}'),
-        behavior: SnackBarBehavior.floating,
-        margin: const EdgeInsets.all(16),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(8),
-        ),
-      ),
+    // Create EpisodeMeta from OneShot data
+    final episodeMeta = EpisodeMeta(
+      id: oneShot.id,
+      title: oneShot.title,
+      episodeNo: 'Mono ${oneShot.monoNo}',
+      authorName: oneShot.writerName,
+      coverUrl: oneShot.coverUrl ?? 'https://images.unsplash.com/photo-1519638399535-1b036603ac77?w=800',
+      jlpt: oneShot.jlpt,
+      likes: oneShot.likes,
+      readTime: '5 min',
+      category: 'One-Shot',
+      preview: 'A quick and engaging one-shot story perfect for your learning journey. (Mono ${oneShot.monoNo})',
+    );
+    
+    showEpisodeModalFromMeta(
+      context,
+      episodeMeta,
+      onSave: () {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Saved for later!')),
+        );
+      },
+      onStartReading: () {
+        // TODO: Navigate to one-shot reader
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Starting to read ${oneShot.title}'),
+            behavior: SnackBarBehavior.floating,
+            margin: const EdgeInsets.all(16),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
+          ),
+        );
+      },
     );
   }
 }

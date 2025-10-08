@@ -55,50 +55,55 @@ class EpisodeModalSheet extends StatelessWidget {
     TextTheme textTheme,
     double bottomPadding,
   ) {
-    return CustomScrollView(
-      controller: controller,
-      slivers: [
-        // Header section
-        SliverToBoxAdapter(
-          child: _buildHeader(context, colorScheme, textTheme),
-        ),
-        
-        // Divider
-        SliverToBoxAdapter(
-          child: Divider(
-            height: 1,
-            thickness: 0.5,
-            indent: 20,
-            endIndent: 20,
-            color: colorScheme.outlineVariant,
+    return Column(
+      children: [
+        // Scrollable content
+        Expanded(
+          child: CustomScrollView(
+            controller: controller,
+            slivers: [
+              // Header section
+              SliverToBoxAdapter(
+                child: _buildHeader(context, colorScheme, textTheme),
+              ),
+              
+              // Divider
+              SliverToBoxAdapter(
+                child: Divider(
+                  height: 1,
+                  thickness: 0.5,
+                  indent: 20,
+                  endIndent: 20,
+                  color: colorScheme.outlineVariant,
+                ),
+              ),
+              
+              // Preview card section
+              SliverPadding(
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                sliver: SliverToBoxAdapter(
+                  child: _buildPreviewCard(context, colorScheme, textTheme),
+                ),
+              ),
+              
+              // Metrics row section
+              SliverPadding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                sliver: SliverToBoxAdapter(
+                  child: _buildMetricsRow(context, colorScheme, textTheme),
+                ),
+              ),
+              
+              // Add some bottom padding to ensure content doesn't get cut off
+              const SliverToBoxAdapter(
+                child: SizedBox(height: 20),
+              ),
+            ],
           ),
         ),
         
-        // Preview card section
-        SliverPadding(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-          sliver: SliverToBoxAdapter(
-            child: _buildPreviewCard(context, colorScheme, textTheme),
-          ),
-        ),
-        
-        // Metrics row section
-        SliverPadding(
-          padding: const EdgeInsets.symmetric(horizontal: 20),
-          sliver: SliverToBoxAdapter(
-            child: _buildMetricsRow(context, colorScheme, textTheme),
-          ),
-        ),
-        
-        // Sticky footer with CTA buttons - positioned at bottom
-        SliverFillRemaining(
-          hasScrollBody: false,
-          fillOverscroll: false,
-          child: Align(
-            alignment: Alignment.bottomCenter,
-            child: _buildStickyFooter(context, colorScheme, textTheme, bottomPadding),
-          ),
-        ),
+        // Fixed footer with CTA buttons
+        _buildStickyFooter(context, colorScheme, textTheme, bottomPadding),
       ],
     );
   }
@@ -109,14 +114,14 @@ class EpisodeModalSheet extends StatelessWidget {
     TextTheme textTheme,
   ) {
     return Padding(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(16),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Cover image
           _buildCoverImage(colorScheme),
           
-          const SizedBox(width: 16),
+          const SizedBox(width: 12),
           
           // Title and metadata
           Expanded(
@@ -128,13 +133,14 @@ class EpisodeModalSheet extends StatelessWidget {
                   episode.title,
                   style: textTheme.titleLarge?.copyWith(
                     fontWeight: FontWeight.w700,
-                    height: 1.2,
+                    height: 1.0,
+                    fontSize: 18,
                   ),
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                 ),
                 
-                const SizedBox(height: 8),
+                const SizedBox(height: 4),
                 
                 // Episode number
                 Text(
@@ -145,7 +151,7 @@ class EpisodeModalSheet extends StatelessWidget {
                   ),
                 ),
                 
-                const SizedBox(height: 4),
+                const SizedBox(height: 2),
                 
                 // Writer row
                 Row(
@@ -171,7 +177,7 @@ class EpisodeModalSheet extends StatelessWidget {
             ),
           ),
           
-          const SizedBox(width: 12),
+          const SizedBox(width: 8),
           
           // JLPT chip and Share button row
           Column(
@@ -229,8 +235,8 @@ class EpisodeModalSheet extends StatelessWidget {
     return ClipRRect(
       borderRadius: BorderRadius.circular(12),
       child: Container(
-        width: 64,
-        height: 64,
+        width: 56,
+        height: 56,
         color: colorScheme.surfaceContainerLow,
         child: episode.coverUrl.isNotEmpty
             ? Image.network(
