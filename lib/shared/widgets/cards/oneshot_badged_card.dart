@@ -222,47 +222,41 @@ class OneShotBadgedCard extends StatelessWidget {
     final isDarkMode = theme.brightness == Brightness.dark;
     
     return Positioned(
-      bottom: 10, // Slightly reduced offset for more compact design
-      left: 12,   // Offset from left edge
-      right: 12,  // Offset from right edge
-      child: Container(
-        height: 36, // Reduced by 2%: 40px -> 36px for more compact design
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(6), // Small radius for banner only
+      bottom: 0,
+      left: 0,
+      right: 0,
+      child: ClipRRect(
+        borderRadius: const BorderRadius.only(
+          bottomLeft: Radius.circular(0),
+          bottomRight: Radius.circular(0),
         ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(6), // Small radius for banner only
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
-            child: Container(
-              width: double.infinity,
-              height: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              decoration: BoxDecoration(
-                color: isDarkMode 
-                    ? Colors.black.withOpacity(0.4)
-                    : Colors.black.withOpacity(0.3),
-              ),
-              child: Center(
-                child: Text(
-                  'Mono ${oneShot.monoNo}',
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                    fontSize: 16, // Slightly reduced font size for compact design
-                    color: Colors.white,
-                    shadows: [
-                      Shadow(
-                        offset: const Offset(0, 1),
-                        blurRadius: 2,
-                        color: Colors.black.withOpacity(0.6),
-                      ),
-                    ],
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: isDarkMode 
+                  ? Colors.black.withOpacity(0.4)
+                  : Colors.black.withOpacity(0.3),
+            ),
+            child: Text(
+              'Mono ${oneShot.monoNo}',
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w700,
+                fontSize: 16,
+                color: Colors.white,
+                shadows: [
+                  Shadow(
+                    offset: const Offset(0, 1),
+                    blurRadius: 2,
+                    color: Colors.black.withOpacity(0.6),
                   ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  textAlign: TextAlign.center,
-                ),
+                ],
               ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
             ),
           ),
         ),
