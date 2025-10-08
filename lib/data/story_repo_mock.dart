@@ -49,6 +49,22 @@ List<Story> _genStories() {
   });
 }
 
+String _getEpisodeTitle(int episodeNumber) {
+  final episodeTitles = [
+    'The Beginning',
+    'First Meeting',
+    'A New Day',
+    'Unexpected Encounter',
+    'Growing Closer',
+    'The Challenge',
+    'A Moment of Truth',
+    'New Horizons',
+    'The Journey Continues',
+    'Looking Forward',
+  ];
+  return episodeTitles[(episodeNumber - 1) % episodeTitles.length];
+}
+
 List<Episode> _genEpisodes() {
   final rnd = Random(9);
   final List<Episode> list = [];
@@ -59,6 +75,7 @@ List<Episode> _genEpisodes() {
         id: _uuid.v4(),
         storyId: s.id,
         index: e,
+        title: 'Episode $e: ${_getEpisodeTitle(e)}',
         blocks: [
           EpisodeBlock(
             type: BlockType.narration,

@@ -455,7 +455,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               child: Column(
                 children: [
                   SectionHeader(
-                    title: "Popular Mono Writer's Collections",
+                    title: "Popular Episode Co-Writer's Collections",
                     sectionKey: SectionKey.popularMonoCollections,
                     storyRepo: widget.repo,
                     showSeeAll: false,
@@ -472,7 +472,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                       final episodes = snap.data!;
                       return MonoCollectionRow(
                         episodes: episodes,
-                        title: 'Popular Mono\nCollections',
+                        title: 'Popular Episode\nCo-Writer\'s Collections',
                       );
                     },
                   ),

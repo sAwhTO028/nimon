@@ -88,85 +88,254 @@ class _EpisodeCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
 
     // Placeholder metadata since Episode doesn't link Story details directly.
     const defaultCategory = 'Love';
     final cover = kCategoryCover[defaultCategory] ?? kCategoryCover.values.first;
     const jlpt = 'N5';
     const writer = 'WRITER NAME';
-    const likes = 4200;
 
     return Container(
       width: 160,
       margin: const EdgeInsets.only(right: 12),
       child: InkWell(
         onTap: () => _showEpisodeBottomSheet(context, ep),
+        borderRadius: BorderRadius.circular(12),
         child: Card(
-          elevation: 3,
+          elevation: 1,
           clipBehavior: Clip.antiAlias,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // header
-              Container(
-                height: 32,
-                color: cs.surfaceContainerHighest,
-                padding: const EdgeInsets.symmetric(horizontal: 8),
-                child: Row(
+              // Image area with overlays
+              Expanded(
+                flex: 71,
+                child: Stack(
                   children: [
-                    const CircleAvatar(radius: 10, child: Icon(Icons.person, size: 14)),
-                    const SizedBox(width: 6),
-                    Expanded(
-                      child: Text(
-                        writer,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.labelLarge,
+                    // Cover image - fills entire image space
+                    ClipRRect(
+                      borderRadius: const BorderRadius.only(
+                        topLeft: Radius.circular(12),
+                        topRight: Radius.circular(12),
+                      ),
+                      child: Image.network(
+                        cover,
+                        width: double.infinity,
+                        height: double.infinity,
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) =>
+                            _buildPlaceholder(context),
                       ),
                     ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: cs.primaryContainer,
-                        borderRadius: BorderRadius.circular(999),
-                      ),
-                      child: Text(jlpt, style: Theme.of(context).textTheme.labelSmall),
+                    
+                    // Top-left badge
+                    Positioned(
+                      top: 8,
+                      left: 8,
+                      child: _buildTypeBadge(context, 'Episode'),
                     ),
+                    
+                    // Top-right JLPT chip
+                    Positioned(
+                      top: 8,
+                      right: 8,
+                      child: _buildJLPTChip(context, jlpt),
+                    ),
+                    
+                    // Blur title band overlay
+                    _buildTitleBandWithBlur(context, ep),
                   ],
                 ),
               ),
-              // cover
+              
+              // Footer/Base Card
               Expanded(
-                child: Image.network(cover, fit: BoxFit.cover),
-              ),
-              // footer
-              Container(
-                height: 48,
-                color: cs.surfaceVariant,
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Episode ${ep.index}  ${ep.preview}',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.bodyMedium,
+                flex: 25,
+                child: Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: colorScheme.surface,
+                    borderRadius: const BorderRadius.only(
+                      bottomLeft: Radius.circular(12),
+                      bottomRight: Radius.circular(12),
                     ),
-                    const Spacer(),
-                    Row(
-                      children: [
-                        Icon(Icons.favorite_rounded, size: 16, color: cs.secondary),
-                        const SizedBox(width: 6),
-                        Text(_kFormat(likes), style: Theme.of(context).textTheme.labelMedium),
-                      ],
-                    ),
-                  ],
+                  ),
+                  child: Row(
+                    children: [
+                      // Writer avatar
+                      CircleAvatar(
+                        radius: 14,
+                        backgroundColor: colorScheme.primary,
+                        child: Text(
+                          writer.isNotEmpty ? writer[0].toUpperCase() : 'W',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: colorScheme.onPrimary,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      
+                      // Writer info
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text(
+                              writer,
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                fontWeight: FontWeight.w600,
+                                color: colorScheme.onSurface,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            Text(
+                              'Episode ${ep.index}',
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: colorScheme.onSurface.withOpacity(0.7),
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTypeBadge(BuildContext context, String label) {
+    final colorScheme = Theme.of(context).colorScheme;
+    
+    return Container(
+      height: 28,
+      padding: const EdgeInsets.symmetric(horizontal: 10),
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceVariant,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            Icons.menu_book_rounded,
+            size: 14,
+            color: colorScheme.onSurfaceVariant,
+          ),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+              color: colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildJLPTChip(BuildContext context, String jlpt) {
+    final colorScheme = Theme.of(context).colorScheme;
+    
+    return Container(
+      height: 28,
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      decoration: BoxDecoration(
+        color: colorScheme.primaryContainer,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Center(
+        child: Text(
+          jlpt,
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.bold,
+            color: colorScheme.onPrimaryContainer,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPlaceholder(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    
+    return Container(
+      color: colorScheme.surfaceVariant,
+      child: Center(
+        child: Icon(
+          Icons.image_outlined,
+          size: 48,
+          color: colorScheme.onSurfaceVariant.withOpacity(0.5),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTitleBandWithBlur(BuildContext context, Episode ep) {
+    final theme = Theme.of(context);
+    final isDarkMode = theme.brightness == Brightness.dark;
+    
+    return Positioned(
+      bottom: 10,
+      left: 12,
+      right: 12,
+      child: Container(
+        height: 36,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(6),
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(6),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+            child: Container(
+              width: double.infinity,
+              height: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: isDarkMode 
+                    ? Colors.black.withOpacity(0.4)
+                    : Colors.black.withOpacity(0.3),
+              ),
+              child: Center(
+                child: Text(
+                  ep.title ?? 'Episode ${ep.index}',
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 16,
+                    color: Colors.white,
+                    shadows: [
+                      Shadow(
+                        offset: const Offset(0, 1),
+                        blurRadius: 2,
+                        color: Colors.black.withOpacity(0.6),
+                      ),
+                    ],
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            ),
           ),
         ),
       ),
