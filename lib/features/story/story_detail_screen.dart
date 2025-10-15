@@ -668,6 +668,107 @@ class _StoryDetailScreenState extends State<StoryDetailScreen> with TickerProvid
     return "${episodeDate.day} ${months[episodeDate.month - 1]} ${episodeDate.year}";
   }
 
+  /// Meta chips row: rating • likes (date removed - shown at top-right)
+  Widget _buildMetaChipsRow(Episode episode) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    
+    return Semantics(
+      label: 'Episode ${episode.index} - Rating 8.7 - 4.2K likes',
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 4,
+        alignment: WrapAlignment.end,
+        children: [
+          // Rating chip
+          _buildRatingChip(),
+          // Likes chip
+          _buildLikesChip(),
+        ],
+      ),
+    );
+  }
+
+  /// Rating chip with star icon
+  Widget _buildRatingChip() {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    
+    return IgnorePointer(
+      child: Container(
+        height: 24,
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        decoration: BoxDecoration(
+          color: colorScheme.brightness == Brightness.light 
+              ? const Color(0xFFF3F4F6) // Light mode background
+              : const Color(0xFF2A2E35), // Dark mode background
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.star,
+              size: 14,
+              color: colorScheme.onSurfaceVariant.withOpacity(0.87),
+            ),
+            const SizedBox(width: 4),
+            Text(
+              '8.7',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+                color: colorScheme.onSurfaceVariant.withOpacity(0.87),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Likes chip with heart icon
+  Widget _buildLikesChip() {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    
+    return IgnorePointer(
+      child: Container(
+        height: 24,
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        decoration: BoxDecoration(
+          color: Colors.transparent,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: colorScheme.brightness == Brightness.light 
+                ? const Color(0xFFE5E7EB) // Light mode border
+                : const Color(0xFF374151), // Dark mode border
+            width: 1,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.favorite,
+              size: 14,
+              color: colorScheme.onSurfaceVariant.withOpacity(0.87),
+            ),
+            const SizedBox(width: 4),
+            Text(
+              '4.2K',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+                color: colorScheme.onSurfaceVariant.withOpacity(0.87),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   /// Individual episode card - industry standard spacing and layout
   Widget _buildEpisodeCard(BuildContext context, Episode episode) {
     return Container(
@@ -729,7 +830,7 @@ class _StoryDetailScreenState extends State<StoryDetailScreen> with TickerProvid
                 
                 const SizedBox(height: 16), // Industry standard 16dp spacing
                 
-                // Bottom: Creator (left) + Rating (right)
+                // Bottom: Creator (left) + Meta chips (right)
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
@@ -765,25 +866,8 @@ class _StoryDetailScreenState extends State<StoryDetailScreen> with TickerProvid
                       ],
                     ),
                     
-                    // Right: Rating with heart
-                    Row(
-                      children: [
-                        const Text(
-                          'Rating – 8.7',
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: Color(0xFF6B7280),
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                        const SizedBox(width: 6), // More spacing
-                        Icon(
-                          Icons.favorite,
-                          size: 18, // Consistent icon size
-                          color: const Color(0xFFEF4444), // Red heart color
-                        ),
-                      ],
-                    ),
+                    // Right: Meta chips row (date • rating • likes)
+                    _buildMetaChipsRow(episode),
                   ],
                 ),
               ],
