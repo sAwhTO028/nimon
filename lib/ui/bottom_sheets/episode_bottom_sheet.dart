@@ -1,20 +1,151 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../../models/episode_model.dart';
+import '../../../models/episode_meta.dart';
+import '../../../models/story.dart';
 
-/// Material 3 compliant Episode Modal Bottom Sheet
-class EpisodeModalSheet extends StatelessWidget {
+/// Global Episode Bottom Sheet - Reusable across the entire app
+/// 
+/// This provides a consistent episode preview experience with:
+/// - Material 3 compliant design
+/// - DraggableScrollableSheet with proper constraints
+/// - Safe area handling
+/// - Proper dismissal gestures
+/// - Responsive design for landscape/tablet
+/// - Haptic feedback and smooth animations
+/// 
+/// Usage:
+/// ```dart
+/// await showEpisodeBottomSheet(
+///   context,
+///   episode,
+///   shareVisible: true,
+/// );
+/// ```
+
+/// Shows the global Episode Bottom Sheet
+/// 
+/// Parameters:
+/// - [context]: The build context to show the sheet in
+/// - [episode]: Episode data to display
+/// - [shareVisible]: Whether to show the share button (default: true)
+/// 
+/// Returns a Future that completes when the sheet is dismissed.
+Future<void> showEpisodeBottomSheet(
+  BuildContext context,
+  Episode episode, {
+  bool shareVisible = true,
+}) async {
+  // Convert Episode to EpisodeModel for the existing UI
+  final episodeModel = _convertEpisodeToModel(episode);
+  
+  final mediaQuery = MediaQuery.of(context);
+  final screenHeight = mediaQuery.size.height;
+  
+  // Adjust initial size for very small devices
+  final initialChildSize = screenHeight < 640 ? 0.50 : 0.55;
+  
+  return showModalBottomSheet<void>(
+    context: context,
+    useRootNavigator: false,
+    isScrollControlled: true,
+    enableDrag: true,
+    showDragHandle: true,
+    backgroundColor: Colors.white,
+    barrierColor: Colors.black.withOpacity(0.35),
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(
+        top: Radius.circular(24),
+      ),
+    ),
+    builder: (context) => DraggableScrollableSheet(
+      minChildSize: 0.45,
+      initialChildSize: initialChildSize,
+      maxChildSize: 0.95,
+      snap: true,
+      expand: false,
+      builder: (context, scrollController) {
+        return _EpisodeBottomSheetContent(
+          episode: episodeModel,
+          controller: scrollController,
+          shareVisible: shareVisible,
+        );
+      },
+    ),
+  );
+}
+
+/// Convenience function to show modal from EpisodeMeta
+Future<void> showEpisodeBottomSheetFromMeta(
+  BuildContext context,
+  EpisodeMeta meta, {
+  bool shareVisible = true,
+}) async {
+  final episodeModel = EpisodeModel.fromEpisodeMeta(meta);
+  
+  final mediaQuery = MediaQuery.of(context);
+  final screenHeight = mediaQuery.size.height;
+  
+  final initialChildSize = screenHeight < 640 ? 0.50 : 0.55;
+  
+  return showModalBottomSheet<void>(
+    context: context,
+    useRootNavigator: false,
+    isScrollControlled: true,
+    enableDrag: true,
+    showDragHandle: true,
+    backgroundColor: Colors.white,
+    barrierColor: Colors.black.withOpacity(0.35),
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(
+        top: Radius.circular(24),
+      ),
+    ),
+    builder: (context) => DraggableScrollableSheet(
+      minChildSize: 0.45,
+      initialChildSize: initialChildSize,
+      maxChildSize: 0.95,
+      snap: true,
+      expand: false,
+      builder: (context, scrollController) {
+        return _EpisodeBottomSheetContent(
+          episode: episodeModel,
+          controller: scrollController,
+          shareVisible: shareVisible,
+        );
+      },
+    ),
+  );
+}
+
+/// Convert Episode to EpisodeModel for compatibility
+EpisodeModel _convertEpisodeToModel(Episode episode) {
+  return EpisodeModel(
+    title: episode.title ?? 'Episode ${episode.index}',
+    number: episode.index,
+    writerName: 'Creator Name', // Mock author name
+    preview: episode.preview,
+    coverUrl: episode.thumbnailUrl ?? '',
+    category: 'Story', // Default category
+    jlpt: 'N5', // Default JLPT level
+    likes: 430, // Mock likes count
+    readTime: Duration(minutes: (episode.blocks.length * 0.5).ceil()),
+  );
+}
+
+/// Material 3 compliant Episode Bottom Sheet Content
+/// 
+/// This is the exact same implementation as the existing EpisodeModalSheet
+/// but renamed and slightly adapted for global use.
+class _EpisodeBottomSheetContent extends StatelessWidget {
   final EpisodeModel episode;
   final ScrollController controller;
-  final VoidCallback? onStartReading;
-  final VoidCallback? onSave;
+  final bool shareVisible;
 
-  const EpisodeModalSheet({
-    super.key,
+  const _EpisodeBottomSheetContent({
     required this.episode,
     required this.controller,
-    this.onStartReading,
-    this.onSave,
+    this.shareVisible = true,
   });
 
   @override
@@ -183,47 +314,49 @@ class EpisodeModalSheet extends StatelessWidget {
           Column(
             children: [
               _buildJLPTChip(colorScheme, textTheme),
-              const SizedBox(height: 8),
-              // Share button
-              SizedBox(
-                width: 32,
-                height: 32,
-                child: OutlinedButton(
-                  onPressed: () {
-                    HapticFeedback.lightImpact();
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: const Row(
-                          children: [
-                            Icon(Icons.check_circle, color: Colors.white, size: 20),
-                            SizedBox(width: 8),
-                            Expanded(child: Text('Episode link copied to clipboard!')),
-                          ],
+              if (shareVisible) ...[
+                const SizedBox(height: 8),
+                // Share button
+                SizedBox(
+                  width: 32,
+                  height: 32,
+                  child: OutlinedButton(
+                    onPressed: () {
+                      HapticFeedback.lightImpact();
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: const Row(
+                            children: [
+                              Icon(Icons.check_circle, color: Colors.white, size: 20),
+                              SizedBox(width: 8),
+                              Expanded(child: Text('Episode link copied to clipboard!')),
+                            ],
+                          ),
+                          backgroundColor: colorScheme.primary,
+                          behavior: SnackBarBehavior.floating,
+                          margin: const EdgeInsets.all(16),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          duration: const Duration(seconds: 2),
                         ),
-                        backgroundColor: colorScheme.primary,
-                        behavior: SnackBarBehavior.floating,
-                        margin: const EdgeInsets.all(16),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        duration: const Duration(seconds: 2),
+                      );
+                    },
+                    style: OutlinedButton.styleFrom(
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
                       ),
-                    );
-                  },
-                  style: OutlinedButton.styleFrom(
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
+                      padding: EdgeInsets.zero,
+                      minimumSize: const Size(32, 32),
                     ),
-                    padding: EdgeInsets.zero,
-                    minimumSize: const Size(32, 32),
-                  ),
-                  child: Icon(
-                    Icons.ios_share_rounded,
-                    size: 16,
-                    color: colorScheme.onSurface,
+                    child: Icon(
+                      Icons.ios_share_rounded,
+                      size: 16,
+                      color: colorScheme.onSurface,
+                    ),
                   ),
                 ),
-              ),
+              ],
             ],
           ),
         ],
@@ -461,7 +594,13 @@ class EpisodeModalSheet extends StatelessWidget {
             // Save for Later button
             Expanded(
               child: OutlinedButton.icon(
-                onPressed: onSave,
+                onPressed: () {
+                  HapticFeedback.selectionClick();
+                  Navigator.of(context).maybePop();
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Saved for later')),
+                  );
+                },
                 icon: const Icon(Icons.bookmark_border, size: 18),
                 label: const Text('Save for Later'),
                 style: OutlinedButton.styleFrom(
@@ -481,7 +620,8 @@ class EpisodeModalSheet extends StatelessWidget {
                 onPressed: () {
                   HapticFeedback.selectionClick();
                   Navigator.of(context).maybePop();
-                  onStartReading?.call();
+                  // Navigate to reader screen
+                  Navigator.of(context).pushNamed('/reader', arguments: episode);
                 },
                 icon: const Icon(Icons.play_arrow, size: 18),
                 label: const Text('Start Reading'),

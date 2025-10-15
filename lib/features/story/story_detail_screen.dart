@@ -5,6 +5,7 @@ import 'package:nimon/data/story_repo.dart';
 import 'package:nimon/models/story.dart';
 import 'package:nimon/features/reader/reader_screen.dart';
 import 'package:nimon/features/learn/learn_hub_screen.dart';
+import 'package:nimon/ui/ui.dart';
 
 // Theme tokens for light/dark mode support
 class AppThemeTokens {
@@ -609,7 +610,7 @@ class _StoryDetailScreenState extends State<StoryDetailScreen> with TickerProvid
       child: Material(
         color: Colors.transparent,
         child: InkWell(
-          onTap: () => _openReader(context, null, episode),
+          onTap: () => showEpisodeBottomSheet(context, episode),
           borderRadius: BorderRadius.circular(16),
           child: Padding(
             padding: const EdgeInsets.all(20), // Industry standard 20dp padding

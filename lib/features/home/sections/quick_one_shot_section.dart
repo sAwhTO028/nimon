@@ -4,7 +4,7 @@ import '../../../models/episode_meta.dart';
 import '../../../data/story_repo.dart';
 import '../widgets/section_header.dart';
 import '../../../shared/widgets/cards/oneshot_badged_card.dart';
-import '../../../ui/widgets/sheets/show_episode_modal.dart';
+import 'package:nimon/ui/ui.dart';
 
 /// Quick One-Shot For You section displaying personalized one-shot stories
 class QuickOneShotSection extends StatefulWidget {
@@ -247,27 +247,9 @@ class _QuickOneShotSectionState extends State<QuickOneShotSection> {
       preview: 'A quick and engaging one-shot story perfect for your learning journey. (Mono ${oneShot.monoNo})',
     );
     
-    showEpisodeModalFromMeta(
+    showEpisodeBottomSheetFromMeta(
       context,
       episodeMeta,
-      onSave: () {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Saved for later!')),
-        );
-      },
-      onStartReading: () {
-        // TODO: Navigate to one-shot reader
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Starting to read ${oneShot.title}'),
-            behavior: SnackBarBehavior.floating,
-            margin: const EdgeInsets.all(16),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(8),
-            ),
-          ),
-        );
-      },
     );
   }
 }

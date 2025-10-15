@@ -6,7 +6,7 @@ import '../../data/story_repo.dart';
 import '../../models/story.dart';
 import '../../models/episode_meta.dart';
 import '../../models/section_key.dart';
-import '../../ui/widgets/sheets/show_episode_modal.dart';
+import 'package:nimon/ui/ui.dart';
 import 'widgets/mono_collection_row.dart';
 import 'widgets/book_cover_card.dart';
 import 'widgets/community_section.dart';
@@ -752,18 +752,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 : 'Rain was falling softly in Kyoto. Aya stood under her umbrella. (Ep ${episode.index})',
           );
           
-          showEpisodeModalFromMeta(
+          showEpisodeBottomSheetFromMeta(
             context,
             episodeMeta,
-            onSave: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Saved for later!')),
-              );
-            },
-            onStartReading: () {
-              // Navigate to reader
-              _openEpisode(context, episode);
-            },
           );
         },
         borderRadius: BorderRadius.circular(12),

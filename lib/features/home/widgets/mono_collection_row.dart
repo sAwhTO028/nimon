@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'dart:ui';
 import '../../../models/story.dart';
 import '../../../models/episode_meta.dart';
-import '../../../ui/widgets/sheets/show_episode_modal.dart';
+import 'package:nimon/ui/ui.dart';
 import '../../reader/reader_screen.dart';
 
 /// MonoCollectionRow — Left static cover + right horizontal episode cards (Kahoot-style row).
@@ -367,21 +367,9 @@ void _showEpisodeBottomSheet(BuildContext context, Episode episode) {
         : 'Rain was falling softly in Kyoto. Aya stood under her umbrella. (Ep ${episode.index})',
   );
   
-  showEpisodeModalFromMeta(
+  showEpisodeBottomSheetFromMeta(
     context,
     episodeMeta,
-    onSave: () {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Saved for later!')),
-      );
-    },
-    onStartReading: () {
-      Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (_) => ReaderScreen(episode: episode),
-        ),
-      );
-    },
   );
 }
 
