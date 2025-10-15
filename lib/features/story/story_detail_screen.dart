@@ -300,101 +300,180 @@ class _StoryDetailScreenState extends State<StoryDetailScreen> with TickerProvid
   );
   
 
-  /// Fixed 4 tags row - N5, Love, CM Name, Premium
+  /// Fixed 4 stat cards row - N5, Love, CM Name, Premium
   Widget _fixedTagsRow(Story s) => Column(
     children: [
-      // Section margin top 12dp, bottom 16dp
+      // Section margin top 12dp, bottom 8dp
       const SizedBox(height: 12),
       
-      // Exactly 4 chips in one row, equal width, no overflow
-      MediaQuery.withNoTextScaling(
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            Expanded(child: _tag("N5", "Level")),
-            const SizedBox(width: 8),
-            Expanded(child: _tag("Love", "Category")),
-            const SizedBox(width: 8),
-            Expanded(child: _tag("CM Name", "Community")),
-            const SizedBox(width: 8),
-            Expanded(child: _tag("Premium", "Unlock")),
-          ],
-        ),
+      // Responsive layout: single row for normal screens, wrap for narrow screens
+      LayoutBuilder(
+        builder: (context, constraints) {
+          final screenWidth = constraints.maxWidth;
+          final horizontalPadding = 32.0; // 16dp * 2
+          final gap = 8.0;
+          
+          // Calculate card width for 4 cards in a row
+          final cardWidth = (screenWidth - horizontalPadding - gap * 3) / 4;
+          
+          // For very narrow screens (< 320dp), use Wrap with 2 rows
+          if (screenWidth < 320) {
+            return Wrap(
+              spacing: gap,
+              runSpacing: 8,
+              children: [
+                _buildStatCard(
+                  icon: Icons.school_outlined,
+                  value: "N5",
+                  caption: "Level",
+                  width: cardWidth,
+                ),
+                _buildStatCard(
+                  icon: Icons.favorite_border,
+                  value: "Love",
+                  caption: "Category",
+                  width: cardWidth,
+                ),
+                _buildStatCard(
+                  icon: Icons.groups_2_outlined,
+                  value: "CM Name",
+                  caption: "Community",
+                  width: cardWidth,
+                ),
+                _buildStatCard(
+                  icon: Icons.lock_outline,
+                  value: "Premium",
+                  caption: "Unlock",
+                  width: cardWidth,
+                ),
+              ],
+            );
+          }
+          
+          // Single row layout for normal screens
+          return Row(
+            children: [
+              Expanded(
+                child: _buildStatCard(
+                  icon: Icons.school_outlined,
+                  value: "N5",
+                  caption: "Level",
+                  width: cardWidth,
+                ),
+              ),
+              SizedBox(width: gap),
+              Expanded(
+                child: _buildStatCard(
+                  icon: Icons.favorite_border,
+                  value: "Love",
+                  caption: "Category",
+                  width: cardWidth,
+                ),
+              ),
+              SizedBox(width: gap),
+              Expanded(
+                child: _buildStatCard(
+                  icon: Icons.groups_2_outlined,
+                  value: "CM Name",
+                  caption: "Community",
+                  width: cardWidth,
+                ),
+              ),
+              SizedBox(width: gap),
+              Expanded(
+                child: _buildStatCard(
+                  icon: Icons.lock_outline,
+                  value: "Premium",
+                  caption: "Unlock",
+                  width: cardWidth,
+                ),
+              ),
+            ],
+          );
+        },
       ),
       
-      const SizedBox(height: 16), // Section margin bottom 16dp
+      const SizedBox(height: 8), // Section margin bottom 8dp
     ],
   );
   
-  /// Individual tag with flexible height to prevent overflow
-  Widget _tag(String title, String subtitle) {
-    IconData icon;
-    switch (title) {
-      case 'N5':
-        icon = Icons.school_outlined; // Level icon
-        break;
-      case 'Love':
-        icon = Icons.favorite_outline; // Category icon
-        break;
-      case 'CM Name':
-        icon = Icons.people_outline; // Community icon
-        break;
-      case 'Premium':
-        icon = Icons.lock_outline; // Unlock icon
-        break;
-      default:
-        icon = Icons.circle_outlined;
-    }
-
-    return Container(
-      constraints: const BoxConstraints(minHeight: 58, maxHeight: 66),
-      padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 12),
-      decoration: BoxDecoration(
-        border: Border.all(color: const Color(0xFFE9E9EC)), // 1dp border
-        borderRadius: BorderRadius.circular(10), // 10dp radius
-        // No shadow/elevation as specified
+  /// Compact stat card for single row layout
+  Widget _buildStatCard({
+    required IconData icon,
+    required String value,
+    required String caption,
+    required double width,
+  }) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    
+    return ConstrainedBox(
+      constraints: const BoxConstraints(
+        minWidth: 44,
+        minHeight: 44,
       ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: () => ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Tag: $title')),
+      child: SizedBox(
+        width: width,
+        height: 80, // Fixed height: 80dp
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 8), // Vertical padding: 8dp
+          decoration: BoxDecoration(
+            color: colorScheme.surface, // White background
+            borderRadius: BorderRadius.circular(12), // Border radius: 12dp
+            border: Border.all(
+              color: colorScheme.outlineVariant, // Theme-aware border color
+              width: 1,
+            ),
           ),
-          borderRadius: BorderRadius.circular(10),
-          child: Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // Icon at the top middle
-                Icon(
-                  icon,
-                  size: 12,
-                  color: const Color(0xFF282A2E), // onSurface
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: () => ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('Stat: $value')),
+              ),
+              borderRadius: BorderRadius.circular(12),
+              child: Semantics(
+                label: '$value $caption',
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Icon at the top
+                    Icon(
+                      icon,
+                      size: 18, // Icon size: 18dp
+                      color: colorScheme.onSurfaceVariant,
+                    ),
+                    const SizedBox(height: 4), // 4dp gap
+                    // Value in the middle
+                    Text(
+                      value,
+                      style: TextStyle(
+                        fontSize: 12, // fontSize: 12sp
+                        fontWeight: FontWeight.w500, // medium
+                        height: 1.2, // lineHeight: 1.2
+                        color: colorScheme.onSurface,
+                      ),
+                      textAlign: TextAlign.center,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 2), // 2dp gap
+                    // Label at the bottom
+                    Text(
+                      caption,
+                      style: TextStyle(
+                        fontSize: 10, // fontSize: 10sp
+                        fontWeight: FontWeight.w400, // regular
+                        color: colorScheme.onSurfaceVariant.withOpacity(0.6), // 60% opacity
+                      ),
+                      textAlign: TextAlign.center,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 1),
-                Text(
-                  title,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w600,
-                    fontSize: 12, // Reduced fontSize
-                    height: 1.1, // Reduced height
-                    color: Color(0x99000000), // onSurfaceVariant
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                Text(
-                  subtitle,
-                  style: const TextStyle(
-                    fontSize: 11, // Reduced fontSize
-                    height: 1.1, // Reduced height
-                    color: Color(0x99000000), // onSurfaceVariant
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
+              ),
             ),
           ),
         ),

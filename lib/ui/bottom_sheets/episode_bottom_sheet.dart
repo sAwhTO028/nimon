@@ -3,6 +3,8 @@ import 'package:flutter/services.dart';
 import '../../../models/episode_model.dart';
 import '../../../models/episode_meta.dart';
 import '../../../models/story.dart';
+import '../../features/learn/learn_hub_screen.dart';
+import '../../features/reader/reader_screen.dart';
 
 /// Global Episode Bottom Sheet - Reusable across the entire app
 /// 
@@ -130,6 +132,24 @@ EpisodeModel _convertEpisodeToModel(Episode episode) {
     jlpt: 'N5', // Default JLPT level
     likes: 430, // Mock likes count
     readTime: Duration(minutes: (episode.blocks.length * 0.5).ceil()),
+  );
+}
+
+/// Convert EpisodeModel back to Episode for ReaderScreen
+Episode _convertModelToEpisode(EpisodeModel episodeModel) {
+  return Episode(
+    id: 'episode_${episodeModel.number}',
+    storyId: 'story_${episodeModel.number}',
+    index: episodeModel.number,
+    title: episodeModel.title,
+    thumbnailUrl: episodeModel.coverUrl,
+    blocks: [
+      // Create a simple block from the preview text
+      EpisodeBlock(
+        type: BlockType.narration,
+        text: episodeModel.preview,
+      ),
+    ],
   );
 }
 
@@ -591,18 +611,20 @@ class _EpisodeBottomSheetContent extends StatelessWidget {
       child: SafeArea(
         child: Row(
           children: [
-            // Save for Later button
+            // Learn Now button
             Expanded(
               child: OutlinedButton.icon(
                 onPressed: () {
                   HapticFeedback.selectionClick();
-                  Navigator.of(context).maybePop();
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Saved for later')),
+                  Navigator.of(context, rootNavigator: true).push(
+                    MaterialPageRoute(
+                      builder: (context) => const LearnHubScreen(),
+                      fullscreenDialog: true,
+                    ),
                   );
                 },
-                icon: const Icon(Icons.bookmark_border, size: 18),
-                label: const Text('Save for Later'),
+                icon: const Icon(Icons.school_outlined, size: 18),
+                label: const Text('Learn Now'),
                 style: OutlinedButton.styleFrom(
                   minimumSize: const Size(0, 48),
                   shape: RoundedRectangleBorder(
@@ -619,9 +641,14 @@ class _EpisodeBottomSheetContent extends StatelessWidget {
               child: FilledButton.icon(
                 onPressed: () {
                   HapticFeedback.selectionClick();
-                  Navigator.of(context).maybePop();
-                  // Navigate to reader screen
-                  Navigator.of(context).pushNamed('/reader', arguments: episode);
+                  // Convert EpisodeModel back to Episode for ReaderScreen
+                  final episodeForReader = _convertModelToEpisode(episode);
+                  Navigator.of(context, rootNavigator: true).push(
+                    MaterialPageRoute(
+                      builder: (context) => ReaderScreen(episode: episodeForReader),
+                      fullscreenDialog: true,
+                    ),
+                  );
                 },
                 icon: const Icon(Icons.play_arrow, size: 18),
                 label: const Text('Start Reading'),
