@@ -5,6 +5,7 @@
 
 // Bottom Sheets
 export 'bottom_sheets/episode_bottom_sheet.dart';
+export 'bottom_sheets/add_mono_bottom_sheet.dart';
 
 // Widgets
 export 'widgets/episode_action_bar.dart';

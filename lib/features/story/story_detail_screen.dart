@@ -321,7 +321,7 @@ class _StoryDetailScreenState extends State<StoryDetailScreen> with TickerProvid
             return Wrap(
               spacing: gap,
               runSpacing: 8,
-              children: [
+          children: [
                 _buildStatCard(
                   icon: Icons.school_outlined,
                   value: "N5",
@@ -417,36 +417,36 @@ class _StoryDetailScreenState extends State<StoryDetailScreen> with TickerProvid
         height: 80, // Fixed height: 80dp
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 8), // Vertical padding: 8dp
-          decoration: BoxDecoration(
+      decoration: BoxDecoration(
             color: colorScheme.surface, // White background
             borderRadius: BorderRadius.circular(12), // Border radius: 12dp
             border: Border.all(
               color: colorScheme.outlineVariant, // Theme-aware border color
               width: 1,
             ),
-          ),
-          child: Material(
-            color: Colors.transparent,
-            child: InkWell(
-              onTap: () => ScaffoldMessenger.of(context).showSnackBar(
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () => ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(content: Text('Stat: $value')),
-              ),
+          ),
               borderRadius: BorderRadius.circular(12),
               child: Semantics(
                 label: '$value $caption',
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisSize: MainAxisSize.min,
+              children: [
                     // Icon at the top
-                    Icon(
-                      icon,
+                Icon(
+                  icon,
                       size: 18, // Icon size: 18dp
                       color: colorScheme.onSurfaceVariant,
-                    ),
+                ),
                     const SizedBox(height: 4), // 4dp gap
                     // Value in the middle
-                    Text(
+                Text(
                       value,
                       style: TextStyle(
                         fontSize: 12, // fontSize: 12sp
@@ -455,12 +455,12 @@ class _StoryDetailScreenState extends State<StoryDetailScreen> with TickerProvid
                         color: colorScheme.onSurface,
                       ),
                       textAlign: TextAlign.center,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
                     const SizedBox(height: 2), // 2dp gap
                     // Label at the bottom
-                    Text(
+                Text(
                       caption,
                       style: TextStyle(
                         fontSize: 10, // fontSize: 10sp
@@ -468,10 +468,10 @@ class _StoryDetailScreenState extends State<StoryDetailScreen> with TickerProvid
                         color: colorScheme.onSurfaceVariant.withOpacity(0.6), // 60% opacity
                       ),
                       textAlign: TextAlign.center,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
                 ),
               ),
             ),
