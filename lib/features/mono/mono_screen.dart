@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:nimon/data/story_repo.dart';
 import 'package:nimon/models/story.dart';
 import 'package:nimon/ui/ui.dart';
@@ -13,12 +14,16 @@ class MonoScreen extends StatelessWidget {
       appBar: AppBar(
         title: const Text('Mono'),
         actions: [
-          IconButton(icon: const Icon(Icons.search), onPressed: () {}),
-          Builder(
-            builder: (context) => IconButton(
-              icon: const Icon(Icons.add), 
-              onPressed: () => showAddMonoBottomSheet(context),
-            ),
+          IconButton(
+            icon: const Icon(Icons.search),
+            onPressed: () {},
+            tooltip: 'Search',
+          ),
+          IconButton(
+            icon: const Icon(Icons.add),
+            onPressed: () => context.push('/create'),
+            tooltip: 'Create',
+            padding: const EdgeInsets.symmetric(horizontal: 16),
           ),
         ],
       ),

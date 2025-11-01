@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:nimon/data/story_repo_mock.dart';
 import 'package:nimon/features/home/home_screen.dart';
 import 'package:nimon/features/mono/mono_screen.dart';
@@ -12,8 +13,10 @@ import 'package:nimon/data/repo_singleton.dart';
 import 'package:nimon/features/learn/learn_hub_screen.dart';
 import 'package:nimon/models/story.dart';
 import 'package:nimon/features/reader/reader_screen.dart';
+import 'package:nimon/create_mono/create_mono_screen.dart';
+import 'package:nimon/features/create/create_screen.dart';
 
-void main() => runApp(const NimonApp());
+void main() => runApp(const ProviderScope(child: NimonApp()));
 
 //final repo = StoryRepoMock();
 
@@ -34,6 +37,16 @@ final _router = GoRouter(
         GoRoute(
           path: '/mono',
           builder: (_, __) => MonoScreen(repo: repo),
+        ),
+        GoRoute(
+          path: '/create-mono',
+          builder: (_, __) => const CreateMonoScreen(),
+        ),
+        GoRoute(
+          path: '/create',
+          builder: (_, state) => CreateScreen(
+            initialTab: state.uri.queryParameters['tab'],
+          ),
         ),
         GoRoute(
           path: '/settings',
@@ -102,6 +115,7 @@ class _AppShellState extends State<AppShell> {
   @override
   Widget build(BuildContext context) {
     final idx = _indexFromLocation(GoRouterState.of(context).uri.toString());
+    
     return Scaffold(
       body: SafeArea(child: widget.child),
       bottomNavigationBar: NavigationBar(
