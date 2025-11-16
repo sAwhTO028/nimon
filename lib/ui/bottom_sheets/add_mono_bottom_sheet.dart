@@ -102,11 +102,25 @@ class _AddMonoSheet extends StatefulWidget {
 }
 
 class _AddMonoSheetState extends State<_AddMonoSheet> {
+  // Prompt selector height: fixed height for the scrollable card area
+  static const double _promptSelectorCardAreaHeight = 400.0;
+
   OneShortState _oneShortState = const OneShortState();
   final TextEditingController _titleController = TextEditingController();
 
-  final List<String> _jlptLevels = ['N5', 'N4', 'N3', 'N2', 'N1'];
-  final List<String> _categories = ['Love', 'Comedy', 'Horror', 'Cultural', 'Adventure', 'Fantasy', 'Drama', 'Business', 'Sci-Fi', 'Mystery'];
+  static const List<String> _jlptLevels = ['N5', 'N4', 'N3', 'N2', 'N1'];
+  static const List<String> _categories = [
+    'Love',
+    'Comedy',
+    'Horror',
+    'Cultural',
+    'Adventure',
+    'Fantasy',
+    'Drama',
+    'Business',
+    'Sci-Fi',
+    'Mystery'
+  ];
   
   // Repository-driven prompt data
   List<Prompt> _matchingPrompts = const [];
@@ -146,20 +160,19 @@ class _AddMonoSheetState extends State<_AddMonoSheet> {
         _cachedLevel = _oneShortState.selectedLevel;
         _cachedCategory = category;
         _cachedLimit = _visibleLimit;
+        setState(() {}); // Only rebuild if data changed
       }
     } else {
-      _matchingPrompts = const [];
-      _cachedLevel = null;
-      _cachedCategory = null;
-      _cachedLimit = null;
+      if (_matchingPrompts.isNotEmpty) {
+        _matchingPrompts = const [];
+        _cachedLevel = null;
+        _cachedCategory = null;
+        _cachedLimit = null;
+        setState(() {}); // Only rebuild if clearing data
+      }
     }
-    setState(() {});
   }
 
-  @override
-  void initState() {
-    super.initState();
-  }
 
   @override
   void dispose() {
@@ -648,61 +661,60 @@ class _AddMonoSheetState extends State<_AddMonoSheet> {
     final level = _toJlptLevel(_oneShortState.selectedLevel);
     if (level == null) return const SizedBox.shrink();
 
-    return SizedBox(
-      height: 240,
-      child: Container(
-        width: double.infinity,
-        margin: const EdgeInsets.symmetric(horizontal: -16),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: const Color(0xFFE6E6E6)),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.05),
-              blurRadius: 8,
-              offset: const Offset(0, 2),
-            ),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.max,
-          children: [
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 16),
-              child: Text(
-                'Select Prompt',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                ),
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.symmetric(horizontal: -16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFE6E6E6)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 16),
+            child: Text(
+              'Select Prompt',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
               ),
             ),
-            const SizedBox(height: 12),
-            Expanded(
-              child: PromptCarousel(
-                prompts: _matchingPrompts,
-                selected: _oneShortState.selectedPromptId != null &&
-                        _matchingPrompts.isNotEmpty
-                    ? _matchingPrompts.firstWhere(
-                        (p) => p.id == _oneShortState.selectedPromptId,
-                        orElse: () => _matchingPrompts.first,
-                      )
-                    : null,
-                onSelect: (prompt) => _setPrompt(prompt.id),
-                onTapCustom: _openCustomPromptSheet,
-                visibleLimit: _visibleLimit,
-                onVisibleLimitChanged: (newLimit) {
-                  setState(() {
-                    _visibleLimit = newLimit;
-                  });
-                  _refreshPrompts();
-                },
-              ),
+          ),
+          const SizedBox(height: 12),
+          // Fixed-height scrollable area for prompt cards
+          SizedBox(
+            height: _promptSelectorCardAreaHeight,
+            child: PromptCarousel(
+              prompts: _matchingPrompts,
+              selected: _oneShortState.selectedPromptId != null &&
+                      _matchingPrompts.isNotEmpty
+                  ? _matchingPrompts.firstWhere(
+                      (p) => p.id == _oneShortState.selectedPromptId,
+                      orElse: () => _matchingPrompts.first,
+                    )
+                  : null,
+              onSelect: (prompt) => _setPrompt(prompt.id),
+              onTapCustom: _openCustomPromptSheet,
+              visibleLimit: _visibleLimit,
+              onVisibleLimitChanged: (newLimit) {
+                setState(() {
+                  _visibleLimit = newLimit;
+                });
+                _refreshPrompts();
+              },
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

@@ -115,13 +115,16 @@ class _PromptCarouselState extends State<PromptCarousel> {
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
       children: [
         // Scrollable list inside fixed-height parent
         Expanded(
           child: ListView.builder(
             controller: _scrollController,
-            padding: EdgeInsets.zero,
-            physics: const BouncingScrollPhysics(),
+            primary: false,
+            shrinkWrap: false,
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            physics: const ClampingScrollPhysics(),
             itemCount: capped.length,
             itemBuilder: (context, index) {
               final prompt = capped[index];
@@ -161,7 +164,10 @@ class _PromptCarouselState extends State<PromptCarousel> {
         const SizedBox(height: 12),
 
         // Custom Prompt button (full width)
-        _buildCustomCard(context),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: _buildCustomCard(context),
+        ),
       ],
     );
   }

@@ -98,7 +98,7 @@ class PromptRepository {
       for (int i = 1; i <= count; i++) {
         all.add(Prompt(
           id: '${describeEnum(level)}-${category.toLowerCase()}-$i',
-          title: '${category.toUpperCase()} IDEA #$i',
+          title: '${category.toUpperCase()} TEST #$i (DEBUG)',
           context: 'An ${describeEnum(level).toUpperCase()} short story about $category theme, variation $i.',
           duration: duration,
           category: category,

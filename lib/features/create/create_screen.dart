@@ -95,7 +95,7 @@ class _CreateScreenState extends State<CreateScreen> {
   
   // Horizontal paged list state
   int _promptPage = 0;
-  static const int _pageSize = 5;
+  static const int _pageSize = 3; // 3 cards per page
   late final PageController _promptPageController;
   final TextEditingController _cpTitle = TextEditingController();
   final TextEditingController _cpContext = TextEditingController();
@@ -105,7 +105,7 @@ class _CreateScreenState extends State<CreateScreen> {
   void initState() {
     super.initState();
     _oneShortState = const OneShortState();
-    _promptPageController = PageController(viewportFraction: 0.96);
+    _promptPageController = PageController();
     
     // Set initial tab based on parameter
     switch (widget.initialTab) {
@@ -262,30 +262,12 @@ class _CreateScreenState extends State<CreateScreen> {
                   style: Theme.of(context).textTheme.titleLarge,
                 ),
                 const SizedBox(height: 20),
-                // Duration FIRST
-                DropdownButtonFormField<String>(
-                  value: _cpDuration,
-                  items: const [
-                    DropdownMenuItem(
-                      value: '3–5 minutes',
-                      child: Text('3–5 minutes'),
-                    ),
-                    DropdownMenuItem(
-                      value: '5–7 minutes',
-                      child: Text('5–7 minutes'),
-                    ),
-                    DropdownMenuItem(
-                      value: '7–9 minutes',
-                      child: Text('7–9 minutes'),
-                    ),
-                  ],
-                  onChanged: (v) {
-                    if (v != null) setState(() => _cpDuration = v);
+                // Duration FIRST - Accordion selector
+                _DurationAccordionSelector(
+                  selectedDuration: _cpDuration,
+                  onDurationSelected: (duration) {
+                    setState(() => _cpDuration = duration);
                   },
-                  decoration: const InputDecoration(
-                    labelText: 'Duration',
-                    border: OutlineInputBorder(),
-                  ),
                 ),
                 const SizedBox(height: 16),
                 // Title SECOND
@@ -786,15 +768,22 @@ class _CreateScreenState extends State<CreateScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text(
-            'Select Prompt',
+            'Select Prompt (DEBUG 3:46)',
             style: TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.w600,
-              color: Colors.black87,
+              color: Colors.red,
             ),
           ),
           const SizedBox(height: 8),
+          // Fixed-height horizontal PageView (3 cards per page)
           _buildPromptContent(),
+          const SizedBox(height: 8),
+          // Page indicator dots
+          _buildPromptPageIndicator(),
+          const SizedBox(height: 12),
+          // "+ Custom Prompt" button (always below the list)
+          buildCustomPromptButton(onTap: _openCustomPromptSheet),
         ],
       ),
     );
@@ -822,175 +811,122 @@ class _CreateScreenState extends State<CreateScreen> {
     if (level == null) return const SizedBox.shrink();
 
     final total = _matchingPrompts.length;
-    final pages = _chunkBy5(_matchingPrompts);
-    final totalPages = pages.length;
 
-    // Empty state - still show button below
+    // Empty state
     if (total == 0) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          _emptyStateWithCustomButton(),
-          // "+ Custom Prompt" button - 8dp from empty message
-          Padding(
-            padding: const EdgeInsets.only(top: 8), // 8dp gap
-            child: buildCustomPromptButton(onTap: _openCustomPromptSheet),
-          ),
-        ],
+      return Center(
+        child: _emptyStateWithCustomButton(),
       );
     }
 
+    // Calculate fixed height for exactly 3 cards
+    const double promptCardHeight = 116.0; // Fixed card height
+    const double promptCardSpacing = 12.0; // Spacing between cards
+    final double promptsAreaHeight =
+        (promptCardHeight * 3) + (promptCardSpacing * 2);
+
+    // Calculate page count (3 cards per page)
+    final int pageCount = (total / _pageSize).ceil();
+
     // Ensure current page is valid
-    if (_promptPage >= totalPages) {
-      _promptPage = max(0, totalPages - 1);
+    if (_promptPage >= pageCount) {
+      _promptPage = (pageCount > 0) ? pageCount - 1 : 0;
     }
 
-    // Calculate height: 5 cards + 4 separators (no extra padding)
-    // Each card is ~120-130px depending on content, separators are 10px each
-    const cardHeight = 130.0;
-    const separatorHeight = 10.0;
-    final pageHeight = (cardHeight * 5) + (separatorHeight * 4); // exact height, no extra padding
+    // Horizontal PageView with 3 cards per page
+    return SizedBox(
+      height: promptsAreaHeight,
+      child: PageView.builder(
+        controller: _promptPageController,
+        itemCount: pageCount,
+        onPageChanged: (index) {
+          setState(() {
+            _promptPage = index;
+          });
+        },
+        itemBuilder: (context, pageIndex) {
+          final start = pageIndex * _pageSize;
+          final end = (start + _pageSize < total) ? start + _pageSize : total;
+          final pageItems = _matchingPrompts.sublist(start, end);
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        // Horizontal paged list with peek
-        SizedBox(
-          height: pageHeight,
-          child: PageView.builder(
-            controller: _promptPageController,
-            onPageChanged: (i) {
-              setState(() {
-                _promptPage = i;
-              });
-            },
-            itemCount: totalPages,
-            itemBuilder: (_, pageIndex) {
-              final pageItems = pages[pageIndex];
-              return Padding(
-                padding: const EdgeInsets.only(left: 8, right: 8, bottom: 0), // show peek, no bottom padding
-                child: ListView.separated(
-                  physics: const BouncingScrollPhysics(),
-                  shrinkWrap: true,
-                  padding: const EdgeInsets.only(top: 8), // small top padding only
-                  itemCount: pageItems.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 10),
-                  itemBuilder: (_, i) {
-                    final p = pageItems[i];
-                    final isSelected = _selectedPrompt?.id == p.id;
-                    return _promptCard(p, isSelected);
-                  },
-                ),
-              );
-            },
-          ),
-        ),
-        // Pager (Prev • dots • Next) - 8dp from last card
-        Padding(
-          padding: const EdgeInsets.only(top: 8), // 8dp from last card
-          child: SizedBox(
-            height: 32,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                IconButton(
-                  tooltip: 'Previous 5 prompts',
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
-                  visualDensity: VisualDensity.compact,
-                  onPressed: _promptPage > 0
-                      ? () => _promptPageController.previousPage(
-                            duration: const Duration(milliseconds: 240),
-                            curve: Curves.easeOut,
-                          )
-                      : null,
-                  icon: Icon(
-                    Icons.chevron_left,
-                    size: 22,
-                    color: _promptPage > 0
-                        ? Theme.of(context).colorScheme.primary
-                        : Colors.grey.shade300,
-                  ),
-                ),
-                const SizedBox(width: 6),
-                ...List.generate(totalPages, (i) {
-                  final isActive = i == _promptPage;
-                  return Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 3),
-                    child: Container(
-                      width: isActive ? 8 : 6,
-                      height: isActive ? 8 : 6,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: isActive
-                            ? Theme.of(context).colorScheme.primary
-                            : Theme.of(context).colorScheme.outlineVariant.withOpacity(0.4),
-                      ),
-                    ),
-                  );
-                }),
-                const SizedBox(width: 6),
-                IconButton(
-                  tooltip: 'Next 5 prompts',
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
-                  visualDensity: VisualDensity.compact,
-                  onPressed: _promptPage < totalPages - 1
-                      ? () => _promptPageController.nextPage(
-                            duration: const Duration(milliseconds: 240),
-                            curve: Curves.easeOut,
-                          )
-                      : null,
-                  icon: Icon(
-                    Icons.chevron_right,
-                    size: 22,
-                    color: _promptPage < totalPages - 1
-                        ? Theme.of(context).colorScheme.primary
-                        : Colors.grey.shade300,
-                  ),
-                ),
+          return Column(
+            mainAxisAlignment: MainAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              for (int i = 0; i < pageItems.length; i++) ...[
+                _promptCard(pageItems[i],
+                    _selectedPrompt?.id == pageItems[i].id),
+                if (i < pageItems.length - 1)
+                  const SizedBox(height: 12.0),
               ],
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildPromptPageIndicator() {
+    final total = _matchingPrompts.length;
+    if (total == 0) return const SizedBox.shrink();
+
+    final int pageCount = (total / _pageSize).ceil();
+    if (pageCount <= 1) return const SizedBox.shrink();
+
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: List.generate(pageCount, (index) {
+        final isActive = index == _promptPage;
+        return Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4),
+          child: Container(
+            width: isActive ? 8 : 6,
+            height: 6,
+            decoration: BoxDecoration(
+              color: isActive
+                  ? Theme.of(context).colorScheme.primary
+                  : Colors.grey.shade300,
+              borderRadius: BorderRadius.circular(3),
             ),
           ),
-        ),
-        // "+ Custom Prompt" button - 8dp from pager
-        Padding(
-          padding: const EdgeInsets.only(top: 8), // 8dp gap from pager
-          child: buildCustomPromptButton(onTap: _openCustomPromptSheet),
-        ),
-      ],
+        );
+      }),
     );
   }
 
   Widget _promptCard(Prompt p, bool selected) {
-    return Stack(
-      children: [
-        Container(
-        decoration: BoxDecoration(
-            color: selected ? const Color(0xFFEEF5FF) : Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-              color: selected
-                  ? Theme.of(context).colorScheme.primary
-                  : const Color(0xFFE6E6E6),
-              width: selected ? 1.5 : 1,
-          ),
-          boxShadow: [
-            BoxShadow(
-                color: Colors.black.withOpacity(0.02),
-                blurRadius: 3,
-                offset: const Offset(0, 1),
+    return SizedBox(
+      width: double.infinity,
+      height: 116, // Fixed height for all prompt cards
+      child: Stack(
+        children: [
+          Container(
+            decoration: BoxDecoration(
+              color: selected ? const Color(0xFFEEF5FF) : Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: selected
+                    ? Theme.of(context).colorScheme.primary
+                    : const Color(0xFFE6E6E6),
+                width: selected ? 1.5 : 1,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.02),
+                  blurRadius: 3,
+                  offset: const Offset(0, 1),
+                ),
+              ],
             ),
-          ],
-        ),
-          child: InkWell(
-            onTap: () => _setPrompt(p),
-            borderRadius: BorderRadius.circular(16),
-            child: Padding(
-              padding: const EdgeInsets.all(14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
+            child: InkWell(
+              onTap: () => _setPrompt(p),
+              borderRadius: BorderRadius.circular(16),
+              child: Padding(
+                padding: const EdgeInsets.all(14),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -1052,8 +988,8 @@ class _CreateScreenState extends State<CreateScreen> {
           ],
         ),
       ),
+            ),
           ),
-        ),
         if (selected)
           Positioned(
             right: 10,
@@ -1065,6 +1001,7 @@ class _CreateScreenState extends State<CreateScreen> {
             ),
           ),
       ],
+    ),
     );
   }
 
@@ -1348,6 +1285,190 @@ class InfoPromptCard extends StatelessWidget {
         textAlign: TextAlign.left,
         style: Theme.of(context).textTheme.bodyMedium,
       ),
+    );
+  }
+}
+
+/// Duration enum for the accordion selector
+enum CustomPromptDuration {
+  threeToFive,
+  fiveToSeven,
+  sevenToNine,
+}
+
+String _durationLabel(CustomPromptDuration value) {
+  switch (value) {
+    case CustomPromptDuration.threeToFive:
+      return '3–5 minutes';
+    case CustomPromptDuration.fiveToSeven:
+      return '5–7 minutes';
+    case CustomPromptDuration.sevenToNine:
+      return '7–9 minutes';
+  }
+}
+
+CustomPromptDuration _durationFromString(String value) {
+  switch (value) {
+    case '3–5 minutes':
+      return CustomPromptDuration.threeToFive;
+    case '5–7 minutes':
+      return CustomPromptDuration.fiveToSeven;
+    case '7–9 minutes':
+      return CustomPromptDuration.sevenToNine;
+    default:
+      return CustomPromptDuration.fiveToSeven;
+  }
+}
+
+String _durationToString(CustomPromptDuration value) {
+  return _durationLabel(value);
+}
+
+/// Accordion-style Duration selector widget
+class _DurationAccordionSelector extends StatefulWidget {
+  final String selectedDuration;
+  final ValueChanged<String> onDurationSelected;
+
+  const _DurationAccordionSelector({
+    required this.selectedDuration,
+    required this.onDurationSelected,
+  });
+
+  @override
+  State<_DurationAccordionSelector> createState() =>
+      _DurationAccordionSelectorState();
+}
+
+class _DurationAccordionSelectorState
+    extends State<_DurationAccordionSelector> {
+  bool _isExpanded = false;
+  late CustomPromptDuration _selectedDuration;
+  
+  static const List<CustomPromptDuration> _durationOptions = [
+    CustomPromptDuration.threeToFive,
+    CustomPromptDuration.fiveToSeven,
+    CustomPromptDuration.sevenToNine,
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedDuration = _durationFromString(widget.selectedDuration);
+  }
+
+  @override
+  void didUpdateWidget(_DurationAccordionSelector oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.selectedDuration != widget.selectedDuration) {
+      _selectedDuration = _durationFromString(widget.selectedDuration);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Label
+        Text(
+          'Duration',
+          style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                color: Theme.of(context).colorScheme.onSurface,
+              ),
+        ),
+        const SizedBox(height: 8),
+        // Collapsed/Expanded container
+        Container(
+          decoration: BoxDecoration(
+            border: Border.all(
+              color: Theme.of(context).colorScheme.outline,
+            ),
+            borderRadius: BorderRadius.circular(4),
+          ),
+          child: Column(
+            children: [
+              // Tappable row showing selected value - ONLY this header is tappable
+              InkWell(
+                onTap: () {
+                  setState(() {
+                    _isExpanded = !_isExpanded;
+                  });
+                },
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(4),
+                ),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 16,
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          _durationLabel(_selectedDuration),
+                          style: Theme.of(context).textTheme.bodyLarge,
+                        ),
+                      ),
+                      AnimatedRotation(
+                        duration: const Duration(milliseconds: 200),
+                        turns: _isExpanded ? 0.5 : 0,
+                        child: Icon(
+                          Icons.keyboard_arrow_down,
+                          color: Theme.of(context).colorScheme.onSurface,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              // Animated expansion of options list - NOT wrapped in tap handler
+              AnimatedCrossFade(
+                duration: const Duration(milliseconds: 200),
+                crossFadeState: _isExpanded
+                    ? CrossFadeState.showFirst
+                    : CrossFadeState.showSecond,
+                firstChild: Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    border: Border(
+                      top: BorderSide(
+                        color: Theme.of(context).colorScheme.outline,
+                      ),
+                    ),
+                  ),
+                  child: SegmentedButton<CustomPromptDuration>(
+                    segments: _durationOptions
+                        .map(
+                          (value) => ButtonSegment<CustomPromptDuration>(
+                            value: value,
+                            label: Text(_durationLabel(value)),
+                          ),
+                        )
+                        .toList(),
+                    selected: {_selectedDuration},
+                    onSelectionChanged: (newSelection) {
+                      if (newSelection.isNotEmpty) {
+                        final selectedValue = newSelection.first;
+                        final durationString = _durationToString(selectedValue);
+                        
+                        setState(() {
+                          _selectedDuration = selectedValue;
+                          _isExpanded = false;
+                        });
+                        
+                        // Update parent form value
+                        widget.onDurationSelected(durationString);
+                      }
+                    },
+                  ),
+                ),
+                secondChild: const SizedBox.shrink(),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }
