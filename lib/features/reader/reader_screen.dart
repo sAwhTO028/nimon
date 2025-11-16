@@ -13,7 +13,7 @@ class ReaderScreen extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(title: Text('Episode ${episode.index}')),
       body: ListView.builder(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 24), 
         itemCount: episode.blocks.length,
         itemBuilder: (ctx, i) => _tile(ctx, episode.blocks[i], i),
       ),

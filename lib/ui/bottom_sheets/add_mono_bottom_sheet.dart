@@ -1,11 +1,29 @@
 import 'package:flutter/material.dart';
+import 'package:animated_accordion/animated_accordion.dart';
 import '../create/widgets/one_short_paper_card.dart';
 import '../create/widgets/prompt_carousel.dart';
-import '../create/widgets/duration_accordion_field.dart';
 import '../../data/prompt_repository.dart';
 
-// Legacy enum - kept for compatibility
-enum CreationType { oneShort, storySeries, promptEpisode }
+// TODO: check usage before removing - CreationType is also defined in create_mono_screen.dart
+// This enum might be unused here since header_sheet.dart imports from create_mono_screen.dart
+// enum CreationType { oneShort, storySeries, promptEpisode }
+
+// Consistent horizontal padding for the Create → One-Short tab
+const double kScreenHorizontalPadding = 16.0;
+
+// Duration option enum and helper
+enum DurationOption { d3to5, d5to7, d7to9 }
+
+String durationLabel(DurationOption v) {
+  switch (v) {
+    case DurationOption.d3to5:
+      return '3–5 minutes';
+    case DurationOption.d5to7:
+      return '5–7 minutes';
+    case DurationOption.d7to9:
+      return '7–9 minutes';
+  }
+}
 
 class OneShortState {
   final String? selectedLevel;
@@ -199,11 +217,7 @@ class _AddMonoSheetState extends State<_AddMonoSheet> {
   Future<void> _openCustomPromptSheet() async {
     final titleCtrl = TextEditingController();
     final contextCtrl = TextEditingController();
-    
-    const durationOptions = ['3–5 minutes', '5–7 minutes', '7–9 minutes'];
-    
-    // State holder that persists across rebuilds
-    String? selectedDuration;
+    final scrollController = ScrollController();
     
     await showModalBottomSheet<void>(
       context: context,
@@ -214,113 +228,31 @@ class _AddMonoSheetState extends State<_AddMonoSheet> {
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
       builder: (ctx) {
-        return AnimatedPadding(
-          duration: const Duration(milliseconds: 180),
-          curve: Curves.easeOut,
-          padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
-          child: SingleChildScrollView(
-            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
-            child: StatefulBuilder(
-              builder: (ctx, setSheetState) {
-                final bool canAdd = 
-                    (selectedDuration != null) &&
-                    titleCtrl.text.trim().length >= 3 &&
-                    titleCtrl.text.trim().length <= 60 &&
-                    contextCtrl.text.trim().length >= 10;
-                
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Text(
-                      'Add Custom Prompt',
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
-                    ),
-                    const SizedBox(height: 12),
-                    // 1) Duration (Accordion) — TOP
-                    DurationAccordionField(
-                      options: durationOptions,
-                      initialValue: selectedDuration,
-                      onChanged: (v) {
-                        selectedDuration = v;
-                        setSheetState(() {}); // Rebuild to update button state
-                      },
-                    ),
-                    const SizedBox(height: 14),
-                    // 2) Title
-                    TextField(
-                      controller: titleCtrl,
-                      maxLength: 60,
-                      textInputAction: TextInputAction.next,
-                      onChanged: (_) => setSheetState(() {}), // Rebuild to update button
-                      decoration: const InputDecoration(
-                        labelText: 'Title (3–60 chars)',
-                        border: OutlineInputBorder(),
-                        counterText: '',
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    // 3) Description
-                    TextField(
-                      controller: contextCtrl,
-                      maxLength: 300,
-                      minLines: 3,
-                      maxLines: 6,
-                      onChanged: (_) => setSheetState(() {}), // Rebuild to update button
-                      decoration: const InputDecoration(
-                        labelText: 'Description / Context (min 10 chars)',
-                        border: OutlineInputBorder(),
-                        counterText: '',
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: OutlinedButton(
-                            onPressed: () => Navigator.of(ctx).pop(),
-                            child: const Text('Cancel'),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: FilledButton(
-                            onPressed: canAdd ? () {
-                              // >>> UPDATE MAIN STATE - Custom prompt replaces previous selection
-    _updateOneShortState(_oneShortState.copyWith(
-                                selectedPromptId: null, // Clear repo prompt selection
-                                customPromptTitle: titleCtrl.text.trim(),
-                                customPromptContext: contextCtrl.text.trim(),
-                                customPromptDuration: selectedDuration,
-                                currentStep: 3,
-                              ));
-                              // Show success feedback
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text('Custom prompt added!'),
-                                  duration: Duration(seconds: 2),
-                                ),
-                              );
-                              Navigator.of(ctx).pop();
-                            } : null,
-                            style: FilledButton.styleFrom(
-                              backgroundColor: canAdd ? null : Colors.grey.shade300,
-                              foregroundColor: canAdd ? null : Colors.grey.shade600,
-                            ),
-                            child: const Text('Add'),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                );
-              },
-            ),
-          ),
+        return _CustomPromptSheet(
+          titleCtrl: titleCtrl,
+          contextCtrl: contextCtrl,
+          scrollController: scrollController,
+          onSave: (selectedDuration) {
+            _updateOneShortState(_oneShortState.copyWith(
+              selectedPromptId: null,
+              customPromptTitle: titleCtrl.text.trim(),
+              customPromptContext: contextCtrl.text.trim(),
+              customPromptDuration: selectedDuration,
+              currentStep: 3,
+            ));
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Custom prompt added!'),
+                duration: Duration(seconds: 2),
+              ),
+            );
+            Navigator.of(ctx).pop();
+          },
         );
       },
-    );
+    ).whenComplete(() {
+      scrollController.dispose();
+    });
   }
 
   void _handleCreate() {
@@ -347,8 +279,9 @@ class _AddMonoSheetState extends State<_AddMonoSheet> {
               behavior: HitTestBehavior.translucent,
               onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
             child: SingleChildScrollView(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.symmetric(horizontal: kScreenHorizontalPadding),
             child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 // Preview carousel matching Home card dimensions
                 SizedBox(
@@ -395,9 +328,9 @@ class _AddMonoSheetState extends State<_AddMonoSheet> {
                   _buildLevelSelector(),
                   const SizedBox(height: 16),
                   _buildCategorySelector(),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 8),
                   _buildPromptSelector(),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 24),
                   _buildTitleInput(),
                 ],
                 ),
@@ -684,134 +617,134 @@ class _AddMonoSheetState extends State<_AddMonoSheet> {
 
   Widget _buildPromptSelector() {
     final hasSelections =
-        _oneShortState.selectedLevel != null && _oneShortState.selectedCategory != null;
+        _oneShortState.selectedLevel != null &&
+        _oneShortState.selectedCategory != null;
 
     if (!hasSelections) {
-          return Container(
-      padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE6E6E6)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
+      return Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: const Color(0xFFE6E6E6)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
             ),
+          ],
+        ),
         child: Center(
           child: Text(
             'First select the level and categories',
             textAlign: TextAlign.center,
             style: TextStyle(color: Colors.grey.shade600),
           ),
-      ),
-    );
-  }
+        ),
+      );
+    }
 
     final level = _toJlptLevel(_oneShortState.selectedLevel);
     if (level == null) return const SizedBox.shrink();
 
-          return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
+    return SizedBox(
+      height: 240,
+      child: Container(
+        width: double.infinity,
+        margin: const EdgeInsets.symmetric(horizontal: -16),
+        decoration: BoxDecoration(
+          color: Colors.white,
           borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE6E6E6)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+          border: Border.all(color: const Color(0xFFE6E6E6)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.05),
               blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'Select Prompt',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
-          ),
-          const SizedBox(height: 12),
-          PromptCarousel(
-            prompts: _matchingPrompts,
-            selected: _oneShortState.selectedPromptId != null && _matchingPrompts.isNotEmpty
-                ? _matchingPrompts.firstWhere(
-                    (p) => p.id == _oneShortState.selectedPromptId,
-                    orElse: () => _matchingPrompts.first,
-                  )
-                : null,
-            onSelect: (prompt) => _setPrompt(prompt.id),
-            onTapCustom: _openCustomPromptSheet,
-            visibleLimit: _visibleLimit,
-            onVisibleLimitChanged: (newLimit) {
-              setState(() {
-                _visibleLimit = newLimit;
-              });
-              _refreshPrompts();
-            },
+              offset: const Offset(0, 2),
             ),
           ],
         ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.max,
+          children: [
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 16),
+              child: Text(
+                'Select Prompt',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Expanded(
+              child: PromptCarousel(
+                prompts: _matchingPrompts,
+                selected: _oneShortState.selectedPromptId != null &&
+                        _matchingPrompts.isNotEmpty
+                    ? _matchingPrompts.firstWhere(
+                        (p) => p.id == _oneShortState.selectedPromptId,
+                        orElse: () => _matchingPrompts.first,
+                      )
+                    : null,
+                onSelect: (prompt) => _setPrompt(prompt.id),
+                onTapCustom: _openCustomPromptSheet,
+                visibleLimit: _visibleLimit,
+                onVisibleLimitChanged: (newLimit) {
+                  setState(() {
+                    _visibleLimit = newLimit;
+                  });
+                  _refreshPrompts();
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
   Widget _buildTitleInput() {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE6E6E6)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'One-Short Title',
+          style: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.w600,
+            color: Colors.black87,
           ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'One-Short Title',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.w600,
-              color: Colors.black87,
+        ),
+        const SizedBox(height: 12),
+        TextField(
+          controller: _titleController,
+          onChanged: _setTitle,
+          maxLength: 60,
+          decoration: InputDecoration(
+            hintText: 'Demo Title Name',
+            hintStyle: TextStyle(color: Colors.grey.shade400),
+            helperText: 'Enter your One-Short title (max 60 characters).',
+            counterText: '', // Hide character counter
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: const BorderSide(color: Color(0xFFE6E6E6)),
             ),
-          ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: _titleController,
-            onChanged: _setTitle,
-            maxLength: 60,
-            decoration: InputDecoration(
-              hintText: 'Demo Title Name',
-              hintStyle: TextStyle(color: Colors.grey.shade400),
-              helperText: 'Enter your One-Short title (max 60 characters).',
-              counterText: '', // Hide character counter
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: const BorderSide(color: Color(0xFFE6E6E6)),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: const BorderSide(color: Color(0xFFE6E6E6)),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: const BorderSide(color: Colors.blue),
-              ),
-              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: const BorderSide(color: Color(0xFFE6E6E6)),
             ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: const BorderSide(color: Colors.blue),
+            ),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 
@@ -819,87 +752,276 @@ class _AddMonoSheetState extends State<_AddMonoSheet> {
     return 'Add One-Short';
   }
 
-  String _getPromptTitle() {
-    switch (_oneShortState.selectedPromptId) {
-      case 'rainy_day_promise':
-        return 'Rainy day promise';
-      case 'first_snow_train':
-        return 'First snow, last train';
-      default:
-        return '';
-    }
+}
+
+/// Custom Prompt Sheet with anchored overlay for Duration selector
+class _CustomPromptSheet extends StatefulWidget {
+  final TextEditingController titleCtrl;
+  final TextEditingController contextCtrl;
+  final ScrollController scrollController;
+  final ValueChanged<String?> onSave;
+
+  const _CustomPromptSheet({
+    required this.titleCtrl,
+    required this.contextCtrl,
+    required this.scrollController,
+    required this.onSave,
+  });
+
+  @override
+  State<_CustomPromptSheet> createState() => _CustomPromptSheetState();
+}
+
+class _CustomPromptSheetState extends State<_CustomPromptSheet> {
+  DurationOption _duration = DurationOption.d5to7;
+  final ValueNotifier<bool> _showDurationAccordion = ValueNotifier<bool>(false);
+  bool _showDurationError = false;
+
+  @override
+  void dispose() {
+    _showDurationAccordion.dispose();
+    super.dispose();
   }
 
-  String _getContextText() {
-    switch (_oneShortState.selectedPromptId) {
-      case 'rainy_day_promise':
-        return 'Two old friends meet again at a bus stop on a rainy afternoon in Tokyo.';
-      case 'first_snow_train':
-        return 'Two people miss the last train home and walk together through the first snow of the season.';
-      default:
-        return '';
-    }
-  }
+  @override
+  Widget build(BuildContext context) {
+    final bool canAdd = 
+        widget.titleCtrl.text.trim().length >= 3 &&
+        widget.titleCtrl.text.trim().length <= 60 &&
+        widget.contextCtrl.text.trim().length >= 10;
 
-  String _getDuration() {
-    switch (_oneShortState.selectedPromptId) {
-      case 'rainy_day_promise':
-        return '4–6 minutes';
-      case 'first_snow_train':
-        return '6–8 minutes';
-      default:
-        return '';
-    }
+    return WillPopScope(
+      onWillPop: () async {
+        if (_showDurationAccordion.value) {
+          _showDurationAccordion.value = false;
+          return false;
+        }
+        return true;
+      },
+      child: SafeArea(
+        child: SingleChildScrollView(
+          controller: widget.scrollController,
+          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+          padding: EdgeInsets.only(
+            left: 16,
+            right: 16,
+            top: 16,
+            bottom: MediaQuery.of(context).viewInsets.bottom + 16,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'Add Custom Prompt',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+              ),
+              const SizedBox(height: 12),
+              // Duration (Accordion)
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Duration',
+                    style: Theme.of(context).textTheme.titleSmall,
+                  ),
+                  const SizedBox(height: 8),
+                  GestureDetector(
+                    onTap: () {
+                      // Close keyboard before expanding to avoid layout jumps
+                      FocusScope.of(context).unfocus();
+                      _showDurationAccordion.value = !_showDurationAccordion.value;
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).cardColor,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: const Color(0x1F000000)),
+                        boxShadow: const [
+                          BoxShadow(
+                            blurRadius: 8,
+                            spreadRadius: 0,
+                            offset: Offset(0, 2),
+                            color: Color(0x11000000),
+                          ),
+                        ],
+                      ),
+                      child: Row(
+                        children: [
+                          Expanded(child: Text(durationLabel(_duration))),
+                          ValueListenableBuilder<bool>(
+                            valueListenable: _showDurationAccordion,
+                            builder: (_, open, __) => AnimatedRotation(
+                              duration: const Duration(milliseconds: 180),
+                              turns: open ? 0.5 : 0.0,
+                              child: const Icon(Icons.keyboard_arrow_down_rounded),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  // Accordion Panel
+                  const SizedBox(height: 6),
+                  ValueListenableBuilder<bool>(
+                    valueListenable: _showDurationAccordion,
+                    builder: (context, open, _) {
+                      return AnimatedCrossFade(
+                        duration: const Duration(milliseconds: 180),
+                        crossFadeState: open ? CrossFadeState.showFirst : CrossFadeState.showSecond,
+                        firstChild: _DurationAccordionPanel(
+                          selected: _duration,
+                          onSelect: (v) {
+                            _duration = v;
+                            _showDurationAccordion.value = false;
+                            _showDurationError = false;
+                            setState(() {}); // keep current state mgmt
+                          },
+                        ),
+                        secondChild: const SizedBox.shrink(),
+                      );
+                    },
+                  ),
+                  // Error message
+                  if (_showDurationError) ...[
+                    const SizedBox(height: 4),
+                    Padding(
+                      padding: const EdgeInsets.only(left: 16),
+                      child: Text(
+                        'Please select a duration.',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.red.shade700,
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            const SizedBox(height: 14),
+            // 2) Title
+            TextField(
+              controller: widget.titleCtrl,
+              maxLength: 60,
+              textInputAction: TextInputAction.next,
+              onChanged: (_) => setState(() {}), // Rebuild to update button
+              decoration: const InputDecoration(
+                labelText: 'Title (3–60 chars)',
+                border: OutlineInputBorder(),
+                counterText: '',
+              ),
+            ),
+            const SizedBox(height: 12),
+            // 3) Description
+            TextField(
+              controller: widget.contextCtrl,
+              maxLength: 300,
+              minLines: 3,
+              maxLines: 6,
+              onChanged: (_) => setState(() {}), // Rebuild to update button
+              decoration: const InputDecoration(
+                labelText: 'Description / Context (min 10 chars)',
+                border: OutlineInputBorder(),
+                counterText: '',
+              ),
+            ),
+            const SizedBox(height: 24),
+            Row(
+              children: [
+                 Expanded(
+                   child: OutlinedButton(
+                     onPressed: () {
+                       Navigator.of(context).pop();
+                     },
+                     child: const Text('Cancel'),
+                   ),
+                 ),
+                const SizedBox(width: 12),
+                 Expanded(
+                   child: FilledButton(
+                     onPressed: canAdd
+                         ? () {
+                             widget.onSave(durationLabel(_duration));
+                           }
+                         : null,
+                     style: FilledButton.styleFrom(
+                       backgroundColor: canAdd ? null : Colors.grey.shade300,
+                       foregroundColor: canAdd ? null : Colors.grey.shade600,
+                     ),
+                     child: const Text('Add'),
+                   ),
+                 ),
+               ],
+             ),
+           ],
+         ),
+       ),
+      ),
+    );
   }
+}
 
-  IconData _getCategoryIcon() {
-    switch (_oneShortState.selectedCategory) {
-      case 'Love':
-        return Icons.favorite;
-      case 'Comedy':
-        return Icons.sentiment_very_satisfied;
-      case 'Horror':
-        return Icons.psychology;
-      case 'Cultural':
-        return Icons.museum;
-      case 'Adventure':
-        return Icons.explore;
-      case 'Fantasy':
-        return Icons.auto_awesome;
-      case 'Drama':
-        return Icons.theater_comedy;
-      case 'Business':
-        return Icons.business;
-      case 'Sci-Fi':
-        return Icons.rocket_launch;
-      case 'Mystery':
-        return Icons.search;
-      default:
-        return Icons.favorite;
-    }
+/// Duration Accordion Panel Widget
+class _DurationAccordionPanel extends StatelessWidget {
+  final DurationOption selected;
+  final ValueChanged<DurationOption> onSelect;
+
+  const _DurationAccordionPanel({
+    required this.selected,
+    required this.onSelect,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final options = const [
+      DurationOption.d3to5,
+      DurationOption.d5to7,
+      DurationOption.d7to9,
+    ];
+
+    return AnimatedAccordion(
+      headerCustomWidget: const SizedBox.shrink(), // we trigger from the pill above
+      contentBackgroundColor: Theme.of(context).cardColor,
+      contentPadding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
+      contentWidgets: options.map((opt) {
+        final isSelected = opt == selected;
+        return InkWell(
+          onTap: () => onSelect(opt),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(10),
+              color: isSelected
+                  ? Theme.of(context).colorScheme.primary.withOpacity(.08)
+                  : null,
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  isSelected ? Icons.radio_button_checked : Icons.radio_button_off,
+                  size: 20,
+                  color: isSelected
+                      ? Theme.of(context).colorScheme.primary
+                      : Theme.of(context).hintColor,
+                ),
+                const SizedBox(width: 10),
+                Expanded(child: Text(durationLabel(opt))),
+              ],
+            ),
+          ),
+        );
+      }).toList(),
+      isInitiallyExpanded: true, // always visible when mounted
+      animationDuration: const Duration(milliseconds: 160),
+    );
   }
-
-  String _getAssetPathForCategory(String category) {
-    const Map<String, String> assetMap = {
-      'adventure': 'assets/images/one_short/Adventure.jpg',
-      'business': 'assets/images/one_short/Business_Learning.jpg',
-      'comedy': 'assets/images/one_short/comedy.jpg',
-      'cultural': 'assets/images/one_short/cultural.jpg',
-      'drama': 'assets/images/one_short/Drama.jpg',
-      'fantasy': 'assets/images/one_short/Fantasy.jpg',
-      'horror': 'assets/images/one_short/horror.jpg',
-      'love': 'assets/images/one_short/love.jpg',
-      'mystery_detective': 'assets/images/one_short/Mystery_Detective.jpg',
-      'scifi_technology': 'assets/images/one_short/Sci-Fi_Technology.jpg',
-    };
-    return assetMap[category.toLowerCase()] ?? 'assets/images/one_short/love.jpg';
-  }
-
 }
 
 // Old PaperSheetWidget removed - now using reusable component from lib/ui/widgets/paper_sheet_widget.dart
 
-// Entry point function
+// TODO: check usage before removing - Entry point function
+// Currently not called anywhere, but might be used via routes or future features
 void showAddMonoSheet(BuildContext context) {
   showModalBottomSheet(
     context: context,
@@ -908,3 +1030,5 @@ void showAddMonoSheet(BuildContext context) {
     builder: (context) => const _AddMonoSheet(),
   );
 }
+
+

@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../../app/app_shell.dart';
+import 'package:go_router/go_router.dart';
 
 class LoginScreen extends StatelessWidget {
   const LoginScreen({super.key});
@@ -7,24 +7,46 @@ class LoginScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Center(
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          const Text('NIMON', style: TextStyle(fontSize: 28, fontWeight: FontWeight.w700)),
-          const SizedBox(height: 24),
-          FilledButton(
-            onPressed: () => Navigator.of(context).pushReplacement(
-              MaterialPageRoute(builder: (_) => const AppShell()),
+      body: SafeArea(
+        minimum: const EdgeInsets.all(24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const SizedBox(height: 24),
+            Text('Great!', style: Theme.of(context).textTheme.headlineSmall),
+            const Text("Let's get started"),
+            const Spacer(),
+            Card(
+              elevation: 0,
+              surfaceTintColor: Colors.white,
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  children: [
+                    TextField(decoration: const InputDecoration(labelText: 'Email')),
+                    TextField(
+                      decoration: const InputDecoration(labelText: 'Password'),
+                      obscureText: true,
+                    ),
+                    const SizedBox(height: 12),
+                    FilledButton(onPressed: () {}, child: const Text('LOGIN')),
+                    TextButton(
+                      onPressed: () => context.go('/'),
+                      child: const Text('Guest >>'),
+                    ),
+                    const SizedBox(height: 12),
+                    OutlinedButton.icon(
+                      onPressed: () {},
+                      icon: const Icon(Icons.g_mobiledata),
+                      label: const Text('Sign up with Google'),
+                    ),
+                  ],
+                ),
+              ),
             ),
-            child: const Text('Guest >>'),
-          ),
-          const SizedBox(height: 8),
-          OutlinedButton.icon(
-            icon: const Icon(Icons.g_mobiledata, size: 28),
-            onPressed: () => ScaffoldMessenger.of(context)
-                .showSnackBar(const SnackBar(content: Text('Google Sign-In (UI-only)'))),
-            label: const Text('Continue with Google'),
-          ),
-        ]),
+            const Spacer(),
+          ],
+        ),
       ),
     );
   }

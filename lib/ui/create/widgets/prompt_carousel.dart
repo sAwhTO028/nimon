@@ -51,12 +51,12 @@ class _PromptCarouselState extends State<PromptCarousel> {
           : 15);
     }
 
-    // Update current page for dots indicator (excludes custom card)
+    // Update current page for dots indicator
+    // For vertical scrolling, calculate page based on scroll position and estimated card height
     if (_scrollController.hasClients) {
-      final cardWidth = 300.0 + 12.0; // card width + padding
-      // Subtract custom card width to get prompt-only scroll position
-      final promptScrollPos = (_scrollController.position.pixels - cardWidth).clamp(0, double.infinity);
-      final newPage = (promptScrollPos / cardWidth).floor();
+      // Estimate card height: ~100-120dp per card including margin
+      final estimatedCardHeight = 110.0;
+      final newPage = (_scrollController.position.pixels / estimatedCardHeight).floor();
       if (newPage != _currentPage && newPage >= 0) {
         setState(() {
           _currentPage = newPage;
@@ -67,43 +67,39 @@ class _PromptCarouselState extends State<PromptCarousel> {
 
   Widget _buildCustomCard(BuildContext context) {
     final theme = Theme.of(context);
-    return Padding(
-      padding: const EdgeInsets.only(right: 12),
-      child: SizedBox(
-        width: 300,
-        child: InkWell(
-          onTap: widget.onTapCustom,
-          borderRadius: BorderRadius.circular(18),
-          child: Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: theme.colorScheme.surface,
-              borderRadius: BorderRadius.circular(18),
-              border: Border.all(
-                color: theme.colorScheme.primary.withOpacity(0.5),
-                width: 2,
+    return SizedBox(
+      width: double.infinity,
+      child: InkWell(
+        onTap: widget.onTapCustom,
+        borderRadius: BorderRadius.circular(18),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 0, vertical: 16),
+          decoration: BoxDecoration(
+            color: theme.colorScheme.surface,
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(
+              color: theme.colorScheme.primary.withOpacity(0.5),
+              width: 2,
+            ),
+            boxShadow: kElevationToShadow[1],
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.add_circle_outline,
+                color: theme.colorScheme.primary,
+                size: 32,
               ),
-              boxShadow: kElevationToShadow[1],
-            ),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(
-                  Icons.add_circle_outline,
+              const SizedBox(width: 8),
+              Text(
+                '+ Custom Prompt',
+                style: theme.textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w600,
                   color: theme.colorScheme.primary,
-                  size: 32,
                 ),
-                const SizedBox(height: 8),
-                Text(
-                  'Custom Prompt',
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w600,
-                    color: theme.colorScheme.primary,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),
@@ -113,43 +109,34 @@ class _PromptCarouselState extends State<PromptCarousel> {
   @override
   Widget build(BuildContext context) {
     final capped = widget.prompts.take(widget.visibleLimit).toList();
-    
+
     // Page count excludes custom card (only count prompt cards, 5 per page)
     final pageCount = (capped.length / 5.0).ceil();
 
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        SizedBox(
-          height: 180,
+        // Scrollable list inside fixed-height parent
+        Expanded(
           child: ListView.builder(
             controller: _scrollController,
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            itemCount: 1 + capped.length, // 1 for custom card
+            padding: EdgeInsets.zero,
+            physics: const BouncingScrollPhysics(),
+            itemCount: capped.length,
             itemBuilder: (context, index) {
-              if (index == 0) {
-                return _buildCustomCard(context);
-              }
-              final prompt = capped[index - 1]; // Adjust for custom card
-              return Padding(
-                padding: EdgeInsets.only(
-                  right: (index - 1) < capped.length - 1 ? 12 : 0,
-                ),
-                child: SizedBox(
-                  width: 300,
-                  child: OneShortPromptCard(
-                    key: ValueKey('prompt_${prompt.id}'), // Stable key for rebuild optimization
-                    prompt: prompt,
-                    selected: widget.selected?.id == prompt.id,
-                    onTap: () => widget.onSelect(prompt),
-                  ),
-                ),
+              final prompt = capped[index];
+              return OneShortPromptCard(
+                key: ValueKey('prompt_${prompt.id}'),
+                prompt: prompt,
+                selected: widget.selected?.id == prompt.id,
+                onTap: () => widget.onSelect(prompt),
               );
             },
           ),
         ),
-        const SizedBox(height: 8),
-        // Dots indicator (excludes custom card, shows pages of 5 prompts each)
+
+        const SizedBox(height: 12),
+
         if (pageCount > 0)
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -170,6 +157,11 @@ class _PromptCarouselState extends State<PromptCarousel> {
               );
             }),
           ),
+
+        const SizedBox(height: 12),
+
+        // Custom Prompt button (full width)
+        _buildCustomCard(context),
       ],
     );
   }

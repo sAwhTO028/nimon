@@ -8,7 +8,7 @@ import 'package:nimon/features/mono/mono_screen.dart';
 import 'package:nimon/features/settings/settings_screen.dart';
 import 'package:nimon/features/story/story_detail_screen.dart';
 import 'package:nimon/features/writer/writer_screen.dart';
-import 'package:nimon/login/login_screen.dart';
+import 'package:nimon/features/auth/login_screen.dart';
 import 'package:nimon/data/repo_singleton.dart';
 import 'package:nimon/features/learn/learn_hub_screen.dart';
 import 'package:nimon/models/story.dart';
@@ -17,8 +17,6 @@ import 'package:nimon/create_mono/create_mono_screen.dart';
 import 'package:nimon/features/create/create_screen.dart';
 
 void main() => runApp(const ProviderScope(child: NimonApp()));
-
-//final repo = StoryRepoMock();
 
 final _router = GoRouter(
   initialLocation: '/login',

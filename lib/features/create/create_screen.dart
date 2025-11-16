@@ -93,9 +93,10 @@ class _CreateScreenState extends State<CreateScreen> {
   Prompt? _selectedPrompt;
   int _visibleLimit = 5;
   
-  // Vertical pagination state
+  // Horizontal paged list state
   int _promptPage = 0;
   static const int _pageSize = 5;
+  late final PageController _promptPageController;
   final TextEditingController _cpTitle = TextEditingController();
   final TextEditingController _cpContext = TextEditingController();
   String _cpDuration = '5–7 minutes';
@@ -104,6 +105,7 @@ class _CreateScreenState extends State<CreateScreen> {
   void initState() {
     super.initState();
     _oneShortState = const OneShortState();
+    _promptPageController = PageController(viewportFraction: 0.96);
     
     // Set initial tab based on parameter
     switch (widget.initialTab) {
@@ -126,6 +128,7 @@ class _CreateScreenState extends State<CreateScreen> {
     _titleController.dispose();
     _cpTitle.dispose();
     _cpContext.dispose();
+    _promptPageController.dispose();
     super.dispose();
   }
 
@@ -173,6 +176,13 @@ class _CreateScreenState extends State<CreateScreen> {
       _matchingPrompts = const [];
     }
     _promptPage = 0; // reset when filters change
+    if (_promptPageController.hasClients) {
+      _promptPageController.animateToPage(
+        0,
+        duration: const Duration(milliseconds: 240),
+        curve: Curves.easeOut,
+      );
+    }
     setState(() {});
   }
   
@@ -234,7 +244,7 @@ class _CreateScreenState extends State<CreateScreen> {
       context: context,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
       ),
       builder: (context) => Padding(
         padding: EdgeInsets.only(
@@ -748,11 +758,21 @@ class _CreateScreenState extends State<CreateScreen> {
   }
 
   Widget _buildPromptSelector() {
+    // Compute readiness: both level and category must be selected
+    final bool _isReadyForPrompts = 
+        _oneShortState.selectedLevel != null && _oneShortState.selectedCategory != null;
+    
+    // Return nothing when not ready (no container, no spacing)
+    if (!_isReadyForPrompts) {
+      return const SizedBox.shrink();
+    }
+    
+    // Render the full section when ready
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 8), // smaller bottom padding
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(color: const Color(0xFFE6E6E6)),
         boxShadow: [
           BoxShadow(
@@ -768,100 +788,176 @@ class _CreateScreenState extends State<CreateScreen> {
           const Text(
             'Select Prompt',
             style: TextStyle(
-              fontSize: 18,
+              fontSize: 16,
               fontWeight: FontWeight.w600,
               color: Colors.black87,
             ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 8),
           _buildPromptContent(),
         ],
       ),
     );
   }
 
-  Widget _buildPromptContent() {
-    // Empty-state on first load OR when level/category not chosen
-    if (_oneShortState.selectedLevel == null || _oneShortState.selectedCategory == null) {
-      return const EmptyPromptCard();
+  // Helper function to chunk prompts into pages of 5
+  List<List<Prompt>> _chunkBy5(List<Prompt> items) {
+    final List<List<Prompt>> pages = [];
+    for (var i = 0; i < items.length; i += 5) {
+      pages.add(items.sublist(i, i + 5 > items.length ? items.length : i + 5));
     }
+    return pages;
+  }
 
+  Widget _buildPromptContent() {
+    // This method is only called when ready (checked in _buildPromptSelector)
+    final level = _toJlptLevel(_oneShortState.selectedLevel);
+    if (level == null) return const SizedBox.shrink();
+    
+    return _buildPromptList();
+  }
+
+  Widget _buildPromptList() {
     final level = _toJlptLevel(_oneShortState.selectedLevel);
     if (level == null) return const SizedBox.shrink();
 
-    // Calculate pagination with guards
     final total = _matchingPrompts.length;
-    final totalPages = (total / _pageSize).ceil();
-    _promptPage = max(0, min(_promptPage, max(0, totalPages - 1)));
+    final pages = _chunkBy5(_matchingPrompts);
+    final totalPages = pages.length;
 
-    // Empty state
+    // Empty state - still show button below
     if (total == 0) {
-      return _emptyStateWithCustomButton();
-    }
-
-    // Calculate visible prompts with guards
-    final start = _promptPage * _pageSize;
-    final end = min(start + _pageSize, total);
-    final visible = _matchingPrompts.sublist(start, end);
-
-    return Stack(
-      children: [
-        // Base layer: list + pager + button
-        Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              // Prompt list
-              ListView.separated(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                itemCount: visible.length,
-                separatorBuilder: (_, __) => const SizedBox(height: 12),
-                itemBuilder: (_, i) {
-                  final p = visible[i];
-                  final isSelected = _selectedPrompt?.id == p.id;
-                  return _promptCard(p, isSelected);
-                },
-              ),
-              const SizedBox(height: 16),
-              // Pager (Prev • dots • Next)
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  IconButton(
-                    onPressed: _promptPage > 0
-                        ? () => setState(() => _promptPage--)
-                        : null,
-                    icon: const Icon(Icons.chevron_left),
-                  ),
-                  ...List.generate(totalPages, (i) {
-                    return Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 4),
-                      child: Icon(
-                        Icons.circle,
-                        size: 8,
-                        color: i == _promptPage
-                            ? Theme.of(context).colorScheme.primary
-                            : Theme.of(context).colorScheme.outlineVariant,
-                      ),
-                    );
-                  }),
-                  IconButton(
-                    onPressed: (_promptPage + 1) < totalPages
-                        ? () => setState(() => _promptPage++)
-                        : null,
-                    icon: const Icon(Icons.chevron_right),
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _emptyStateWithCustomButton(),
+          // "+ Custom Prompt" button - 8dp from empty message
+          Padding(
+            padding: const EdgeInsets.only(top: 8), // 8dp gap
+            child: buildCustomPromptButton(onTap: _openCustomPromptSheet),
           ),
         ],
-      ),
-              const SizedBox(height: 12),
-              // Bottom fixed +Custom Prompt button
-              OutlinedButton.icon(
-                onPressed: _openCustomPromptSheet,
-                icon: const Icon(Icons.add),
-                label: const Text('+ Custom Prompt'),
-              ),
-            ],
+      );
+    }
+
+    // Ensure current page is valid
+    if (_promptPage >= totalPages) {
+      _promptPage = max(0, totalPages - 1);
+    }
+
+    // Calculate height: 5 cards + 4 separators (no extra padding)
+    // Each card is ~120-130px depending on content, separators are 10px each
+    const cardHeight = 130.0;
+    const separatorHeight = 10.0;
+    final pageHeight = (cardHeight * 5) + (separatorHeight * 4); // exact height, no extra padding
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // Horizontal paged list with peek
+        SizedBox(
+          height: pageHeight,
+          child: PageView.builder(
+            controller: _promptPageController,
+            onPageChanged: (i) {
+              setState(() {
+                _promptPage = i;
+              });
+            },
+            itemCount: totalPages,
+            itemBuilder: (_, pageIndex) {
+              final pageItems = pages[pageIndex];
+              return Padding(
+                padding: const EdgeInsets.only(left: 8, right: 8, bottom: 0), // show peek, no bottom padding
+                child: ListView.separated(
+                  physics: const BouncingScrollPhysics(),
+                  shrinkWrap: true,
+                  padding: const EdgeInsets.only(top: 8), // small top padding only
+                  itemCount: pageItems.length,
+                  separatorBuilder: (_, __) => const SizedBox(height: 10),
+                  itemBuilder: (_, i) {
+                    final p = pageItems[i];
+                    final isSelected = _selectedPrompt?.id == p.id;
+                    return _promptCard(p, isSelected);
+                  },
+                ),
+              );
+            },
           ),
+        ),
+        // Pager (Prev • dots • Next) - 8dp from last card
+        Padding(
+          padding: const EdgeInsets.only(top: 8), // 8dp from last card
+          child: SizedBox(
+            height: 32,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                IconButton(
+                  tooltip: 'Previous 5 prompts',
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                  visualDensity: VisualDensity.compact,
+                  onPressed: _promptPage > 0
+                      ? () => _promptPageController.previousPage(
+                            duration: const Duration(milliseconds: 240),
+                            curve: Curves.easeOut,
+                          )
+                      : null,
+                  icon: Icon(
+                    Icons.chevron_left,
+                    size: 22,
+                    color: _promptPage > 0
+                        ? Theme.of(context).colorScheme.primary
+                        : Colors.grey.shade300,
+                  ),
+                ),
+                const SizedBox(width: 6),
+                ...List.generate(totalPages, (i) {
+                  final isActive = i == _promptPage;
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 3),
+                    child: Container(
+                      width: isActive ? 8 : 6,
+                      height: isActive ? 8 : 6,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: isActive
+                            ? Theme.of(context).colorScheme.primary
+                            : Theme.of(context).colorScheme.outlineVariant.withOpacity(0.4),
+                      ),
+                    ),
+                  );
+                }),
+                const SizedBox(width: 6),
+                IconButton(
+                  tooltip: 'Next 5 prompts',
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                  visualDensity: VisualDensity.compact,
+                  onPressed: _promptPage < totalPages - 1
+                      ? () => _promptPageController.nextPage(
+                            duration: const Duration(milliseconds: 240),
+                            curve: Curves.easeOut,
+                          )
+                      : null,
+                  icon: Icon(
+                    Icons.chevron_right,
+                    size: 22,
+                    color: _promptPage < totalPages - 1
+                        ? Theme.of(context).colorScheme.primary
+                        : Colors.grey.shade300,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        // "+ Custom Prompt" button - 8dp from pager
+        Padding(
+          padding: const EdgeInsets.only(top: 8), // 8dp gap from pager
+          child: buildCustomPromptButton(onTap: _openCustomPromptSheet),
+        ),
       ],
     );
   }
@@ -877,13 +973,13 @@ class _CreateScreenState extends State<CreateScreen> {
               color: selected
                   ? Theme.of(context).colorScheme.primary
                   : const Color(0xFFE6E6E6),
-              width: selected ? 2 : 1,
+              width: selected ? 1.5 : 1,
           ),
           boxShadow: [
             BoxShadow(
-                color: Colors.black.withOpacity(0.06),
-                blurRadius: 10,
-                offset: const Offset(0, 4),
+                color: Colors.black.withOpacity(0.02),
+                blurRadius: 3,
+                offset: const Offset(0, 1),
             ),
           ],
         ),
@@ -891,7 +987,7 @@ class _CreateScreenState extends State<CreateScreen> {
             onTap: () => _setPrompt(p),
             borderRadius: BorderRadius.circular(16),
             child: Padding(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(14),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -902,7 +998,7 @@ class _CreateScreenState extends State<CreateScreen> {
                         child: Text(
                           p.title,
                           style: TextStyle(
-                fontSize: 16,
+                fontSize: 15,
                 fontWeight: FontWeight.w600,
                             color: selected
                                 ? Theme.of(context).colorScheme.primary
@@ -913,26 +1009,26 @@ class _CreateScreenState extends State<CreateScreen> {
                     ],
                   ),
                   if (p.context.isNotEmpty) ...[
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 6),
             Text(
                       p.context,
               style: TextStyle(
-                fontSize: 14,
+                fontSize: 13,
                         color: Colors.black54,
-                height: 1.4,
+                height: 1.35,
               ),
-                      maxLines: 3,
+                      maxLines: 2,
               overflow: TextOverflow.ellipsis,
             ),
                   ],
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 8),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
             Text(
                         p.duration,
               style: TextStyle(
-                fontSize: 12,
+                fontSize: 11,
                           color: Colors.black54,
                 fontWeight: FontWeight.w500,
               ),
@@ -973,29 +1069,19 @@ class _CreateScreenState extends State<CreateScreen> {
   }
 
   Widget _emptyStateWithCustomButton() {
-    return Column(
-      children: [
-        Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: Theme.of(context).dividerColor,
-            ),
-            color: Theme.of(context).colorScheme.surface,
-          ),
-          child: Text(
-            'No prompts for the selected level & category. Try another combo or add a custom prompt.',
-            style: Theme.of(context).textTheme.bodyMedium,
-          ),
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: Theme.of(context).dividerColor,
         ),
-        const SizedBox(height: 12),
-        OutlinedButton.icon(
-          onPressed: _openCustomPromptSheet,
-          icon: const Icon(Icons.add),
-          label: const Text('+ Custom Prompt'),
-        ),
-      ],
+        color: Theme.of(context).colorScheme.surface,
+      ),
+      child: Text(
+        'No prompts for the selected level & category. Try another combo or add a custom prompt.',
+        style: Theme.of(context).textTheme.bodyMedium,
+      ),
     );
   }
   
@@ -1052,6 +1138,41 @@ class _CreateScreenState extends State<CreateScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget buildCustomPromptButton({required VoidCallback onTap, Key? key}) {
+    return InkWell(
+      key: key,
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          color: Theme.of(context).cardColor,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: const Color(0x1F000000)),
+          boxShadow: const [
+            BoxShadow(
+              blurRadius: 8,
+              offset: Offset(0, 2),
+              color: Color(0x11000000),
+            ),
+          ],
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.max,
+          children: [
+            const Icon(Icons.add, size: 20),
+            const SizedBox(width: 8),
+            Text(
+              'Custom Prompt',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+          ],
+        ),
       ),
     );
   }
