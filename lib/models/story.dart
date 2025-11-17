@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'story_category.dart';
 
 enum BlockType { narration, dialog }
 
@@ -66,6 +67,8 @@ class Story {
   final String jlptLevel; // N5..N1
   final List<String> tags;
   final int likes;
+  final StoryCategory? category; // Auto-detected or manually selected category
+  final StorySourceType? sourceType; // How the story was created
 
   const Story({
     required this.id,
@@ -75,6 +78,14 @@ class Story {
     required this.jlptLevel,
     required this.tags,
     required this.likes,
+    this.category,
+    this.sourceType,
   });
+}
+
+/// Source type for stories (how they were created)
+enum StorySourceType {
+  manual, // Created manually by user
+  ai, // Generated from YouTube URL via AI
 }
 

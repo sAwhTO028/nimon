@@ -2,7 +2,11 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../ui/create/widgets/one_short_paper_card.dart';
+import '../../create_mono/story_series/story_series_screen.dart';
 import '../../data/prompt_repository.dart';
+import '../../models/ai_stories.dart';
+import '../../models/story_category.dart';
+import '../../data/ai_stories_repository.dart';
 
 // Import OneShortState and extension from add_mono_bottom_sheet
 class OneShortState {
@@ -69,7 +73,7 @@ extension OneShortStateSteps on OneShortState {
   }
 }
 
-enum CreateTab { oneShort, storySeries, promptEpisode }
+enum CreateTab { oneShort, storySeries, aiStories }
 
 class CreateScreen extends StatefulWidget {
   final String? initialTab;
@@ -82,11 +86,23 @@ class CreateScreen extends StatefulWidget {
 
 class _CreateScreenState extends State<CreateScreen> {
   late CreateTab _selectedTab;
+  final GlobalKey<StorySeriesScreenState> _storySeriesKey = GlobalKey();
   late OneShortState _oneShortState;
   final TextEditingController _titleController = TextEditingController();
 
   final List<String> _jlptLevels = ['N5', 'N4', 'N3', 'N2', 'N1'];
-  final List<String> _categories = ['Love', 'Comedy', 'Horror', 'Cultural', 'Adventure', 'Fantasy', 'Drama', 'Business', 'Sci-Fi', 'Mystery'];
+  final List<String> _categories = [
+    'Love',
+    'Comedy',
+    'Horror',
+    'Cultural',
+    'Adventure',
+    'Fantasy',
+    'Drama',
+    'Business',
+    'Sci-Fi',
+    'Mystery'
+  ];
   
   // Repository-driven prompt matching
   List<Prompt> _matchingPrompts = const [];
@@ -115,8 +131,9 @@ class _CreateScreenState extends State<CreateScreen> {
       case 'series':
         _selectedTab = CreateTab.storySeries;
         break;
-      case 'promptEpisode':
-        _selectedTab = CreateTab.promptEpisode;
+      case 'aiStories':
+      case 'promptEpisode': // Legacy support
+        _selectedTab = CreateTab.aiStories;
         break;
       default:
         _selectedTab = CreateTab.oneShort;
@@ -140,11 +157,16 @@ class _CreateScreenState extends State<CreateScreen> {
 
   JlptLevel? _toJlptLevel(String? s) {
     switch (s) {
-      case 'N5': return JlptLevel.n5;
-      case 'N4': return JlptLevel.n4;
-      case 'N3': return JlptLevel.n3;
-      case 'N2': return JlptLevel.n2;
-      case 'N1': return JlptLevel.n1;
+      case 'N5':
+        return JlptLevel.n5;
+      case 'N4':
+        return JlptLevel.n4;
+      case 'N3':
+        return JlptLevel.n3;
+      case 'N2':
+        return JlptLevel.n2;
+      case 'N1':
+        return JlptLevel.n1;
     }
     return null;
   }
@@ -185,8 +207,6 @@ class _CreateScreenState extends State<CreateScreen> {
     }
     setState(() {});
   }
-  
-  
 
   void _setLevel(String level) {
     setState(() {
@@ -204,7 +224,8 @@ class _CreateScreenState extends State<CreateScreen> {
 
   void _setCategory(String category) {
     // Toggle: if same category is selected, deselect it
-    final newCategory = _oneShortState.selectedCategory == category ? null : category;
+    final newCategory =
+        _oneShortState.selectedCategory == category ? null : category;
     setState(() {
       _oneShortState = _oneShortState.copyWith(
         selectedCategory: newCategory,
@@ -320,7 +341,8 @@ class _CreateScreenState extends State<CreateScreen> {
                           if (c.length < 10) {
                             ScaffoldMessenger.of(context).showSnackBar(
                               const SnackBar(
-                                content: Text('Description must be at least 10 characters.'),
+                                content: Text(
+                                    'Description must be at least 10 characters.'),
                               ),
                             );
                             return;
@@ -337,7 +359,8 @@ class _CreateScreenState extends State<CreateScreen> {
                           
                           Navigator.pop(context);
                           ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Custom prompt saved!')),
+                            const SnackBar(
+                                content: Text('Custom prompt saved!')),
                           );
                         },
                         child: const Text('Add'),
@@ -354,11 +377,30 @@ class _CreateScreenState extends State<CreateScreen> {
   }
 
   void _handleCreate() {
+    if (_selectedTab == CreateTab.oneShort) {
     if (_oneShortState.isComplete) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Created One-Short!')),
       );
       context.pop();
+      }
+    } else if (_selectedTab == CreateTab.storySeries) {
+      final storySeriesState = _storySeriesKey.currentState;
+      if (storySeriesState != null) {
+        final canCreate = storySeriesState.activeCardIndex == 0
+            ? storySeriesState.canCreateNewSeries
+            : storySeriesState.canCreateJoinSeries;
+        if (canCreate) {
+          // TODO: Implement actual submit logic
+          debugPrint('Creating Story-Series...');
+          debugPrint(
+              'Mode: ${storySeriesState.activeCardIndex == 0 ? "New Series" : "Join by Code"}');
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Created Story-Series!')),
+          );
+          context.pop();
+        }
+      }
     }
   }
 
@@ -401,7 +443,8 @@ class _CreateScreenState extends State<CreateScreen> {
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(8),
                       ),
-                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 24, vertical: 12),
                     ),
                     child: const Text(
                       'CREATE',
@@ -410,6 +453,43 @@ class _CreateScreenState extends State<CreateScreen> {
                   ),
                 ),
               ),
+            )
+          else if (_selectedTab == CreateTab.storySeries)
+            Builder(
+              builder: (context) {
+                final storySeriesState = _storySeriesKey.currentState;
+                final canCreate = storySeriesState != null
+                    ? (storySeriesState.activeCardIndex == 0
+                        ? storySeriesState.canCreateNewSeries
+                        : storySeriesState.canCreateJoinSeries)
+                    : false;
+                return Padding(
+                  padding: const EdgeInsets.only(right: 16),
+                  child: Center(
+                    child: SizedBox(
+                      height: 40,
+                      child: FilledButton(
+                        onPressed: canCreate ? _handleCreate : null,
+                        style: FilledButton.styleFrom(
+                          backgroundColor:
+                              canCreate ? Colors.blue : Colors.grey.shade300,
+                          foregroundColor:
+                              canCreate ? Colors.white : Colors.grey.shade600,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 24, vertical: 12),
+                        ),
+                        child: const Text(
+                          'CREATE',
+                          style: TextStyle(fontWeight: FontWeight.w600),
+                        ),
+                      ),
+                    ),
+                  ),
+                );
+              },
             ),
         ],
       ),
@@ -421,8 +501,8 @@ class _CreateScreenState extends State<CreateScreen> {
               index: _selectedTab.index,
               children: [
                 _buildOneShortContent(),
-                _buildPlaceholder('Story-Series'),
-                _buildPlaceholder('Prompt-Episode'),
+                StorySeriesScreen(key: _storySeriesKey),
+                _buildAiStoriesContent(),
               ],
             ),
           ),
@@ -456,9 +536,9 @@ class _CreateScreenState extends State<CreateScreen> {
           ),
           Expanded(
             child: _buildSegmentedButton(
-              'Prompt-Episode',
-              CreateTab.promptEpisode,
-              _selectedTab == CreateTab.promptEpisode,
+              'AI-Stories',
+              CreateTab.aiStories,
+              _selectedTab == CreateTab.aiStories,
             ),
           ),
         ],
@@ -474,13 +554,15 @@ class _CreateScreenState extends State<CreateScreen> {
         decoration: BoxDecoration(
           color: isSelected ? Colors.white : Colors.transparent,
           borderRadius: BorderRadius.circular(10),
-          boxShadow: isSelected ? [
+          boxShadow: isSelected
+              ? [
             BoxShadow(
               color: Colors.black.withOpacity(0.1),
               blurRadius: 4,
               offset: const Offset(0, 2),
             ),
-          ] : null,
+                ]
+              : null,
         ),
         child: Text(
           label,
@@ -507,7 +589,8 @@ class _CreateScreenState extends State<CreateScreen> {
               child: AnimatedSwitcher(
                 duration: const Duration(milliseconds: 180),
               child: OneShortPaperCard(
-                  key: ValueKey('${_oneShortState.selectedLevel}_${_oneShortState.selectedCategory}_${_oneShortState.selectedPromptId}_${_oneShortState.title}'),
+                  key: ValueKey(
+                      '${_oneShortState.selectedLevel}_${_oneShortState.selectedCategory}_${_oneShortState.selectedPromptId}_${_oneShortState.title}'),
                   data: OneShortPaper(
                     jlpt: _oneShortState.selectedLevel ?? '',
                     title: _oneShortState.title,
@@ -633,7 +716,8 @@ class _CreateScreenState extends State<CreateScreen> {
                   borderSide: const BorderSide(color: Colors.blue, width: 2),
                 ),
                 // Material Design 3: 56dp height with perfect vertical centering
-                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
                 isDense: true,
                 // Ensure consistent baseline alignment
                 alignLabelWithHint: false,
@@ -713,7 +797,8 @@ class _CreateScreenState extends State<CreateScreen> {
                 return GestureDetector(
                   onTap: () => _setCategory(category),
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                     decoration: BoxDecoration(
                       color: isSelected ? Colors.blue : Colors.grey.shade100,
                       borderRadius: BorderRadius.circular(10),
@@ -741,8 +826,8 @@ class _CreateScreenState extends State<CreateScreen> {
 
   Widget _buildPromptSelector() {
     // Compute readiness: both level and category must be selected
-    final bool _isReadyForPrompts = 
-        _oneShortState.selectedLevel != null && _oneShortState.selectedCategory != null;
+    final bool _isReadyForPrompts = _oneShortState.selectedLevel != null &&
+        _oneShortState.selectedCategory != null;
     
     // Return nothing when not ready (no container, no spacing)
     if (!_isReadyForPrompts) {
@@ -751,7 +836,8 @@ class _CreateScreenState extends State<CreateScreen> {
     
     // Render the full section when ready
     return Container(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 8), // smaller bottom padding
+      padding:
+          const EdgeInsets.fromLTRB(16, 12, 16, 8), // smaller bottom padding
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
@@ -836,14 +922,14 @@ class _CreateScreenState extends State<CreateScreen> {
     // Horizontal PageView with 3 cards per page
     return SizedBox(
       height: promptsAreaHeight,
-      child: PageView.builder(
-        controller: _promptPageController,
+          child: PageView.builder(
+            controller: _promptPageController,
         itemCount: pageCount,
         onPageChanged: (index) {
-          setState(() {
+              setState(() {
             _promptPage = index;
-          });
-        },
+              });
+            },
         itemBuilder: (context, pageIndex) {
           final start = pageIndex * _pageSize;
           final end = (start + _pageSize < total) ? start + _pageSize : total;
@@ -854,15 +940,14 @@ class _CreateScreenState extends State<CreateScreen> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               for (int i = 0; i < pageItems.length; i++) ...[
-                _promptCard(pageItems[i],
-                    _selectedPrompt?.id == pageItems[i].id),
-                if (i < pageItems.length - 1)
-                  const SizedBox(height: 12.0),
+                _promptCard(
+                    pageItems[i], _selectedPrompt?.id == pageItems[i].id),
+                if (i < pageItems.length - 1) const SizedBox(height: 12.0),
               ],
             ],
-          );
-        },
-      ),
+              );
+            },
+          ),
     );
   }
 
@@ -874,23 +959,23 @@ class _CreateScreenState extends State<CreateScreen> {
     if (pageCount <= 1) return const SizedBox.shrink();
 
     return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisAlignment: MainAxisAlignment.center,
       children: List.generate(pageCount, (index) {
         final isActive = index == _promptPage;
-        return Padding(
+                  return Padding(
           padding: const EdgeInsets.symmetric(horizontal: 4),
-          child: Container(
-            width: isActive ? 8 : 6,
+                    child: Container(
+                      width: isActive ? 8 : 6,
             height: 6,
-            decoration: BoxDecoration(
-              color: isActive
-                  ? Theme.of(context).colorScheme.primary
+                      decoration: BoxDecoration(
+                        color: isActive
+                            ? Theme.of(context).colorScheme.primary
                   : Colors.grey.shade300,
               borderRadius: BorderRadius.circular(3),
-            ),
-          ),
-        );
-      }),
+                      ),
+                    ),
+                  );
+                }),
     );
   }
 
@@ -899,34 +984,34 @@ class _CreateScreenState extends State<CreateScreen> {
       width: double.infinity,
       height: 116, // Fixed height for all prompt cards
       child: Stack(
-        children: [
-          Container(
-            decoration: BoxDecoration(
-              color: selected ? const Color(0xFFEEF5FF) : Colors.white,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(
-                color: selected
-                    ? Theme.of(context).colorScheme.primary
-                    : const Color(0xFFE6E6E6),
-                width: selected ? 1.5 : 1,
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.02),
-                  blurRadius: 3,
-                  offset: const Offset(0, 1),
-                ),
-              ],
+      children: [
+        Container(
+        decoration: BoxDecoration(
+            color: selected ? const Color(0xFFEEF5FF) : Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+              color: selected
+                  ? Theme.of(context).colorScheme.primary
+                  : const Color(0xFFE6E6E6),
+              width: selected ? 1.5 : 1,
+          ),
+          boxShadow: [
+            BoxShadow(
+                color: Colors.black.withOpacity(0.02),
+                blurRadius: 3,
+                offset: const Offset(0, 1),
             ),
-            child: InkWell(
-              onTap: () => _setPrompt(p),
-              borderRadius: BorderRadius.circular(16),
-              child: Padding(
-                padding: const EdgeInsets.all(14),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+          ],
+        ),
+          child: InkWell(
+            onTap: () => _setPrompt(p),
+            borderRadius: BorderRadius.circular(16),
+            child: Padding(
+              padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
+          children: [
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -970,7 +1055,8 @@ class _CreateScreenState extends State<CreateScreen> {
               ),
             ),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
                           color: Theme.of(context).colorScheme.surfaceVariant,
                           borderRadius: BorderRadius.circular(12),
@@ -988,8 +1074,8 @@ class _CreateScreenState extends State<CreateScreen> {
           ],
         ),
       ),
-            ),
           ),
+        ),
         if (selected)
           Positioned(
             right: 10,
@@ -1001,7 +1087,7 @@ class _CreateScreenState extends State<CreateScreen> {
             ),
           ),
       ],
-    ),
+      ),
     );
   }
 
@@ -1021,7 +1107,6 @@ class _CreateScreenState extends State<CreateScreen> {
       ),
     );
   }
-  
 
   Widget _buildTitleInput() {
     return Container(
@@ -1071,7 +1156,8 @@ class _CreateScreenState extends State<CreateScreen> {
                 borderRadius: BorderRadius.circular(8),
                 borderSide: const BorderSide(color: Colors.blue),
               ),
-              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             ),
           ),
         ],
@@ -1155,6 +1241,20 @@ class _CreateScreenState extends State<CreateScreen> {
     );
   }
 
+  Widget _buildAiStoriesContent() {
+    return Center(
+      child: SingleChildScrollView(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 480),
+            child: const _AiStoriesCard(),
+          ),
+        ),
+      ),
+    );
+  }
+
   String _getPromptTitle() {
     return _selectedPrompt?.title ?? '';
   }
@@ -1222,7 +1322,411 @@ class _CreateScreenState extends State<CreateScreen> {
       'mystery_detective': 'assets/images/one_short/Mystery_Detective.jpg',
       'scifi_technology': 'assets/images/one_short/Sci-Fi_Technology.jpg',
     };
-    return assetMap[category.toLowerCase()] ?? 'assets/images/one_short/love.jpg';
+    return assetMap[category.toLowerCase()] ??
+        'assets/images/one_short/love.jpg';
+  }
+}
+
+/// AI Stories Card widget for YouTube URL input
+class _AiStoriesCard extends StatefulWidget {
+  const _AiStoriesCard();
+
+  @override
+  State<_AiStoriesCard> createState() => _AiStoriesCardState();
+}
+
+class _AiStoriesCardState extends State<_AiStoriesCard> {
+  final TextEditingController _urlController = TextEditingController();
+  final AiStoriesRepository _repository = MockAiStoriesRepository();
+  
+  static const List<String> _jlptLevels = ['N5', 'N4', 'N3', 'N2', 'N1'];
+  String _selectedLevel = 'N4'; // Default to N4
+  
+  StoryCategory? _detectedCategory;
+  bool _isGenerating = false;
+  String? _errorMessage;
+
+  @override
+  void dispose() {
+    _urlController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _onGenerateStory() async {
+    final url = _urlController.text.trim();
+    if (url.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please enter a YouTube URL.'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
+
+    setState(() {
+      _isGenerating = true;
+      _errorMessage = null;
+      _detectedCategory = null;
+    });
+
+    try {
+      final request = AiStoriesGenerateRequest(
+        youtubeUrl: url,
+        targetLevel: _selectedLevel,
+        autoCategory: true,
+      );
+
+      final response = await _repository.generateStory(request);
+
+      if (!mounted) return;
+
+      setState(() {
+        _detectedCategory = response.category;
+        _isGenerating = false;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Story generated! Category: ${response.category.displayName}',
+          ),
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        _isGenerating = false;
+        _errorMessage = 'Failed to generate story: ${e.toString()}';
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(_errorMessage ?? 'Failed to generate story.'),
+          backgroundColor: Colors.red,
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(24),
+      ),
+      color: Theme.of(context).colorScheme.surface,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(24, 32, 24, 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // Icon section
+            Center(
+              child: Column(
+                children: [
+                  Container(
+                    width: 56,
+                    height: 56,
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.primaryContainer,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      Icons.auto_awesome,
+                      size: 32,
+                      color: Theme.of(context).colorScheme.onPrimaryContainer,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    'AI Stories',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.grey.shade700,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 24),
+            // Title
+            Text(
+              'Paste a YouTube URL',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.w700,
+                color: Colors.black87,
+              ),
+            ),
+            const SizedBox(height: 8),
+            // Subtitle
+            Text(
+              'We\'ll turn a short Japanese video into a story episode.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 14,
+                color: Colors.grey.shade600,
+                height: 1.4,
+              ),
+              maxLines: 2,
+              softWrap: true,
+              overflow: TextOverflow.ellipsis,
+            ),
+            const SizedBox(height: 16),
+            // Level and category display
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                // Level pill
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.primaryContainer,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    'Level: $_selectedLevel',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                      color: Theme.of(context).colorScheme.onPrimaryContainer,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                // Detected category pill
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: _detectedCategory != null
+                        ? Theme.of(context).colorScheme.secondaryContainer
+                        : Colors.grey.shade100,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    _detectedCategory != null
+                        ? 'Category: ${_detectedCategory!.displayName}'
+                        : 'Category: —',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                      color: _detectedCategory != null
+                          ? Theme.of(context).colorScheme.onSecondaryContainer
+                          : Colors.grey.shade600,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 24),
+            // Select your level
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: const Color(0xFFE6E6E6)),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.05),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Select your level',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.black87,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    height: 56,
+                    child: DropdownButtonFormField<String>(
+                      value: _selectedLevel,
+                      onChanged: (value) {
+                        if (value != null) {
+                          setState(() {
+                            _selectedLevel = value;
+                          });
+                        }
+                      },
+                      decoration: InputDecoration(
+                        hintText: 'Choose JLPT level',
+                        hintStyle: TextStyle(
+                          color: Colors.grey.shade400,
+                          fontSize: 16,
+                        ),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: const BorderSide(color: Color(0xFFE6E6E6)),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: const BorderSide(color: Color(0xFFE6E6E6)),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: const BorderSide(color: Colors.blue, width: 2),
+                        ),
+                        contentPadding:
+                            const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                        isDense: true,
+                      ),
+                      isExpanded: true,
+                      icon: const Icon(Icons.arrow_drop_down, color: Colors.grey),
+                      iconSize: 24,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        color: Colors.black87,
+                        height: 1.0,
+                      ),
+                      itemHeight: 48,
+                      items: _jlptLevels.map((String level) {
+                        return DropdownMenuItem<String>(
+                          value: level,
+                          child: Container(
+                            height: 48,
+                            alignment: Alignment.centerLeft,
+                            child: Text(
+                              level,
+                              style: const TextStyle(
+                                fontSize: 16,
+                                color: Colors.black87,
+                              ),
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 24),
+            // URL input
+            TextField(
+              controller: _urlController,
+              decoration: InputDecoration(
+                labelText: 'Paste URL',
+                hintText: 'https://youtube.com/watch?v=...',
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: const BorderSide(color: Color(0xFFE6E6E6)),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: const BorderSide(color: Color(0xFFE6E6E6)),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: const BorderSide(color: Colors.blue, width: 2),
+                ),
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              ),
+            ),
+            const SizedBox(height: 24),
+            // Notes section
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Notes',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.grey.shade700,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                _buildNoteItem('Only public YouTube videos are supported.'),
+                const SizedBox(height: 6),
+                _buildNoteItem('Maximum video length: 10 minutes per episode.'),
+                const SizedBox(height: 6),
+                _buildNoteItem(
+                    'Recently uploaded videos may not be available immediately.'),
+              ],
+            ),
+            const SizedBox(height: 24),
+            // Generate Story button
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton(
+                onPressed: _isGenerating ? null : _onGenerateStory,
+                style: FilledButton.styleFrom(
+                  backgroundColor: Colors.blue,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                ),
+                child: _isGenerating
+                    ? const SizedBox(
+                        height: 20,
+                        width: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                        ),
+                      )
+                    : const Text(
+                        'Generate Story',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildNoteItem(String text) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(top: 6, right: 8),
+          child: Text(
+            '•',
+            style: TextStyle(
+              fontSize: 12,
+              color: Colors.grey.shade600,
+            ),
+          ),
+        ),
+        Expanded(
+          child: Text(
+            text,
+            style: TextStyle(
+              fontSize: 12,
+              color: Colors.grey.shade600,
+              height: 1.4,
+            ),
+            softWrap: true,
+          ),
+        ),
+      ],
+    );
   }
 }
 
@@ -1343,7 +1847,7 @@ class _DurationAccordionSelectorState
     extends State<_DurationAccordionSelector> {
   bool _isExpanded = false;
   late CustomPromptDuration _selectedDuration;
-  
+
   static const List<CustomPromptDuration> _durationOptions = [
     CustomPromptDuration.threeToFive,
     CustomPromptDuration.fiveToSeven,
@@ -1451,12 +1955,12 @@ class _DurationAccordionSelectorState
                       if (newSelection.isNotEmpty) {
                         final selectedValue = newSelection.first;
                         final durationString = _durationToString(selectedValue);
-                        
+
                         setState(() {
                           _selectedDuration = selectedValue;
                           _isExpanded = false;
                         });
-                        
+
                         // Update parent form value
                         widget.onDurationSelected(durationString);
                       }
