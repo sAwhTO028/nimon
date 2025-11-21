@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'dart:ui';
 import '../../../models/story.dart';
 import '../../../models/episode_meta.dart';
+import '../../../data/episode_mock_data.dart'; // Canonical mock data source
 import 'package:nimon/ui/ui.dart';
 import '../../reader/reader_screen.dart';
 
@@ -364,7 +365,7 @@ void _showEpisodeBottomSheet(BuildContext context, Episode episode) {
     category: 'Love',
     preview: episode.preview.isNotEmpty 
         ? episode.preview 
-        : 'Rain was falling softly in Kyoto. Aya stood under her umbrella. (Ep ${episode.index})',
+        : getMockEpisodePreview(episode.index), // Use canonical mock preview
   );
   
   showEpisodeBottomSheetFromMeta(

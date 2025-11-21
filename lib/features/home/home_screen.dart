@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'dart:ui';
 import 'package:go_router/go_router.dart';
 import 'package:nimon/features/reader/reader_screen.dart';
+import 'package:nimon/features/reader/episode_reader_screen.dart';
 import '../../data/story_repo.dart';
+import '../../data/episode_mock_data.dart'; // Canonical mock data source
 import '../../models/story.dart';
 import '../../models/episode_meta.dart';
 import '../../models/section_key.dart';
@@ -127,7 +129,12 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
       Navigator.push(
         context,
-        MaterialPageRoute(builder: (_) => ReaderScreen(episode: best)),
+        MaterialPageRoute(
+          builder: (_) => EpisodeReaderScreen(
+            episode: best,
+            storyId: s.id,
+          ),
+        ),
       );
     } catch (e) {
       if (!context.mounted) return;
@@ -144,7 +151,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   Future<void> _openEpisode(BuildContext context, Episode episode) async {
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (_) => ReaderScreen(episode: episode)),
+      MaterialPageRoute(
+        builder: (_) => EpisodeReaderScreen(episode: episode),
+      ),
     );
   }
 
@@ -749,7 +758,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             category: defaultCategory,
             preview: episode.preview.isNotEmpty 
                 ? episode.preview 
-                : 'Rain was falling softly in Kyoto. Aya stood under her umbrella. (Ep ${episode.index})',
+                : getMockEpisodePreview(episode.index), // Use canonical mock preview
           );
           
           showEpisodeBottomSheetFromMeta(

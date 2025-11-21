@@ -7,6 +7,7 @@ import '../models/filter_state.dart';
 import '../models/oneshot.dart';
 import 'story_repo.dart';
 import '../models/story.dart';
+import 'episode_mock_data.dart'; // CANONICAL mock data source
 
 final _uuid = const Uuid();
 
@@ -77,17 +78,16 @@ List<Episode> _genEpisodes() {
         index: e,
         title: 'Episode $e: ${_getEpisodeTitle(e)}',
         blocks: [
+          // Use canonical mock data from episode_mock_data.dart
           EpisodeBlock(
             type: BlockType.narration,
-            text:
-            'Rain was falling softly in Kyoto. Aya stood under her umbrella. (Ep $e)',
+            text: getMockEpisodeText(e), // Long multi-page content
           ),
           EpisodeBlock(type: BlockType.dialog, speaker: 'YAMADA', text: 'あ… かさ を わすれました。'),
           EpisodeBlock(type: BlockType.dialog, speaker: 'AYANA', text: 'いっしょに いきますか。'),
           EpisodeBlock(
             type: BlockType.narration,
-            text:
-            'Aya tilted her umbrella, covering him too. Their shoulders touched slightly.',
+            text: 'Aya tilted her umbrella, covering him too. Their shoulders touched slightly.',
           ),
         ],
       ));

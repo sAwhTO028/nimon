@@ -4,43 +4,43 @@ import 'package:nimon/data/story_repo.dart';
 import 'package:nimon/models/story.dart';
 import 'package:nimon/ui/ui.dart';
 
-/// Tab enum for Mono profile
-enum MonoTab { oneShort, storySeries, aiStories }
+/// Tab enum for profile content types
+enum ProfileTab { oneShort, storySeries, aiStories }
 
-/// Profile state model for Mono screen
-class MonoProfileState {
+/// Profile state model
+class ProfileState {
   final int uploadedCount;
   final int processingCount;
-  final MonoTab activeTab;
+  final ProfileTab activeTab;
 
-  const MonoProfileState({
+  const ProfileState({
     this.uploadedCount = 0,
     this.processingCount = 0,
-    this.activeTab = MonoTab.oneShort,
+    this.activeTab = ProfileTab.oneShort,
   });
 
-  MonoProfileState copyWith({
+  ProfileState copyWith({
     int? uploadedCount,
     int? processingCount,
-    MonoTab? activeTab,
+    ProfileTab? activeTab,
   }) =>
-      MonoProfileState(
+      ProfileState(
         uploadedCount: uploadedCount ?? this.uploadedCount,
         processingCount: processingCount ?? this.processingCount,
         activeTab: activeTab ?? this.activeTab,
       );
 }
 
-class MonoScreen extends StatefulWidget {
+class ProfileScreen extends StatefulWidget {
   final StoryRepo repo;
-  const MonoScreen({super.key, required this.repo});
+  const ProfileScreen({super.key, required this.repo});
 
   @override
-  State<MonoScreen> createState() => _MonoScreenState();
+  State<ProfileScreen> createState() => _ProfileScreenState();
 }
 
-class _MonoScreenState extends State<MonoScreen> with SingleTickerProviderStateMixin {
-  late MonoProfileState _state;
+class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProviderStateMixin {
+  late ProfileState _state;
   late Future<List<Story>> _storiesFuture;
   late PageController _pageController;
   late TabController _tabController;
@@ -48,7 +48,7 @@ class _MonoScreenState extends State<MonoScreen> with SingleTickerProviderStateM
   @override
   void initState() {
     super.initState();
-    _state = const MonoProfileState();
+    _state = const ProfileState();
     _storiesFuture = widget.repo.getStories();
     _pageController = PageController();
     _tabController = TabController(length: 2, vsync: this);
@@ -76,7 +76,7 @@ class _MonoScreenState extends State<MonoScreen> with SingleTickerProviderStateM
     }
   }
 
-  void _handleTabChanged(MonoTab tab) {
+  void _handleTabChanged(ProfileTab tab) {
     setState(() {
       _state = _state.copyWith(activeTab: tab);
     });
@@ -103,12 +103,12 @@ class _MonoScreenState extends State<MonoScreen> with SingleTickerProviderStateM
         bottom: false, // Handle padding manually to account for nav bar
         child: Column(
           children: [
-            _MonoHeader(
+            _ProfileHeader(
               state: _state,
               onEditProfile: _handleEditProfile,
             ),
-            _MonoStatusRow(state: _state),
-            _MonoTabBar(controller: _tabController),
+            _ProfileStatusRow(state: _state),
+            _ProfileTabBar(controller: _tabController),
             Expanded(
               child: PageView(
                 controller: _pageController,
@@ -139,11 +139,11 @@ class _MonoScreenState extends State<MonoScreen> with SingleTickerProviderStateM
 }
 
 /// Profile header widget
-class _MonoHeader extends StatelessWidget {
-  final MonoProfileState state;
+class _ProfileHeader extends StatelessWidget {
+  final ProfileState state;
   final VoidCallback onEditProfile;
 
-  const _MonoHeader({
+  const _ProfileHeader({
     required this.state,
     required this.onEditProfile,
   });
@@ -253,10 +253,10 @@ class _StatChip extends StatelessWidget {
 }
 
 /// Status row with Uploaded/Processing buttons
-class _MonoStatusRow extends StatelessWidget {
-  final MonoProfileState state;
+class _ProfileStatusRow extends StatelessWidget {
+  final ProfileState state;
 
-  const _MonoStatusRow({required this.state});
+  const _ProfileStatusRow({required this.state});
 
   @override
   Widget build(BuildContext context) {
@@ -286,10 +286,10 @@ class _MonoStatusRow extends StatelessWidget {
 }
 
 /// Tab bar for Uploaded/Processing tabs
-class _MonoTabBar extends StatelessWidget {
+class _ProfileTabBar extends StatelessWidget {
   final TabController controller;
 
-  const _MonoTabBar({required this.controller});
+  const _ProfileTabBar({required this.controller});
 
   @override
   Widget build(BuildContext context) {
@@ -426,8 +426,8 @@ class _StatusCard extends StatelessWidget {
 
 /// Page 1 content with segmented control and story list
 class _Page1Content extends StatelessWidget {
-  final MonoProfileState state;
-  final ValueChanged<MonoTab> onTabChanged;
+  final ProfileState state;
+  final ValueChanged<ProfileTab> onTabChanged;
   final Future<List<Story>> storiesFuture;
   final double bottomPadding;
 
@@ -444,7 +444,7 @@ class _Page1Content extends StatelessWidget {
       height: double.infinity,
       child: Column(
         children: [
-          _MonoFilterSegmentedControl(
+          _ProfileFilterSegmentedControl(
             selected: state.activeTab,
             onChanged: onTabChanged,
           ),
@@ -453,7 +453,7 @@ class _Page1Content extends StatelessWidget {
               future: storiesFuture,
               builder: (context, snapshot) {
                 final stories = snapshot.data ?? const <Story>[];
-                return _MonoStoryList(
+                return _ProfileStoryList(
                   activeTab: state.activeTab,
                   stories: stories,
                   bottomPadding: bottomPadding,
@@ -494,12 +494,12 @@ class _Page2Placeholder extends StatelessWidget {
   }
 }
 
-/// Segmented control widget for Mono filter (Page 1 only)
-class _MonoFilterSegmentedControl extends StatelessWidget {
-  final MonoTab selected;
-  final ValueChanged<MonoTab> onChanged;
+/// Segmented control widget for profile filter (Page 1 only)
+class _ProfileFilterSegmentedControl extends StatelessWidget {
+  final ProfileTab selected;
+  final ValueChanged<ProfileTab> onChanged;
 
-  const _MonoFilterSegmentedControl({
+  const _ProfileFilterSegmentedControl({
     required this.selected,
     required this.onChanged,
   });
@@ -516,22 +516,22 @@ class _MonoFilterSegmentedControl extends StatelessWidget {
         children: [
           _buildTypeChip(
             label: 'One-Short',
-            isSelected: selected == MonoTab.oneShort,
-            onTap: () => onChanged(MonoTab.oneShort),
+            isSelected: selected == ProfileTab.oneShort,
+            onTap: () => onChanged(ProfileTab.oneShort),
             primaryColor: primaryColor,
           ),
           const SizedBox(width: 8),
           _buildTypeChip(
             label: 'Story-Series',
-            isSelected: selected == MonoTab.storySeries,
-            onTap: () => onChanged(MonoTab.storySeries),
+            isSelected: selected == ProfileTab.storySeries,
+            onTap: () => onChanged(ProfileTab.storySeries),
             primaryColor: primaryColor,
           ),
           const SizedBox(width: 8),
           _buildTypeChip(
             label: 'AI-Stories',
-            isSelected: selected == MonoTab.aiStories,
-            onTap: () => onChanged(MonoTab.aiStories),
+            isSelected: selected == ProfileTab.aiStories,
+            onTap: () => onChanged(ProfileTab.aiStories),
             primaryColor: primaryColor,
           ),
         ],
@@ -580,12 +580,12 @@ class _MonoFilterSegmentedControl extends StatelessWidget {
 }
 
 /// Story list widget
-class _MonoStoryList extends StatelessWidget {
-  final MonoTab activeTab;
+class _ProfileStoryList extends StatelessWidget {
+  final ProfileTab activeTab;
   final List<Story> stories;
   final double bottomPadding;
 
-  const _MonoStoryList({
+  const _ProfileStoryList({
     required this.activeTab,
     required this.stories,
     required this.bottomPadding,
@@ -608,7 +608,7 @@ class _MonoStoryList extends StatelessWidget {
         final story = filteredStories[index];
         return Padding(
           padding: const EdgeInsets.fromLTRB(0, 4, 0, 8),
-          child: _MonoStoryCard(story: story),
+          child: _ProfileStoryCard(story: story),
         );
       },
     );
@@ -616,10 +616,10 @@ class _MonoStoryList extends StatelessWidget {
 }
 
 /// Story card widget (reusing existing design)
-class _MonoStoryCard extends StatelessWidget {
+class _ProfileStoryCard extends StatelessWidget {
   final Story story;
 
-  const _MonoStoryCard({required this.story});
+  const _ProfileStoryCard({required this.story});
 
   @override
   Widget build(BuildContext context) {
@@ -703,3 +703,4 @@ class _MonoStoryCard extends StatelessWidget {
     );
   }
 }
+

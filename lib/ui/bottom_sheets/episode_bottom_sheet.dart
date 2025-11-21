@@ -3,8 +3,10 @@ import 'package:flutter/services.dart';
 import '../../../models/episode_model.dart';
 import '../../../models/episode_meta.dart';
 import '../../../models/story.dart';
+import '../../../data/episode_mock_data.dart'; // Canonical mock data source
 import '../../features/learn/learn_hub_screen.dart';
 import '../../features/reader/reader_screen.dart';
+import '../../features/reader/episode_reader_screen.dart';
 
 /// Global Episode Bottom Sheet - Reusable across the entire app
 /// 
@@ -29,7 +31,7 @@ import '../../features/reader/reader_screen.dart';
 /// 
 /// Parameters:
 /// - [context]: The build context to show the sheet in
-/// - [episode]: Episode data to display
+/// - [episode]: Episode data to display (FULL episode with all blocks)
 /// - [shareVisible]: Whether to show the share button (default: true)
 /// 
 /// Returns a Future that completes when the sheet is dismissed.
@@ -69,6 +71,7 @@ Future<void> showEpisodeBottomSheet(
       builder: (context, scrollController) {
         return _EpisodeBottomSheetContent(
           episode: episodeModel,
+          originalEpisode: episode, // Preserve full episode for reader
           controller: scrollController,
           shareVisible: shareVisible,
         );
@@ -110,8 +113,11 @@ Future<void> showEpisodeBottomSheetFromMeta(
       snap: true,
       expand: false,
       builder: (context, scrollController) {
+        // For EpisodeMeta, we need to reconstruct the episode from the repo
+        // This is a limitation - ideally we'd pass the full Episode here too
         return _EpisodeBottomSheetContent(
           episode: episodeModel,
+          originalEpisode: null, // Will need to fetch from repo or use mock
           controller: scrollController,
           shareVisible: shareVisible,
         );
@@ -136,7 +142,12 @@ EpisodeModel _convertEpisodeToModel(Episode episode) {
 }
 
 /// Convert EpisodeModel back to Episode for ReaderScreen
+/// NOTE: This should NOT be used when originalEpisode is available!
+/// This is a fallback that only uses preview text (short).
+/// Always prefer passing the original Episode object directly.
 Episode _convertModelToEpisode(EpisodeModel episodeModel) {
+  // Import canonical mock data to use full text instead of just preview
+  // This ensures we get long multi-page content even when original episode is lost
   return Episode(
     id: 'episode_${episodeModel.number}',
     storyId: 'story_${episodeModel.number}',
@@ -144,10 +155,10 @@ Episode _convertModelToEpisode(EpisodeModel episodeModel) {
     title: episodeModel.title,
     thumbnailUrl: episodeModel.coverUrl,
     blocks: [
-      // Create a simple block from the preview text
+      // Use canonical mock data for full content, not just preview
       EpisodeBlock(
         type: BlockType.narration,
-        text: episodeModel.preview,
+        text: getMockEpisodeText(episodeModel.number), // Full long text
       ),
     ],
   );
@@ -159,11 +170,13 @@ Episode _convertModelToEpisode(EpisodeModel episodeModel) {
 /// but renamed and slightly adapted for global use.
 class _EpisodeBottomSheetContent extends StatelessWidget {
   final EpisodeModel episode;
+  final Episode? originalEpisode; // Full episode with all blocks (preferred)
   final ScrollController controller;
   final bool shareVisible;
 
   const _EpisodeBottomSheetContent({
     required this.episode,
+    this.originalEpisode, // Pass full episode to preserve all blocks
     required this.controller,
     this.shareVisible = true,
   });
@@ -641,11 +654,19 @@ class _EpisodeBottomSheetContent extends StatelessWidget {
               child: FilledButton.icon(
                 onPressed: () {
                   HapticFeedback.selectionClick();
-                  // Convert EpisodeModel back to Episode for ReaderScreen
-                  final episodeForReader = _convertModelToEpisode(episode);
+                  // Use original episode if available (has full blocks), otherwise convert
+                  final episodeForReader = originalEpisode ?? _convertModelToEpisode(episode);
+                  
+                  // Debug: Print episode content length to verify full text is used
+                  final contentLength = episodeForReader.blocks.fold<int>(
+                    0,
+                    (sum, block) => sum + block.text.length,
+                  );
+                  debugPrint('EP${episodeForReader.index} length = $contentLength');
+                  
                   Navigator.of(context, rootNavigator: true).push(
                     MaterialPageRoute(
-                      builder: (context) => ReaderScreen(episode: episodeForReader),
+                      builder: (context) => EpisodeReaderScreen(episode: episodeForReader),
                       fullscreenDialog: true,
                     ),
                   );
