@@ -37,10 +37,8 @@ class FollowingWritersSection extends StatelessWidget {
           );
         }
 
-        // Show first 14 writers + "All" button if more than 14
-        final displayWriters = writers.length > 14
-            ? writers.take(14).toList()
-            : writers;
+        // Show all writers (no limit since we have horizontal scrolling)
+        final displayWriters = writers;
 
         return Padding(
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
@@ -56,19 +54,35 @@ class FollowingWritersSection extends StatelessWidget {
               const SizedBox(height: 12),
               SizedBox(
                 height: 90,
-                child: ListView.separated(
-                  scrollDirection: Axis.horizontal,
-                  itemCount: displayWriters.length + 1, // +1 for "All" button
-                  separatorBuilder: (context, index) => const SizedBox(width: 12),
-                  itemBuilder: (context, index) {
-                    if (index == displayWriters.length) {
-                      // "All" button at the end
-                      return _AllWritersButton();
-                    }
-                    return _WriterAvatar(
-                      writer: displayWriters[index],
-                    );
-                  },
+                child: Row(
+                  children: [
+                    // Scrollable list of writers
+                    Expanded(
+                      child: ListView.builder(
+                        scrollDirection: Axis.horizontal,
+                        itemCount: displayWriters.length,
+                        itemBuilder: (context, index) {
+                          // Fixed width container for each item to prevent expansion
+                          return SizedBox(
+                            width: 70,
+                            child: Padding(
+                              padding: const EdgeInsets.only(right: 12),
+                              child: _WriterAvatar(
+                                writer: displayWriters[index],
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                    // Small spacing between list and "All" button
+                    const SizedBox(width: 8),
+                    // Static "All" button fixed on the right (compact size)
+                    const SizedBox(
+                      width: 60,
+                      child: _AllWritersButton(),
+                    ),
+                  ],
                 ),
               ),
             ],
@@ -96,37 +110,42 @@ class _WriterAvatar extends StatelessWidget {
       },
       child: Column(
         mainAxisSize: MainAxisSize.min,
+        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          CircleAvatar(
-            radius: 28,
-            backgroundColor: Theme.of(context).colorScheme.primary.withOpacity(0.1),
-            backgroundImage: writer.avatarUrl != null
-                ? NetworkImage(writer.avatarUrl!)
-                : null,
-            child: writer.avatarUrl == null
-                ? Text(
-                    writer.initial,
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.w600,
-                      color: Theme.of(context).colorScheme.primary,
-                    ),
-                  )
-                : null,
+          // Fixed-size circular avatar (56x56 to match "All" button)
+          SizedBox(
+            width: 56,
+            height: 56,
+            child: CircleAvatar(
+              radius: 28,
+              backgroundColor: Theme.of(context).colorScheme.primary.withOpacity(0.1),
+              backgroundImage: writer.avatarUrl != null
+                  ? NetworkImage(writer.avatarUrl!)
+                  : null,
+              child: writer.avatarUrl == null
+                  ? Text(
+                      writer.initial,
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w600,
+                        color: Theme.of(context).colorScheme.primary,
+                      ),
+                    )
+                  : null,
+            ),
           ),
           const SizedBox(height: 6),
-          SizedBox(
-            width: 70,
-            child: Text(
-              writer.name,
-              textAlign: TextAlign.center,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    fontSize: 11,
-                    color: Colors.black87,
-                  ),
-            ),
+          // Writer name label centered below avatar
+          Text(
+            writer.name,
+            textAlign: TextAlign.center,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  fontSize: 11,
+                  color: Colors.black87,
+                ),
           ),
         ],
       ),
@@ -146,7 +165,10 @@ class _AllWritersButton extends StatelessWidget {
       },
       child: Column(
         mainAxisSize: MainAxisSize.min,
+        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
+          // Circular outline with right-arrow icon (56x56 to match avatars)
           Container(
             width: 56,
             height: 56,
@@ -160,24 +182,22 @@ class _AllWritersButton extends StatelessWidget {
             ),
             child: Center(
               child: Icon(
-                Icons.arrow_forward_ios,
-                size: 20,
+                Icons.chevron_right,
+                size: 24,
                 color: Theme.of(context).colorScheme.primary,
               ),
             ),
           ),
           const SizedBox(height: 6),
-          SizedBox(
-            width: 70,
-            child: Text(
-              'All',
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                    color: Theme.of(context).colorScheme.primary,
-                  ),
-            ),
+          // "All" label centered below circle
+          Text(
+            'All',
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
           ),
         ],
       ),
