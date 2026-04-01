@@ -1,34 +1,30 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:flutter/services.dart';
 import 'package:nimon/data/story_repo.dart';
-import 'package:nimon/models/story.dart';
-import 'package:nimon/ui/ui.dart';
 
-/// Tab enum for Mono profile
-enum MonoTab { oneShort, storySeries, aiStories }
+enum MonoItemType { question, note, sentence, dialogue, hook }
 
-/// Profile state model for Mono screen
-class MonoProfileState {
-  final int uploadedCount;
-  final int processingCount;
-  final MonoTab activeTab;
+class MonoFeedItem {
+  final String id;
+  final String writerName;
+  final String writerHandle;
+  final String level; // All, N5..N1
+  final MonoItemType type;
+  final String? title;
+  final String textContent;
+  final String? shortDescription;
 
-  const MonoProfileState({
-    this.uploadedCount = 0,
-    this.processingCount = 0,
-    this.activeTab = MonoTab.oneShort,
+  const MonoFeedItem({
+    required this.id,
+    required this.writerName,
+    required this.writerHandle,
+    required this.level,
+    required this.type,
+    required this.textContent,
+    this.title,
+    this.shortDescription,
   });
-
-  MonoProfileState copyWith({
-    int? uploadedCount,
-    int? processingCount,
-    MonoTab? activeTab,
-  }) =>
-      MonoProfileState(
-        uploadedCount: uploadedCount ?? this.uploadedCount,
-        processingCount: processingCount ?? this.processingCount,
-        activeTab: activeTab ?? this.activeTab,
-      );
 }
 
 class MonoScreen extends StatefulWidget {
@@ -39,94 +35,229 @@ class MonoScreen extends StatefulWidget {
   State<MonoScreen> createState() => _MonoScreenState();
 }
 
-class _MonoScreenState extends State<MonoScreen> with SingleTickerProviderStateMixin {
-  late MonoProfileState _state;
-  late Future<List<Story>> _storiesFuture;
-  late PageController _pageController;
-  late TabController _tabController;
+class _MonoScreenState extends State<MonoScreen> {
+  static const _levels = <String>['All', 'N5', 'N4', 'N3', 'N2', 'N1'];
+
+  static const _mockItems = <MonoFeedItem>[
+    MonoFeedItem(
+      id: 'm1',
+      writerName: 'Yuki',
+      writerHandle: '@yuki',
+      level: 'N5',
+      type: MonoItemType.sentence,
+      title: 'Daily phrase',
+      textContent: '今日はいい天気ですね。',
+      shortDescription: '“Nice weather today, isn’t it?”',
+    ),
+    MonoFeedItem(
+      id: 'm2',
+      writerName: 'Haru',
+      writerHandle: '@haru',
+      level: 'N5',
+      type: MonoItemType.question,
+      textContent: '「～です」と「～ます」の違いは？',
+      shortDescription: 'Quick reminder: polite forms for nouns/adjectives vs verbs.',
+    ),
+    MonoFeedItem(
+      id: 'm3',
+      writerName: 'Mika',
+      writerHandle: '@mika',
+      level: 'N4',
+      type: MonoItemType.note,
+      title: 'Small note',
+      textContent: '「もう」= already / anymore.\n「まだ」= still / not yet.',
+    ),
+    MonoFeedItem(
+      id: 'm4',
+      writerName: 'Ken',
+      writerHandle: '@ken',
+      level: 'N4',
+      type: MonoItemType.dialogue,
+      title: 'Mini dialogue',
+      textContent:
+          'A: 今、時間ある？\nB: ちょっとだけ。\nA: じゃあ、駅まで一緒に行こう。',
+    ),
+    MonoFeedItem(
+      id: 'm5',
+      writerName: 'Sora',
+      writerHandle: '@sora',
+      level: 'N3',
+      type: MonoItemType.hook,
+      title: 'Story hook',
+      textContent: '彼は「大丈夫」と言った。\nでも、その声は震えていた。',
+      shortDescription: 'Notice how contrast is created with でも.',
+    ),
+    MonoFeedItem(
+      id: 'm6',
+      writerName: 'Aki',
+      writerHandle: '@aki',
+      level: 'N3',
+      type: MonoItemType.question,
+      textContent: '「ようにする」ってどういうニュアンス？',
+      shortDescription: '“Make a habit of…” / “Try to…” (effort + repetition).',
+    ),
+    MonoFeedItem(
+      id: 'm7',
+      writerName: 'Rin',
+      writerHandle: '@rin',
+      level: 'N2',
+      type: MonoItemType.note,
+      title: 'Contrast',
+      textContent: '「にもかかわらず」= despite / in spite of.',
+    ),
+    MonoFeedItem(
+      id: 'm8',
+      writerName: 'Nao',
+      writerHandle: '@nao',
+      level: 'N1',
+      type: MonoItemType.sentence,
+      textContent: '彼の言い分は筋が通っているとは言い難い。',
+      shortDescription: 'Pattern: 〜とは言い難い (hard to say that…).',
+    ),
+  ];
+
+  String _selectedLevel = 'All';
+  late final PageController _feedController;
+  final Set<String> _bookmarkedIds = <String>{};
 
   @override
   void initState() {
     super.initState();
-    _state = const MonoProfileState();
-    _storiesFuture = widget.repo.getStories();
-    _pageController = PageController();
-    _tabController = TabController(length: 2, vsync: this);
-
-    // Sync TabController with PageController when tab is tapped
-    _tabController.addListener(_onTabChanged);
+    _feedController = PageController();
   }
 
   @override
   void dispose() {
-    _tabController.removeListener(_onTabChanged);
-    _tabController.dispose();
-    _pageController.dispose();
+    _feedController.dispose();
     super.dispose();
   }
 
-  void _onTabChanged() {
-    // Only sync when tab change is complete (not during animation)
-    if (!_tabController.indexIsChanging && _tabController.index != _pageController.page?.round()) {
-      _pageController.animateToPage(
-        _tabController.index,
-        duration: const Duration(milliseconds: 300),
-        curve: Curves.easeInOut,
-      );
-    }
+  List<MonoFeedItem> get _filteredItems {
+    if (_selectedLevel == 'All') return _mockItems;
+    return _mockItems.where((i) => i.level == _selectedLevel).toList();
   }
 
-  void _handleTabChanged(MonoTab tab) {
-    setState(() {
-      _state = _state.copyWith(activeTab: tab);
-    });
+  void _openLearn(MonoFeedItem item) {
+    // Existing route shape is /learn/:id (Learn screen currently ignores param)
+    context.push('/learn/${item.id}');
   }
 
-  void _handleEditProfile() {
-    // TODO: Navigate to edit profile screen
+  Future<void> _share(MonoFeedItem item) async {
+    final text = [
+      'Nimon Mono',
+      '${item.level} • ${_typeLabel(item.type)}',
+      '${item.writerName} (${item.writerHandle})',
+      if ((item.title ?? '').trim().isNotEmpty) item.title!,
+      '',
+      item.textContent,
+      if ((item.shortDescription ?? '').trim().isNotEmpty) '\n${item.shortDescription}',
+    ].join('\n');
+
+    await Clipboard.setData(ClipboardData(text: text));
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Edit Profile - Coming soon')),
+      SnackBar(
+        content: const Text('Copied to clipboard'),
+        behavior: SnackBarBehavior.floating,
+        margin: const EdgeInsets.all(16),
+        duration: const Duration(seconds: 2),
+      ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    // Calculate bottom padding: nav bar height + device safe area + extra spacing
-    final bottomPadding = MediaQuery.of(context).padding.bottom;
-    const double bottomNavHeight = 64.0; // Navigation bar height
-    const double extraBottomPadding = 40.0; // Extra spacing to prevent overflow
+    final items = _filteredItems;
 
     return Scaffold(
-      backgroundColor: theme.scaffoldBackgroundColor,
+      backgroundColor: theme.colorScheme.surface,
       body: SafeArea(
-        bottom: false, // Handle padding manually to account for nav bar
-        child: Column(
+        child: Stack(
           children: [
-            _MonoHeader(
-              state: _state,
-              onEditProfile: _handleEditProfile,
-            ),
-            _MonoStatusRow(state: _state),
-            _MonoTabBar(controller: _tabController),
-            Expanded(
-              child: PageView(
-                controller: _pageController,
-                onPageChanged: (index) {
-                  // Sync TabController when page is swiped
-                  if (_tabController.index != index) {
-                    _tabController.animateTo(index);
-                  }
-                },
-                children: [
-                  _Page1Content(
-                    state: _state,
-                    onTabChanged: _handleTabChanged,
-                    storiesFuture: _storiesFuture,
-                    bottomPadding: bottomNavHeight + bottomPadding + extraBottomPadding,
+            // Feed
+            if (items.isEmpty)
+              Center(
+                child: Text(
+                  'No items for $_selectedLevel',
+                  style: theme.textTheme.bodyLarge?.copyWith(
+                    color: Colors.grey.shade600,
                   ),
-                  _Page2Placeholder(
-                    bottomPadding: bottomNavHeight + bottomPadding + extraBottomPadding,
+                ),
+              )
+            else
+              PageView.builder(
+                key: ValueKey(_selectedLevel),
+                controller: _feedController,
+                scrollDirection: Axis.vertical,
+                itemCount: items.length,
+                itemBuilder: (context, index) {
+                  final item = items[index];
+                  final isBookmarked = _bookmarkedIds.contains(item.id);
+                  return _MonoFeedPage(
+                    item: item,
+                    isBookmarked: isBookmarked,
+                    onLearn: () => _openLearn(item),
+                    onToggleBookmark: () {
+                      setState(() {
+                        if (isBookmarked) {
+                          _bookmarkedIds.remove(item.id);
+                        } else {
+                          _bookmarkedIds.add(item.id);
+                        }
+                      });
+                    },
+                    onShare: () => _share(item),
+                  );
+                },
+              ),
+
+            // Top bar (level filter)
+            Positioned(
+              left: 16,
+              right: 16,
+              top: 8,
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.surface.withOpacity(0.92),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: Colors.black.withOpacity(0.08)),
+                    ),
+                    child: DropdownButtonHideUnderline(
+                      child: DropdownButton<String>(
+                        value: _selectedLevel,
+                        borderRadius: BorderRadius.circular(12),
+                        items: [
+                          for (final lv in _levels)
+                            DropdownMenuItem<String>(
+                              value: lv,
+                              child: Text(lv),
+                            ),
+                        ],
+                        onChanged: (v) {
+                          if (v == null) return;
+                          setState(() => _selectedLevel = v);
+                        },
+                      ),
+                    ),
+                  ),
+                  const Spacer(),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.surface.withOpacity(0.92),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: Colors.black.withOpacity(0.08)),
+                    ),
+                    child: Text(
+                      'Mono',
+                      style: theme.textTheme.labelLarge?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
                   ),
                 ],
               ),
@@ -138,113 +269,131 @@ class _MonoScreenState extends State<MonoScreen> with SingleTickerProviderStateM
   }
 }
 
-/// Profile header widget
-class _MonoHeader extends StatelessWidget {
-  final MonoProfileState state;
-  final VoidCallback onEditProfile;
+class _MonoFeedPage extends StatelessWidget {
+  final MonoFeedItem item;
+  final bool isBookmarked;
+  final VoidCallback onLearn;
+  final VoidCallback onToggleBookmark;
+  final VoidCallback onShare;
 
-  const _MonoHeader({
-    required this.state,
-    required this.onEditProfile,
+  const _MonoFeedPage({
+    required this.item,
+    required this.isBookmarked,
+    required this.onLearn,
+    required this.onToggleBookmark,
+    required this.onShare,
   });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          // Profile image
-          CircleAvatar(
-            radius: 32,
-            backgroundColor: Colors.grey.shade200,
-            child: Icon(
-              Icons.person,
-              size: 32,
-              color: Colors.grey.shade600,
-            ),
-            // TODO: Replace with actual profile image
-            // backgroundImage: AssetImage('assets/images/demo_profile.png'),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Just4withYou', // TODO: bind real writer name
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  '@just4withyou', // placeholder handle
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: Colors.black.withOpacity(0.6),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    _StatChip(label: 'Following', value: '0'),
-                    const SizedBox(width: 12),
-                    _StatChip(label: 'Followers', value: '0'),
-                    const SizedBox(width: 12),
-                    _StatChip(label: 'Stories', value: '0'),
+    return Stack(
+      children: [
+        // Center card
+        Align(
+          alignment: Alignment.center,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 72, 88, 24),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 560),
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.surface,
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: Colors.black.withOpacity(0.08)),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.06),
+                      blurRadius: 22,
+                      offset: const Offset(0, 10),
+                    ),
                   ],
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          _Badge(text: item.level),
+                          _Badge(text: _typeLabel(item.type)),
+                        ],
+                      ),
+                      const SizedBox(height: 14),
+                      Text(
+                        '${item.writerName}  ${item.writerHandle}',
+                        style: theme.textTheme.labelLarge?.copyWith(
+                          color: Colors.black.withOpacity(0.70),
+                        ),
+                      ),
+                      if ((item.title ?? '').trim().isNotEmpty) ...[
+                        const SizedBox(height: 10),
+                        Text(
+                          item.title!,
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
+                      const SizedBox(height: 14),
+                      Text(
+                        item.textContent,
+                        style: theme.textTheme.headlineSmall?.copyWith(
+                          height: 1.35,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      if ((item.shortDescription ?? '').trim().isNotEmpty) ...[
+                        const SizedBox(height: 14),
+                        Text(
+                          item.shortDescription!,
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            height: 1.35,
+                            color: Colors.black.withOpacity(0.68),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+
+        // Right actions
+        Positioned(
+          right: 12,
+          top: 0,
+          bottom: 0,
+          child: SafeArea(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                _ActionButton(
+                  icon: Icons.school_outlined,
+                  label: 'Learn',
+                  onTap: onLearn,
+                ),
+                const SizedBox(height: 14),
+                _ActionButton(
+                  icon: isBookmarked ? Icons.bookmark : Icons.bookmark_outline,
+                  label: 'Bookmark',
+                  onTap: onToggleBookmark,
+                ),
+                const SizedBox(height: 14),
+                _ActionButton(
+                  icon: Icons.ios_share,
+                  label: 'Share',
+                  onTap: onShare,
                 ),
               ],
             ),
-          ),
-          const SizedBox(width: 8),
-          OutlinedButton(
-            onPressed: onEditProfile,
-            style: OutlinedButton.styleFrom(
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(20),
-              ),
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            ),
-            child: const Text('Edit Profile'),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// Stat chip widget for follower/following/stories count
-class _StatChip extends StatelessWidget {
-  final String label;
-  final String value;
-
-  const _StatChip({
-    required this.label,
-    required this.value,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          value,
-          style: const TextStyle(
-            fontWeight: FontWeight.w600,
-            fontSize: 14,
-          ),
-        ),
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: 11,
-            color: Colors.black.withOpacity(0.6),
           ),
         ),
       ],
@@ -252,454 +401,94 @@ class _StatChip extends StatelessWidget {
   }
 }
 
-/// Status row with Uploaded/Processing buttons
-class _MonoStatusRow extends StatelessWidget {
-  final MonoProfileState state;
-
-  const _MonoStatusRow({required this.state});
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-      child: Row(
-        children: [
-          Expanded(
-            child: _StatusCard(
-              icon: Icons.cloud_done_rounded,
-              label: 'Uploaded',
-              value: state.uploadedCount.toString(),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: _StatusCard(
-              icon: Icons.schedule_rounded,
-              label: 'Processing',
-              value: state.processingCount.toString(),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// Tab bar for Uploaded/Processing tabs
-class _MonoTabBar extends StatelessWidget {
-  final TabController controller;
-
-  const _MonoTabBar({required this.controller});
+class _Badge extends StatelessWidget {
+  final String text;
+  const _Badge({required this.text});
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final primaryColor = theme.colorScheme.primary;
-
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      child: TabBar(
-        controller: controller,
-        indicator: UnderlineTabIndicator(
-          borderSide: BorderSide(color: primaryColor, width: 2),
-          insets: const EdgeInsets.symmetric(horizontal: 16),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.primary.withOpacity(0.10),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        text,
+        style: theme.textTheme.labelMedium?.copyWith(
+          color: theme.colorScheme.primary,
+          fontWeight: FontWeight.w700,
         ),
-        indicatorSize: TabBarIndicatorSize.tab,
-        labelColor: primaryColor,
-        unselectedLabelColor: Colors.grey.shade600,
-        labelStyle: const TextStyle(
-          fontSize: 14,
-          fontWeight: FontWeight.w600,
-        ),
-        unselectedLabelStyle: const TextStyle(
-          fontSize: 14,
-          fontWeight: FontWeight.w400,
-        ),
-        tabs: [
-          Tab(
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  Icons.cloud_done_rounded,
-                  size: 20,
-                ),
-                const SizedBox(width: 8),
-                const Text('Uploaded'),
-              ],
-            ),
-          ),
-          Tab(
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  Icons.schedule_rounded,
-                  size: 20,
-                ),
-                const SizedBox(width: 8),
-                const Text('Processing'),
-              ],
-            ),
-          ),
-        ],
       ),
     );
   }
 }
 
-/// Status card widget
-class _StatusCard extends StatelessWidget {
+class _ActionButton extends StatelessWidget {
   final IconData icon;
   final String label;
-  final String value;
+  final VoidCallback onTap;
 
-  const _StatusCard({
+  const _ActionButton({
     required this.icon,
     required this.label,
-    required this.value,
+    required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-
-    return Container(
-      height: 88,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: theme.cardColor,
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 32,
-            height: 32,
-            decoration: BoxDecoration(
-              color: theme.colorScheme.primary.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Icon(
-              icon,
-              color: theme.colorScheme.primary,
-              size: 20,
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.center,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  value,
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  label,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: Colors.black.withOpacity(0.6),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// Page 1 content with segmented control and story list
-class _Page1Content extends StatelessWidget {
-  final MonoProfileState state;
-  final ValueChanged<MonoTab> onTabChanged;
-  final Future<List<Story>> storiesFuture;
-  final double bottomPadding;
-
-  const _Page1Content({
-    required this.state,
-    required this.onTabChanged,
-    required this.storiesFuture,
-    required this.bottomPadding,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      height: double.infinity,
-      child: Column(
-        children: [
-          _MonoFilterSegmentedControl(
-            selected: state.activeTab,
-            onChanged: onTabChanged,
-          ),
-          Expanded(
-            child: FutureBuilder<List<Story>>(
-              future: storiesFuture,
-              builder: (context, snapshot) {
-                final stories = snapshot.data ?? const <Story>[];
-                return _MonoStoryList(
-                  activeTab: state.activeTab,
-                  stories: stories,
-                  bottomPadding: bottomPadding,
-                );
-              },
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// Page 2 placeholder
-class _Page2Placeholder extends StatelessWidget {
-  final double bottomPadding;
-
-  const _Page2Placeholder({
-    required this.bottomPadding,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      height: double.infinity,
-      child: Center(
-        child: Padding(
-          padding: EdgeInsets.only(bottom: bottomPadding),
-          child: Text(
-            'Page 2 - Coming Soon',
-            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                  color: Colors.grey.shade600,
-                ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// Segmented control widget for Mono filter (Page 1 only)
-class _MonoFilterSegmentedControl extends StatelessWidget {
-  final MonoTab selected;
-  final ValueChanged<MonoTab> onChanged;
-
-  const _MonoFilterSegmentedControl({
-    required this.selected,
-    required this.onChanged,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final primaryColor = theme.colorScheme.primary;
-
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16.0, 8.0, 16.0, 8.0),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          _buildTypeChip(
-            label: 'One-Short',
-            isSelected: selected == MonoTab.oneShort,
-            onTap: () => onChanged(MonoTab.oneShort),
-            primaryColor: primaryColor,
-          ),
-          const SizedBox(width: 8),
-          _buildTypeChip(
-            label: 'Story-Series',
-            isSelected: selected == MonoTab.storySeries,
-            onTap: () => onChanged(MonoTab.storySeries),
-            primaryColor: primaryColor,
-          ),
-          const SizedBox(width: 8),
-          _buildTypeChip(
-            label: 'AI-Stories',
-            isSelected: selected == MonoTab.aiStories,
-            onTap: () => onChanged(MonoTab.aiStories),
-            primaryColor: primaryColor,
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildTypeChip({
-    required String label,
-    required bool isSelected,
-    required VoidCallback onTap,
-    required Color primaryColor,
-  }) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(20),
+    return Semantics(
+      button: true,
+      label: label,
+      child: InkResponse(
         onTap: onTap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 250),
-          curve: Curves.easeOut,
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-          decoration: BoxDecoration(
-            color: isSelected ? primaryColor : Colors.transparent,
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(
-              color: isSelected
-                  ? primaryColor
-                  : Colors.grey.shade300,
-              width: 1,
-            ),
-          ),
-          child: Text(
-            label,
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              color: isSelected ? Colors.white : Colors.grey.shade600,
-              letterSpacing: 0.2,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// Story list widget
-class _MonoStoryList extends StatelessWidget {
-  final MonoTab activeTab;
-  final List<Story> stories;
-  final double bottomPadding;
-
-  const _MonoStoryList({
-    required this.activeTab,
-    required this.stories,
-    required this.bottomPadding,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    // TODO: Filter stories by activeTab when backend supports it
-    final filteredStories = stories.take(30).toList();
-
-    return ListView.builder(
-      padding: EdgeInsets.fromLTRB(
-        16,
-        8,
-        16,
-        bottomPadding,
-      ),
-      itemCount: filteredStories.length,
-      itemBuilder: (context, index) {
-        final story = filteredStories[index];
-        return Padding(
-          padding: const EdgeInsets.fromLTRB(0, 4, 0, 8),
-          child: _MonoStoryCard(story: story),
-        );
-      },
-    );
-  }
-}
-
-/// Story card widget (reusing existing design)
-class _MonoStoryCard extends StatelessWidget {
-  final Story story;
-
-  const _MonoStoryCard({required this.story});
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    return Card(
-      margin: EdgeInsets.zero,
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Row(
+        radius: 28,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            ClipRRect(
-              borderRadius: BorderRadius.circular(8),
-              child: story.coverUrl != null
-                  ? Image.network(
-                      story.coverUrl!,
-                      width: 88,
-                      height: 88,
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => _buildPlaceholderImage(),
-                    )
-                  : _buildPlaceholderImage(),
+            Container(
+              width: 46,
+              height: 46,
+              decoration: BoxDecoration(
+                color: theme.colorScheme.surface.withOpacity(0.92),
+                shape: BoxShape.circle,
+                border: Border.all(color: Colors.black.withOpacity(0.08)),
+              ),
+              child: Icon(icon, size: 22),
             ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    story.title,
-                    style: theme.textTheme.titleLarge,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Description overall……',
-                    maxLines: 1,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: Colors.black.withOpacity(0.6),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Episode – 0${(story.likes % 9) + 1}',
-                    style: theme.textTheme.bodySmall,
-                  ),
-                ],
+            const SizedBox(height: 6),
+            SizedBox(
+              width: 66,
+              child: Text(
+                label,
+                textAlign: TextAlign.center,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: Colors.black.withOpacity(0.70),
+                ),
               ),
             ),
-            Column(
-              children: [
-                Chip(
-                  label: Text(story.jlptLevel),
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
-                ),
-                const SizedBox(height: 8),
-                Icon(
-                  Icons.edit_note,
-                  size: 28,
-                  color: theme.colorScheme.primary,
-                ),
-              ],
-            )
           ],
         ),
       ),
     );
   }
+}
 
-  Widget _buildPlaceholderImage() {
-    return Container(
-      width: 88,
-      height: 88,
-      color: Colors.grey.shade200,
-      child: Icon(
-        Icons.image_outlined,
-        size: 32,
-        color: Colors.grey.shade400,
-      ),
-    );
+String _typeLabel(MonoItemType type) {
+  switch (type) {
+    case MonoItemType.question:
+      return 'Question';
+    case MonoItemType.note:
+      return 'Note';
+    case MonoItemType.sentence:
+      return 'Sentence';
+    case MonoItemType.dialogue:
+      return 'Dialogue';
+    case MonoItemType.hook:
+      return 'Hook';
   }
 }

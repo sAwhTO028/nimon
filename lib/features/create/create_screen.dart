@@ -122,22 +122,10 @@ class _CreateScreenState extends State<CreateScreen> {
     super.initState();
     _oneShortState = const OneShortState();
     _promptPageController = PageController();
-    
-    // Set initial tab based on parameter
-    switch (widget.initialTab) {
-      case 'oneShort':
-        _selectedTab = CreateTab.oneShort;
-        break;
-      case 'series':
-        _selectedTab = CreateTab.storySeries;
-        break;
-      case 'aiStories':
-      case 'promptEpisode': // Legacy support
-        _selectedTab = CreateTab.aiStories;
-        break;
-      default:
-        _selectedTab = CreateTab.oneShort;
-    }
+
+    // V1 scope: Create is one-short only. Keep other modes in codebase but hide them
+    // from the primary `/create` entry for now.
+    _selectedTab = CreateTab.oneShort;
   }
 
   @override
@@ -425,87 +413,40 @@ class _CreateScreenState extends State<CreateScreen> {
         ),
         centerTitle: true,
         actions: [
-          if (_selectedTab == CreateTab.oneShort)
-            Padding(
-              padding: const EdgeInsets.only(right: 16),
-              child: Center(
-                child: SizedBox(
-                  height: 40,
-                  child: FilledButton(
-                    onPressed: _oneShortState.isComplete ? _handleCreate : null,
-                    style: FilledButton.styleFrom(
-                      backgroundColor: _oneShortState.isComplete 
-                          ? Colors.blue 
-                          : Colors.grey.shade300,
-                      foregroundColor: _oneShortState.isComplete 
-                          ? Colors.white 
-                          : Colors.grey.shade600,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 24, vertical: 12),
+          Padding(
+            padding: const EdgeInsets.only(right: 16),
+            child: Center(
+              child: SizedBox(
+                height: 40,
+                child: FilledButton(
+                  onPressed: _oneShortState.isComplete ? _handleCreate : null,
+                  style: FilledButton.styleFrom(
+                    backgroundColor: _oneShortState.isComplete
+                        ? Colors.blue
+                        : Colors.grey.shade300,
+                    foregroundColor: _oneShortState.isComplete
+                        ? Colors.white
+                        : Colors.grey.shade600,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
                     ),
-                    child: const Text(
-                      'CREATE',
-                      style: TextStyle(fontWeight: FontWeight.w600),
-                    ),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 24, vertical: 12),
+                  ),
+                  child: const Text(
+                    'CREATE',
+                    style: TextStyle(fontWeight: FontWeight.w600),
                   ),
                 ),
               ),
-            )
-          else if (_selectedTab == CreateTab.storySeries)
-            Builder(
-              builder: (context) {
-                final storySeriesState = _storySeriesKey.currentState;
-                final canCreate = storySeriesState != null
-                    ? (storySeriesState.activeCardIndex == 0
-                        ? storySeriesState.canCreateNewSeries
-                        : storySeriesState.canCreateJoinSeries)
-                    : false;
-                return Padding(
-                  padding: const EdgeInsets.only(right: 16),
-                  child: Center(
-                    child: SizedBox(
-                      height: 40,
-                      child: FilledButton(
-                        onPressed: canCreate ? _handleCreate : null,
-                        style: FilledButton.styleFrom(
-                          backgroundColor:
-                              canCreate ? Colors.blue : Colors.grey.shade300,
-                          foregroundColor:
-                              canCreate ? Colors.white : Colors.grey.shade600,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 24, vertical: 12),
-                        ),
-                        child: const Text(
-                          'CREATE',
-                          style: TextStyle(fontWeight: FontWeight.w600),
-                        ),
-                      ),
-                    ),
-                  ),
-                );
-              },
             ),
+          ),
         ],
       ),
       body: Column(
         children: [
-          _buildSegmentedControl(),
-          Expanded(
-            child: IndexedStack(
-              index: _selectedTab.index,
-              children: [
-                _buildOneShortContent(),
-                StorySeriesScreen(key: _storySeriesKey),
-                _buildAiStoriesContent(),
-              ],
-            ),
-          ),
+          // V1 scope: one-short only
+          Expanded(child: _buildOneShortContent()),
         ],
       ),
     );

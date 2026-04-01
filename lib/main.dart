@@ -46,7 +46,7 @@ final _router = GoRouter(
         ),
         GoRoute(
           path: '/mono',
-          builder: (_, __) => const _MonoPlaceholderScreen(),
+          builder: (_, __) => MonoScreen(repo: repo),
         ),
         GoRoute(
           path: '/create-mono',
@@ -123,13 +123,14 @@ class AppShell extends StatefulWidget {
 }
 
 class _AppShellState extends State<AppShell> {
+  /// V1 bottom nav: 0 = Mono, 1 = Add (no persistent selection), 2 = Profile.
+  /// -1 = shell route with no V1 tab (e.g. Home, Library, story, learn).
   int _currentIndex = 0;
 
   int _indexFromLocation(String loc) {
-    if (loc.startsWith('/mono')) return 1;
-    if (loc.startsWith('/library')) return 2;
-    if (loc.startsWith('/more') || loc.startsWith('/settings')) return 3;
-    return 0; // Default to Home
+    if (loc.startsWith('/mono')) return 0;
+    if (loc.startsWith('/more') || loc.startsWith('/settings')) return 2;
+    return -1;
   }
 
   void _openCreate(BuildContext context) {
@@ -182,24 +183,16 @@ class _AppShellState extends State<AppShell> {
         onItemTapped: (i) {
           switch (i) {
             case 0:
-              context.go('/');
+              context.go('/mono');
               setState(() => _currentIndex = 0);
               break;
             case 1:
-              context.go('/mono');
-              setState(() => _currentIndex = 1);
-              break;
-            case 2:
-              // Create button - navigate but don't change selected index
+              // Add — push create; keep current tab highlight
               _openCreate(context);
               break;
-            case 3:
-              context.go('/library');
-              setState(() => _currentIndex = 2);
-              break;
-            case 4:
+            case 2:
               context.go('/more');
-              setState(() => _currentIndex = 3);
+              setState(() => _currentIndex = 2);
               break;
           }
         },
@@ -209,7 +202,7 @@ class _AppShellState extends State<AppShell> {
   }
 }
 
-/// Custom bottom navigation bar with 5 items including center Create button
+/// V1 bottom navigation: Mono | Add (center) | Profile
 class _CustomBottomNavBar extends StatelessWidget {
   final int selectedIndex;
   final ValueChanged<int> onItemTapped;
@@ -244,39 +237,23 @@ class _CustomBottomNavBar extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
               _NavItem(
-                icon: Icons.home_outlined,
-                selectedIcon: Icons.home_rounded,
-                label: 'Home',
+                icon: Icons.menu_book_outlined,
+                selectedIcon: Icons.menu_book_rounded,
+                label: 'Mono',
                 isSelected: selectedIndex == 0,
                 onTap: () => onItemTapped(0),
                 colorScheme: colorScheme,
               ),
-              _NavItem(
-                icon: Icons.menu_book_outlined,
-                selectedIcon: Icons.menu_book_rounded,
-                label: 'Mono',
-                isSelected: selectedIndex == 1,
-                onTap: () => onItemTapped(1),
-                colorScheme: colorScheme,
-              ),
               _CreateNavItem(
-                onTap: () => onItemTapped(2),
-                colorScheme: colorScheme,
-              ),
-              _NavItem(
-                icon: Icons.local_library_outlined,
-                selectedIcon: Icons.local_library_rounded,
-                label: 'Library',
-                isSelected: selectedIndex == 2,
-                onTap: () => onItemTapped(3),
+                onTap: () => onItemTapped(1),
                 colorScheme: colorScheme,
               ),
               _NavItem(
                 icon: Icons.person_outline,
                 selectedIcon: Icons.person,
                 label: 'Profile',
-                isSelected: selectedIndex == 3,
-                onTap: () => onItemTapped(4),
+                isSelected: selectedIndex == 2,
+                onTap: () => onItemTapped(2),
                 colorScheme: colorScheme,
               ),
             ],
@@ -362,27 +339,6 @@ class _CreateNavItem extends StatelessWidget {
               color: colorScheme.primary,
             ),
           ),
-        ),
-      ),
-    );
-  }
-}
-
-/// Placeholder screen for Mono tab (reserved for future feature)
-class _MonoPlaceholderScreen extends StatelessWidget {
-  const _MonoPlaceholderScreen();
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Mono'),
-      ),
-      body: const Center(
-        child: Text(
-          'Mono Screen\nComing soon',
-          textAlign: TextAlign.center,
-          style: TextStyle(fontSize: 18),
         ),
       ),
     );

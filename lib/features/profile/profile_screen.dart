@@ -39,47 +39,20 @@ class ProfileScreen extends StatefulWidget {
   State<ProfileScreen> createState() => _ProfileScreenState();
 }
 
-class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProviderStateMixin {
+class _ProfileScreenState extends State<ProfileScreen> {
   late ProfileState _state;
   late Future<List<Story>> _storiesFuture;
-  late PageController _pageController;
-  late TabController _tabController;
 
   @override
   void initState() {
     super.initState();
     _state = const ProfileState();
     _storiesFuture = widget.repo.getStories();
-    _pageController = PageController();
-    _tabController = TabController(length: 2, vsync: this);
-
-    // Sync TabController with PageController when tab is tapped
-    _tabController.addListener(_onTabChanged);
   }
 
   @override
   void dispose() {
-    _tabController.removeListener(_onTabChanged);
-    _tabController.dispose();
-    _pageController.dispose();
     super.dispose();
-  }
-
-  void _onTabChanged() {
-    // Only sync when tab change is complete (not during animation)
-    if (!_tabController.indexIsChanging && _tabController.index != _pageController.page?.round()) {
-      _pageController.animateToPage(
-        _tabController.index,
-        duration: const Duration(milliseconds: 300),
-        curve: Curves.easeInOut,
-      );
-    }
-  }
-
-  void _handleTabChanged(ProfileTab tab) {
-    setState(() {
-      _state = _state.copyWith(activeTab: tab);
-    });
   }
 
   void _handleEditProfile() {
@@ -107,28 +80,11 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
               state: _state,
               onEditProfile: _handleEditProfile,
             ),
-            _ProfileStatusRow(state: _state),
-            _ProfileTabBar(controller: _tabController),
             Expanded(
-              child: PageView(
-                controller: _pageController,
-                onPageChanged: (index) {
-                  // Sync TabController when page is swiped
-                  if (_tabController.index != index) {
-                    _tabController.animateTo(index);
-                  }
-                },
-                children: [
-                  _Page1Content(
-                    state: _state,
-                    onTabChanged: _handleTabChanged,
-                    storiesFuture: _storiesFuture,
-                    bottomPadding: bottomNavHeight + bottomPadding + extraBottomPadding,
-                  ),
-                  _Page2Placeholder(
-                    bottomPadding: bottomNavHeight + bottomPadding + extraBottomPadding,
-                  ),
-                ],
+              child: _Page1Content(
+                state: _state,
+                storiesFuture: _storiesFuture,
+                bottomPadding: bottomNavHeight + bottomPadding + extraBottomPadding,
               ),
             ),
           ],
@@ -427,13 +383,11 @@ class _StatusCard extends StatelessWidget {
 /// Page 1 content with segmented control and story list
 class _Page1Content extends StatelessWidget {
   final ProfileState state;
-  final ValueChanged<ProfileTab> onTabChanged;
   final Future<List<Story>> storiesFuture;
   final double bottomPadding;
 
   const _Page1Content({
     required this.state,
-    required this.onTabChanged,
     required this.storiesFuture,
     required this.bottomPadding,
   });
@@ -444,10 +398,6 @@ class _Page1Content extends StatelessWidget {
       height: double.infinity,
       child: Column(
         children: [
-          _ProfileFilterSegmentedControl(
-            selected: state.activeTab,
-            onChanged: onTabChanged,
-          ),
           Expanded(
             child: FutureBuilder<List<Story>>(
               future: storiesFuture,

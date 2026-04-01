@@ -29,9 +29,13 @@ class LoginScreen extends StatelessWidget {
                       obscureText: true,
                     ),
                     const SizedBox(height: 12),
-                    FilledButton(onPressed: () {}, child: const Text('LOGIN')),
+                    // V1 entry behavior: after login, land on Mono (auth logic TBD)
+                    FilledButton(
+                      onPressed: () => context.go('/mono'),
+                      child: const Text('LOGIN'),
+                    ),
                     TextButton(
-                      onPressed: () => context.go('/'),
+                      onPressed: () => context.go('/mono'),
                       child: const Text('Guest >>'),
                     ),
                     const SizedBox(height: 12),
