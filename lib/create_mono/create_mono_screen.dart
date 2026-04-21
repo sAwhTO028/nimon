@@ -2,25 +2,30 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'one_short_tab.dart';
 import 'widgets/header_sheet.dart';
+import 'mono_draft_v1.dart';
 
 enum CreationType { oneShort, storySeries, promptEpisode }
 
 class CreateMonoState {
   final CreationType type;
   final OneShortState oneShortState;
+  final List<MonoDraftV1> drafts;
 
   const CreateMonoState({
     this.type = CreationType.oneShort,
     this.oneShortState = const OneShortState(),
+    this.drafts = const [],
   });
 
   CreateMonoState copyWith({
     CreationType? type,
     OneShortState? oneShortState,
+    List<MonoDraftV1>? drafts,
   }) {
     return CreateMonoState(
       type: type ?? this.type,
       oneShortState: oneShortState ?? this.oneShortState,
+      drafts: drafts ?? this.drafts,
     );
   }
 }
@@ -34,6 +39,62 @@ class CreateMonoNotifier extends StateNotifier<CreateMonoState> {
 
   void updateOneShortState(OneShortState oneShortState) {
     state = state.copyWith(oneShortState: oneShortState);
+  }
+
+  void saveOneShortDraft() {
+    final s = state.oneShortState;
+    final id = 'draft_one_short';
+    final content = s.toMonoContent(id: id);
+    final legacy = s.toLegacyBodyText();
+    final title = s.title.trim();
+    final jlpt = s.jlpt.trim();
+
+    final draft = MonoDraftV1(
+      id: id,
+      title: title.isEmpty ? 'Untitled' : title,
+      jlptLevel: jlpt.isEmpty ? 'N5' : jlpt,
+      content: content,
+      legacyBodyText: legacy,
+      updatedAt: DateTime.now(),
+      published: false,
+    );
+
+    final next = [...state.drafts];
+    final idx = next.indexWhere((d) => d.id == id);
+    if (idx >= 0) {
+      next[idx] = draft;
+    } else {
+      next.insert(0, draft);
+    }
+    state = state.copyWith(drafts: next);
+  }
+
+  /// V1 publish validation: title + jlpt + at least one Japanese line.
+  /// Explanations and furigana are optional.
+  bool canPublishOneShort() {
+    final s = state.oneShortState;
+    if (s.title.trim().isEmpty) return false;
+    if (s.jlpt.trim().isEmpty) return false;
+    if (!s.hasAtLeastOneLine) return false;
+    return true;
+  }
+
+  /// Publish: store a published snapshot in drafts list (V1).
+  void publishOneShort() {
+    final s = state.oneShortState;
+    final id = 'published_one_short';
+    final content = s.toMonoContent(id: id);
+    final legacy = s.toLegacyBodyText();
+    final draft = MonoDraftV1(
+      id: id,
+      title: s.title.trim(),
+      jlptLevel: s.jlpt.trim(),
+      content: content,
+      legacyBodyText: legacy,
+      updatedAt: DateTime.now(),
+      published: true,
+    );
+    state = state.copyWith(drafts: [draft, ...state.drafts]);
   }
 }
 
@@ -58,8 +119,27 @@ class CreateMonoScreen extends ConsumerWidget {
             children: [
               HeaderSheet(
                 type: state.type,
-                canCreate: _canCreate(state),
-                onCreate: () => _handleCreate(context, state),
+                canPublish: notifier.canPublishOneShort(),
+                onSaveDraft: () {
+                  notifier.saveOneShortDraft();
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('All changes saved locally.')),
+                  );
+                },
+                onPublish: () {
+                  if (!notifier.canPublishOneShort()) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Add title, level, and at least 1 line'),
+                      ),
+                    );
+                    return;
+                  }
+                  notifier.publishOneShort();
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Published (V1 mock)')),
+                  );
+                },
               ),
               const SizedBox(height: 16),
               _buildContent(state, notifier),
@@ -183,33 +263,5 @@ class CreateMonoScreen extends ConsumerWidget {
     );
   }
 
-  bool _canCreate(CreateMonoState state) {
-    switch (state.type) {
-      case CreationType.oneShort:
-        return state.oneShortState.isComplete;
-      case CreationType.storySeries:
-      case CreationType.promptEpisode:
-        return false;
-    }
-  }
-
-  void _handleCreate(BuildContext context, CreateMonoState state) {
-    switch (state.type) {
-      case CreationType.oneShort:
-        final payload = {
-          'jlpt': state.oneShortState.jlpt,
-          'category': state.oneShortState.category,
-          'promptId': state.oneShortState.promptId,
-          'title': state.oneShortState.title,
-        };
-        print('One-Short payload: $payload');
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Created One-Short!')),
-        );
-        break;
-      case CreationType.storySeries:
-      case CreationType.promptEpisode:
-        break;
-    }
-  }
+  // Publish/save is handled via [CreateMonoNotifier] (V1 lightweight).
 }

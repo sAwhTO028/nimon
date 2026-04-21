@@ -167,12 +167,14 @@ class _StoryDetailScreenState extends State<StoryDetailScreen> with TickerProvid
               SizedBox(
                 width: 44,
                 height: 44,
-                child: _buildGlassButton(
-                  icon: Icons.arrow_back,
-                  onTap: () => Navigator.of(context).canPop() 
-                      ? Navigator.of(context).pop()
-                      : context.go('/'),
-                  semanticLabel: '戻る',
+                child: Center(
+                  child: NimonCircleNavButton(
+                    onPressed: () => Navigator.of(context).canPop()
+                        ? Navigator.of(context).pop()
+                        : context.go('/'),
+                    tooltip: '戻る',
+                    semanticLabel: '戻る',
+                  ),
                 ),
               ),
               

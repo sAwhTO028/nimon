@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:nimon/ui/widgets/nimon_circle_nav_button.dart';
 import 'package:nimon/data/story_repo.dart';
 import 'package:nimon/models/story.dart';
 
@@ -71,6 +72,7 @@ class _WriterScreenState extends State<WriterScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Writer'),
+        leading: const NimonBackButton(),
         actions: [
           IconButton(
             tooltip: 'AI check (demo)',

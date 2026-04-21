@@ -3,14 +3,16 @@ import '../create_mono_screen.dart';
 
 class HeaderSheet extends StatelessWidget {
   final CreationType type;
-  final bool canCreate;
-  final VoidCallback onCreate;
+  final bool canPublish;
+  final VoidCallback onSaveDraft;
+  final VoidCallback onPublish;
 
   const HeaderSheet({
     super.key,
     required this.type,
-    required this.canCreate,
-    required this.onCreate,
+    required this.canPublish,
+    required this.onSaveDraft,
+    required this.onPublish,
   });
 
   @override
@@ -69,25 +71,49 @@ class HeaderSheet extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 16),
-              SizedBox(
-                height: 40,
-                child: FilledButton(
-                  onPressed: canCreate ? onCreate : null,
-                  style: FilledButton.styleFrom(
-                    backgroundColor: canCreate ? Colors.blue : Colors.grey.shade300,
-                    foregroundColor: canCreate ? Colors.white : Colors.grey.shade600,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  SizedBox(
+                    height: 40,
+                    child: OutlinedButton(
+                      onPressed: onSaveDraft,
+                      style: OutlinedButton.styleFrom(
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                        ),
+                      ),
+                      child: const Text(
+                        'Save draft',
+                        style: TextStyle(fontWeight: FontWeight.w700),
+                      ),
                     ),
-                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
                   ),
-                  child: const Text(
-                    'CREATE',
-                    style: TextStyle(
-                      fontWeight: FontWeight.w600,
+                  const SizedBox(width: 10),
+                  SizedBox(
+                    height: 40,
+                    child: FilledButton(
+                      onPressed: canPublish ? onPublish : null,
+                      style: FilledButton.styleFrom(
+                        backgroundColor:
+                            canPublish ? Colors.blue : Colors.grey.shade300,
+                        foregroundColor:
+                            canPublish ? Colors.white : Colors.grey.shade600,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                      ),
+                      child: const Text(
+                        'Publish',
+                        style: TextStyle(fontWeight: FontWeight.w700),
+                      ),
                     ),
                   ),
-                ),
+                ],
               ),
             ],
           ),

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:nimon/models/story.dart';
+import 'package:nimon/ui/widgets/nimon_circle_nav_button.dart';
 import '../../data/episode_mock_data.dart'; // CANONICAL mock data source
 
 /// DEPRECATED: Local mock text - kept as fallback only
@@ -641,10 +642,9 @@ class _ReaderHeader extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       child: Row(
         children: [
-          IconButton(
-            icon: const Icon(Icons.arrow_back),
+          NimonCircleNavButton(
             onPressed: onBack,
-            color: textColor,
+            tooltip: 'Back',
           ),
           Expanded(
             child: Text(

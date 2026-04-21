@@ -1,5 +1,7 @@
-import 'package:flutter/material.dart';
 import 'dart:io' show Platform;
+
+import 'package:flutter/material.dart';
+import 'package:nimon/ui/widgets/nimon_circle_nav_button.dart';
 import '../../models/section_key.dart';
 import '../../models/filter_state.dart';
 import '../../models/story.dart';
@@ -91,7 +93,7 @@ class _SeeMorePageState extends State<SeeMorePage> {
         elevation: 0,
         backgroundColor: theme.colorScheme.surface,
         foregroundColor: theme.colorScheme.onSurface,
-        leading: const BackButton(),
+        leading: const NimonBackButton(),
         centerTitle: true,
         title: Text(
           widget.section.title,

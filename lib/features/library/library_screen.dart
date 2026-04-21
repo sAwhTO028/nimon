@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:nimon/ui/widgets/nimon_circle_nav_button.dart';
 import 'widgets/following_writers_section.dart';
 
 /// Library screen showing user's saved content and following writers
@@ -10,6 +11,7 @@ class LibraryScreen extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Library'),
+        leading: const NimonBackButton(),
       ),
       body: SafeArea(
         child: SingleChildScrollView(

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:nimon/ui/widgets/nimon_circle_nav_button.dart';
 import 'package:nimon/models/story.dart';
 
 /// Clean reader (Narration / Dialog / Monologue / Emotion only)
@@ -11,7 +12,10 @@ class ReaderScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text('Episode ${episode.index}')),
+      appBar: AppBar(
+        title: Text('Episode ${episode.index}'),
+        leading: const NimonBackButton(),
+      ),
       body: ListView.builder(
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 24), 
         itemCount: episode.blocks.length,

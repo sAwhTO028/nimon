@@ -6,16 +6,24 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  flutter_localizations:
+    sdk: flutter
   go_router: ^14.2.7
-  google_fonts: ^6.2.1
+  google_fonts: ^6.3.3
   uuid: ^4.4.2
   collection: ^1.18.0
-  intl: ^0.19.0
+  intl: ^0.20.2
   modal_bottom_sheet: ^3.0.0
   flutter_riverpod: ^2.4.9
   animated_accordion: ^1.1.1
   image_picker: ^1.0.0
+  file_picker: ^10.1.0
   shared_preferences: ^2.2.2
+  just_audio: ^0.9.40
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
 
 flutter:
   uses-material-design: true

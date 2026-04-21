@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:nimon/ui/widgets/nimon_circle_nav_button.dart';
 import '../../models/story.dart';
 import '../learn/learn_hub_screen.dart';
 
@@ -19,7 +20,7 @@ class _StoryScreenState extends State<StoryScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        leading: const BackButton(),
+        leading: const NimonBackButton(),
         title: Text(widget.story.title),
         actions: [
           IconButton(icon: const Icon(Icons.search), onPressed: () {}),

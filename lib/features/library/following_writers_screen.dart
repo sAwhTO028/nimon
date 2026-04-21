@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:nimon/ui/widgets/nimon_circle_nav_button.dart';
 import '../../models/following_writer.dart';
 import '../../data/following_repository.dart';
 
@@ -11,6 +12,7 @@ class FollowingWritersScreen extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Following Writers'),
+        leading: const NimonBackButton(),
       ),
       body: FutureBuilder<List<FollowingWriter>>(
         future: followingRepo.fetchFollowingWriters(),

@@ -43,7 +43,8 @@ class _EpisodeActionBarState extends State<EpisodeActionBar> {
     
     try {
       // Add haptic feedback for better UX
-      await HapticFeedback.lightImpact();
+      // Don't await: some test environments/platform channels can hang.
+      HapticFeedback.lightImpact();
       
       if (widget.onShare != null) {
         widget.onShare!();
@@ -99,45 +100,40 @@ class _EpisodeActionBarState extends State<EpisodeActionBar> {
     );
 
     // Save for Later button
-    final saveBtn = Expanded(
-      child: OutlinedButton.icon(
-        onPressed: widget.isLoading ? null : widget.onSave,
-        icon: Icon(
-          Icons.bookmark_border_rounded,
-          size: 20,
+    final saveBtn = OutlinedButton.icon(
+      onPressed: widget.isLoading ? null : widget.onSave,
+      icon: const Icon(
+        Icons.bookmark_border_rounded,
+        size: 20,
+      ),
+      label: Text(
+        'Save for Later',
+        style: theme.textTheme.labelLarge,
+      ),
+      style: OutlinedButton.styleFrom(
+        minimumSize: const Size(0, 48),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(14),
         ),
-        label: Text(
-          'Save for Later',
-          style: theme.textTheme.labelLarge,
-        ),
-        style: OutlinedButton.styleFrom(
-          minimumSize: const Size(0, 48),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(14),
-          ),
-          side: BorderSide(
-            color: theme.colorScheme.outline.withOpacity(0.5),
-            width: 1,
-          ),
+        side: BorderSide(
+          color: theme.colorScheme.outline.withOpacity(0.5),
+          width: 1,
         ),
       ),
     );
 
     // Start Reading button (primary)
-    final startBtn = Expanded(
-      flex: 2, // Give more space to the primary button
-      child: FilledButton.icon(
-        onPressed: (widget.isLoading || _isSharing) ? null : widget.onStart,
-        icon: const Icon(Icons.play_arrow_rounded, size: 22),
-        label: const Text('Start Reading'),
-        style: FilledButton.styleFrom(
-          minimumSize: const Size(0, 48),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(14),
-          ),
-          backgroundColor: theme.colorScheme.primary,
-          foregroundColor: theme.colorScheme.onPrimary,
+    final startBtn = FilledButton.icon(
+      onPressed: (widget.isLoading || _isSharing) ? null : widget.onStart,
+      icon: const Icon(Icons.play_arrow_rounded, size: 22),
+      label: const Text('Start Reading'),
+      style: FilledButton.styleFrom(
+        minimumSize: const Size(0, 48),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(14),
         ),
+        backgroundColor: theme.colorScheme.primary,
+        foregroundColor: theme.colorScheme.onPrimary,
       ),
     );
 
@@ -157,18 +153,23 @@ class _EpisodeActionBarState extends State<EpisodeActionBar> {
             gap,
             
             // Save for Later button
-            Semantics(
-              button: true,
-              label: 'Save episode for later',
-              child: saveBtn,
+            Expanded(
+              child: Semantics(
+                button: true,
+                label: 'Save episode for later',
+                child: saveBtn,
+              ),
             ),
             gap,
             
             // Start Reading button (primary)
-            Semantics(
-              button: true,
-              label: 'Start reading episode',
-              child: startBtn,
+            Expanded(
+              flex: 2, // Give more space to the primary button
+              child: Semantics(
+                button: true,
+                label: 'Start reading episode',
+                child: startBtn,
+              ),
             ),
           ],
         ),

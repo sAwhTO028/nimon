@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:nimon/ui/widgets/nimon_circle_nav_button.dart';
 
 class QuizScreen extends StatefulWidget {
   const QuizScreen({super.key});
@@ -19,6 +20,7 @@ class _QuizScreenState extends State<QuizScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Quiz'),
+        leading: const NimonBackButton(),
         actions: [Center(child: Padding(padding: const EdgeInsets.only(right: 12), child: Text('1/10')))],
       ),
       body: Padding(
