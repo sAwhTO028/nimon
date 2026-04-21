@@ -4,8 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:nimon/features/create/creator_route_sync.dart';
+import 'package:nimon/features/create/data/story_draft_repository_provider.dart';
 import 'package:nimon/features/create/story_creator_models.dart';
-import 'package:nimon/features/create/story_creator_draft_storage.dart';
 import 'package:nimon/features/create/story_creator_progress_checklist.dart';
 import 'package:nimon/features/create/story_creator_provider.dart';
 import 'package:nimon/ui/widgets/nimon_circle_nav_button.dart';
@@ -86,7 +86,7 @@ class StoryCreatorHubScreen extends ConsumerWidget {
           ),
           const SizedBox(height: 12),
           FutureBuilder<bool>(
-            future: StoryCreatorDraftStorage.exists(),
+            future: ref.read(storyDraftRepositoryProvider).hasAnyIndexedDraft(),
             builder: (context, snap) {
               final hasDraft = snap.data == true;
               return Column(
@@ -103,7 +103,8 @@ class StoryCreatorHubScreen extends ConsumerWidget {
                   ),
                   const SizedBox(height: 8),
                   FutureBuilder<DateTime?>(
-                    future: StoryCreatorDraftStorage.loadSavedAt(),
+                    future:
+                        ref.read(storyDraftRepositoryProvider).savedAtActiveDraft(),
                     builder: (context, snap2) {
                       final dt = snap2.data;
                       final label = !hasDraft

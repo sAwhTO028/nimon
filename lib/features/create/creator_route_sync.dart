@@ -5,7 +5,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:nimon/features/create/creator_drawer_session.dart';
 import 'package:nimon/features/create/creator_navigation_debug.dart';
-import 'package:nimon/features/create/story_creator_draft_storage.dart';
+import 'package:nimon/features/create/data/story_draft_repository_provider.dart';
+import 'package:nimon/features/create/story_creator_draft_storage.dart'
+    show CreatorLastActiveModule;
 import 'package:nimon/features/create/story_creator_provider.dart';
 
 /// Pushes the current `/create/story/...` location into [creatorDrawerSessionProvider].
@@ -70,11 +72,11 @@ void syncCreatorDrawerSessionFromContext(BuildContext context, WidgetRef ref) {
 
       if (module != null) {
         unawaited(
-          StoryCreatorDraftResumeStorage.recordLastActive(
-            draftId: draftId,
-            module: module,
-            subPage: subPage,
-          ),
+          ref.read(storyDraftRepositoryProvider).recordResumeNavigation(
+                draftId: draftId,
+                module: module,
+                subPage: subPage,
+              ),
         );
       }
     });

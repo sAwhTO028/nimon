@@ -2,8 +2,12 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart' show kDebugMode, debugPrint;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:nimon/features/auth/dev_current_user_provider.dart';
 import 'package:nimon/features/create/creator_readiness.dart';
-import 'package:nimon/features/create/story_creator_draft_storage.dart';
+import 'package:nimon/features/create/data/story_draft_repository.dart';
+import 'package:nimon/features/create/data/story_draft_repository_provider.dart';
+import 'package:nimon/features/create/story_creator_draft_storage.dart'
+    show CreatorDraftResumeMeta, CreatorLastActiveModule;
 import 'package:nimon/features/create/story_creator_models.dart';
 import 'package:uuid/uuid.dart';
 
@@ -56,8 +60,9 @@ class StoryCreatorDraftState {
   final DateTime? lastSavedAt;
   final String? lastSaveError;
 
-  factory StoryCreatorDraftState.initial() => StoryCreatorDraftState(
-        draft: CreatorStoryV1.empty(),
+  factory StoryCreatorDraftState.initial({required String creatorOwnerId}) =>
+      StoryCreatorDraftState(
+        draft: CreatorStoryV1.empty(creatorOwnerId: creatorOwnerId),
         dirty: false,
         saveStatus: CreatorDraftSaveStatus.idle,
         lastSavedAt: null,
@@ -84,7 +89,13 @@ class StoryCreatorDraftState {
 }
 
 class StoryCreatorDraftNotifier extends StateNotifier<StoryCreatorDraftState> {
-  StoryCreatorDraftNotifier() : super(StoryCreatorDraftState.initial());
+  StoryCreatorDraftNotifier(this._drafts, this._devOwnerId)
+      : super(StoryCreatorDraftState.initial(creatorOwnerId: _devOwnerId));
+
+  final StoryDraftRepository _drafts;
+
+  /// Development (later: authenticated) user id for [StoryBasics.creatorOwnerId].
+  final String _devOwnerId;
 
   bool _hydrated = false;
   Timer? _persistDebounce;
@@ -93,26 +104,41 @@ class StoryCreatorDraftNotifier extends StateNotifier<StoryCreatorDraftState> {
 
   CreatorStoryV1 get draft => state.draft;
 
+  String _effectiveCreatorOwnerId() {
+    final v = state.draft.basics.creatorOwnerId.trim();
+    return v.isEmpty ? _devOwnerId : v;
+  }
+
   /// Explicitly load a specific local draft (no implicit resume in the Add/Create entry point).
   Future<void> loadDraftById(String draftId) async {
     final id = draftId.trim();
     if (id.isEmpty) return;
-    final loaded = await StoryCreatorDraftStorage.load(draftId: id);
+    var loaded = await _drafts.loadDraft(id);
     _hydrated = true;
     if (loaded == null) return;
+    final needsOwnerBackfill =
+        loaded.basics.creatorOwnerId.trim().isEmpty;
+    if (needsOwnerBackfill) {
+      loaded = loaded.copyWith(
+        basics: loaded.basics.copyWith(creatorOwnerId: _devOwnerId),
+      );
+    }
     state = state.copyWith(
       draft: loaded,
       dirty: false,
       saveStatus: CreatorDraftSaveStatus.saved,
-      lastSavedAt: await StoryCreatorDraftStorage.loadSavedAt(draftId: id),
+      lastSavedAt: await _drafts.savedAt(id),
       clearLastSaveError: true,
     );
+    if (needsOwnerBackfill) {
+      await persistLocalNow(reason: 'owner_backfill');
+    }
   }
 
   /// Start a brand-new local draft session (empty, new id) and persist immediately.
   Future<CreatorStoryV1> startNewLocalDraft() async {
     final next = CreatorStoryV1.empty(
-      creatorOwnerId: state.draft.basics.creatorOwnerId,
+      creatorOwnerId: _effectiveCreatorOwnerId(),
     );
     state = state.copyWith(
       draft: next,
@@ -121,7 +147,7 @@ class StoryCreatorDraftNotifier extends StateNotifier<StoryCreatorDraftState> {
       lastSavedAt: null,
       clearLastSaveError: true,
     );
-    await StoryCreatorDraftResumeStorage.saveMeta(
+    await _drafts.saveResumeMeta(
       CreatorDraftResumeMeta.initial(
         draftId: state.draft.id,
         module: CreatorLastActiveModule.storyBasics,
@@ -155,15 +181,7 @@ class StoryCreatorDraftNotifier extends StateNotifier<StoryCreatorDraftState> {
     );
     try {
       // Save incomplete drafts too; keep publish state + module statuses.
-      final now = DateTime.now();
-      final nextDraft = state.draft.copyWith(
-        basics: state.draft.basics.copyWith(updatedAt: now),
-      );
-      await StoryCreatorDraftStorage.save(nextDraft);
-      await StoryCreatorDraftResumeStorage.touchEdited(
-        draftId: nextDraft.id,
-        atUtc: DateTime.now().toUtc(),
-      );
+      final nextDraft = await _drafts.saveDraft(state.draft);
       state = state.copyWith(
         draft: nextDraft,
         dirty: false,
@@ -221,13 +239,35 @@ class StoryCreatorDraftNotifier extends StateNotifier<StoryCreatorDraftState> {
   }
 
   Future<void> discardDraftFromDiskAndReset() async {
-    await StoryCreatorDraftStorage.clear();
+    await _drafts.clearActiveDraft();
     reset();
+  }
+
+  /// Profile / other surfaces deleted this draft id — drop session state if it matches.
+  void syncIfDraftWasRemovedExternally(String draftId) {
+    final id = draftId.trim();
+    if (id.isEmpty) return;
+    if (state.draft.id != id) return;
+    _persistDebounce?.cancel();
+    reset();
+  }
+
+  /// Profile / other surfaces saved this draft — refresh session if it is the same id.
+  void syncIfSameDraftWasPersistedElsewhere(CreatorStoryV1 persisted) {
+    if (state.draft.id != persisted.id) return;
+    _persistDebounce?.cancel();
+    state = state.copyWith(
+      draft: persisted,
+      dirty: false,
+      saveStatus: CreatorDraftSaveStatus.saved,
+      lastSavedAt: DateTime.now(),
+      clearLastSaveError: true,
+    );
   }
 
   void reset() => state = state.copyWith(
         draft: CreatorStoryV1.empty(
-          creatorOwnerId: state.draft.basics.creatorOwnerId,
+          creatorOwnerId: _effectiveCreatorOwnerId(),
         ),
         dirty: false,
         saveStatus: CreatorDraftSaveStatus.idle,
@@ -984,7 +1024,10 @@ class StoryCreatorDraftNotifier extends StateNotifier<StoryCreatorDraftState> {
 final storyCreatorDraftProvider =
     StateNotifierProvider<StoryCreatorDraftNotifier, StoryCreatorDraftState>(
         (ref) {
-  return StoryCreatorDraftNotifier();
+  return StoryCreatorDraftNotifier(
+    ref.watch(storyDraftRepositoryProvider),
+    ref.watch(devCurrentUserProvider).userId,
+  );
 });
 
 /// Convenience: most UIs only need the draft content, not save meta.

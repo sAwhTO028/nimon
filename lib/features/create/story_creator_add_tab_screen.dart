@@ -6,7 +6,10 @@ import 'package:go_router/go_router.dart';
 import 'package:nimon/features/create/creator_resume_draft.dart';
 import 'package:nimon/features/create/creator_readiness.dart';
 import 'package:nimon/features/create/creator_labels.dart';
-import 'package:nimon/features/create/story_creator_draft_storage.dart';
+import 'package:nimon/features/create/data/story_draft_repository.dart';
+import 'package:nimon/features/create/data/story_draft_repository_provider.dart';
+import 'package:nimon/features/create/story_creator_draft_storage.dart'
+    show CreatorDraftResumeMeta, CreatorLastActiveModule;
 import 'package:nimon/features/create/story_creator_models.dart';
 import 'package:nimon/features/create/story_creator_provider.dart';
 import 'package:nimon/features/profile/profile_navigation_helpers.dart';
@@ -46,7 +49,7 @@ class StoryCreatorAddTabScreen extends ConsumerWidget {
         centerTitle: true,
       ),
       body: FutureBuilder<_LocalDraftsSnapshot>(
-        future: _LocalDraftsSnapshot.load(),
+        future: _LocalDraftsSnapshot.load(ref.read(storyDraftRepositoryProvider)),
         builder: (context, snap) {
           final data = snap.data;
           final loading = snap.connectionState != ConnectionState.done && data == null;
@@ -153,14 +156,14 @@ class _LocalDraftsSnapshot {
 
   const _LocalDraftsSnapshot({required this.drafts});
 
-  static Future<_LocalDraftsSnapshot> load() async {
-    final ids = await StoryCreatorDraftStorage.loadAllIds();
+  static Future<_LocalDraftsSnapshot> load(StoryDraftRepository repository) async {
+    final ids = await repository.listDraftIds();
     final out = <_DraftListItemModel>[];
     for (final id in ids) {
-      final draft = await StoryCreatorDraftStorage.load(draftId: id);
+      final draft = await repository.loadDraft(id);
       if (draft == null) continue;
       if (draft.publishState != StoryPublishState.draft) continue;
-      final meta = await StoryCreatorDraftResumeStorage.loadMeta(id);
+      final meta = await repository.loadResumeMeta(id);
       out.add(
         _DraftListItemModel.fromDraft(
           draft: draft,

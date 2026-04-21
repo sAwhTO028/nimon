@@ -5,7 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:nimon/features/create/create_story_basics_form.dart';
 import 'package:nimon/features/create/creator_route_sync.dart';
-import 'package:nimon/features/create/story_creator_draft_storage.dart';
+import 'package:nimon/features/create/data/story_draft_repository_provider.dart';
 import 'package:nimon/features/create/story_creator_provider.dart';
 import 'package:nimon/ui/widgets/nimon_circle_nav_button.dart';
 
@@ -69,7 +69,8 @@ class _StoryCreatorBasicsScreenState
 
     if (!mounted) return;
 
-    final hasPersisted = await StoryCreatorDraftStorage.hasDraft(draftId);
+    final hasPersisted =
+        await ref.read(storyDraftRepositoryProvider).hasDraft(draftId);
     if (!mounted) return;
 
     final action = await showDialog<String>(
@@ -113,8 +114,7 @@ class _StoryCreatorBasicsScreenState
     if (action == 'discard') {
       // If the draft never persisted, ensure nothing remains in local storage.
       if (!hasPersisted) {
-        await StoryCreatorDraftStorage.clear(draftId: draftId);
-        await StoryCreatorDraftResumeStorage.clearMeta(draftId);
+        await ref.read(storyDraftRepositoryProvider).deleteDraft(draftId);
       }
       ref.read(storyCreatorDraftProvider.notifier).reset();
       if (!mounted) return;

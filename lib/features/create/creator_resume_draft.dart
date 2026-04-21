@@ -5,7 +5,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:nimon/features/create/creator_drawer_session.dart';
 import 'package:nimon/features/create/creator_workspace_step.dart';
-import 'package:nimon/features/create/story_creator_draft_storage.dart';
+import 'package:nimon/features/create/data/story_draft_repository_provider.dart';
+import 'package:nimon/features/create/story_creator_draft_storage.dart'
+    show CreatorLastActiveModule;
 import 'package:nimon/features/create/story_creator_models.dart';
 import 'package:nimon/features/create/story_creator_provider.dart';
 
@@ -52,15 +54,14 @@ abstract final class CreatorDraftResumeFlow {
   }
 
   static Future<void> _restoreDraftState(ProviderContainer c, String draftId) async {
-    await StoryCreatorDraftResumeStorage.ensureInit(draftId);
+    await c.read(storyDraftRepositoryProvider).ensureResumeMetaInitialized(draftId);
     await c.read(storyCreatorDraftProvider.notifier).loadDraftById(draftId);
   }
 
   static Future<String> _targetUri(ProviderContainer c, String draftId) async {
     final id = draftId.trim();
-    final meta = await StoryCreatorDraftResumeStorage.loadMeta(id);
+    final meta = await c.read(storyDraftRepositoryProvider).loadResumeMeta(id);
     final module = meta?.lastActiveModule ?? CreatorLastActiveModule.storytelling;
-    final sub = (meta?.lastActiveSubPage ?? '').trim();
 
     final drawer = c.read(creatorDrawerSessionProvider.notifier);
 

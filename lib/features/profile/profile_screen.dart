@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:nimon/features/create/creator_processing_copy.dart';
 import 'package:nimon/data/story_repo.dart';
@@ -9,8 +10,11 @@ import 'package:nimon/features/create/creator_labels.dart';
 import 'package:nimon/features/create/creator_draft_validation.dart';
 import 'package:nimon/features/create/creator_readiness.dart';
 import 'package:nimon/features/create/creator_resume_draft.dart';
-import 'package:nimon/features/create/story_creator_draft_storage.dart';
+import 'package:nimon/features/create/data/story_draft_repository_provider.dart';
+import 'package:nimon/features/create/story_creator_draft_storage.dart'
+    show CreatorDraftResumeMeta;
 import 'package:nimon/features/create/story_creator_models.dart';
+import 'package:nimon/features/create/story_creator_provider.dart';
 import 'package:nimon/features/mono/mono_reader_menu_origin.dart';
 import 'package:nimon/features/mono/mono_screen.dart';
 import 'package:nimon/features/profile/profile_navigation_drawer.dart';
@@ -187,7 +191,7 @@ String? _firstStoryThumbnailUrl(List<_OneShortItem> items) {
   return null;
 }
 
-class ProfileScreen extends StatefulWidget {
+class ProfileScreen extends ConsumerStatefulWidget {
   final StoryRepo repo;
 
   /// Profile content tabs: 0 = Published, 1 = Processing, 2 = Saved. Null uses 0.
@@ -204,10 +208,10 @@ class ProfileScreen extends StatefulWidget {
   });
 
   @override
-  State<ProfileScreen> createState() => _ProfileScreenState();
+  ConsumerState<ProfileScreen> createState() => _ProfileScreenState();
 }
 
-class _ProfileScreenState extends State<ProfileScreen>
+class _ProfileScreenState extends ConsumerState<ProfileScreen>
     with TickerProviderStateMixin {
   static const _uploadedMock = <_OneShortItem>[
     _OneShortItem(
@@ -395,14 +399,15 @@ class _ProfileScreenState extends State<ProfileScreen>
   }
 
   Future<void> _loadLocalCreatorDraftIntoProcessing() async {
-    final ids = await StoryCreatorDraftStorage.loadAllIds();
+    final repo = ref.read(storyDraftRepositoryProvider);
+    final ids = await repo.listDraftIds();
     final drafts = <_ProcessingDraftItem>[];
     for (final id in ids) {
-      final d = await StoryCreatorDraftStorage.load(draftId: id);
+      final d = await repo.loadDraft(id);
       if (d == null) continue;
       // Defensive: never show empty/invalid shell drafts.
       if (!isMeaningfulDraftForProcessing(d)) continue;
-      final meta = await StoryCreatorDraftResumeStorage.loadMeta(id);
+      final meta = await repo.loadResumeMeta(id);
       drafts.add(
         _ProcessingDraftItem.fromDraft(
           draft: d,
@@ -863,7 +868,8 @@ class _ProfileScreenState extends State<ProfileScreen>
   }
 
   Future<void> _showProcessingDraftSheet(_OneShortItem item) async {
-    final draft = await StoryCreatorDraftStorage.load(draftId: item.id);
+    final draft =
+        await ref.read(storyDraftRepositoryProvider).loadDraft(item.id);
     if (!mounted) return;
     await showModalBottomSheet<void>(
       context: context,
@@ -1031,7 +1037,11 @@ class _ProfileScreenState extends State<ProfileScreen>
                       onPressed: () {
                         Navigator.of(ctx).pop();
                         unawaited(() async {
-                          await StoryCreatorDraftStorage.clear(draftId: item.id);
+                          final repo = ref.read(storyDraftRepositoryProvider);
+                          await repo.deleteDraft(item.id);
+                          ref
+                              .read(storyCreatorDraftProvider.notifier)
+                              .syncIfDraftWasRemovedExternally(item.id);
                           if (!mounted) return;
                           await _loadLocalCreatorDraftIntoProcessing();
                         }());
@@ -3016,7 +3026,7 @@ class _ProcessingSectionHeader extends StatelessWidget {
 /// Lightweight list row for Profile > Processing (not a boxed card): soft tap
 /// target, dividers from parent, small thumbnail, status line, chips, primary
 /// affordance + overflow.
-class _ProcessingDraftCard extends StatelessWidget {
+class _ProcessingDraftCard extends ConsumerWidget {
   const _ProcessingDraftCard({
     super.key,
     required this.item,
@@ -3035,7 +3045,7 @@ class _ProcessingDraftCard extends StatelessWidget {
     return '${dt.month}/${dt.day} $hh:$mm';
   }
 
-  Future<void> _rename(BuildContext context) async {
+  Future<void> _rename(BuildContext context, WidgetRef ref) async {
     final ctrl = TextEditingController(text: item.title);
     final next = await showDialog<String>(
       context: context,
@@ -3066,24 +3076,20 @@ class _ProcessingDraftCard extends StatelessWidget {
     final title = (next ?? '').trim();
     if (title.isEmpty || title == item.title) return;
 
-    final loaded = await StoryCreatorDraftStorage.load(draftId: item.draftId);
+    final repo = ref.read(storyDraftRepositoryProvider);
+    final loaded = await repo.loadDraft(item.draftId);
     if (loaded == null) return;
-    final now = DateTime.now();
     final updated = loaded.copyWith(
-      basics: loaded.basics.copyWith(
-        title: title,
-        updatedAt: now,
-      ),
+      basics: loaded.basics.copyWith(title: title),
     );
-    await StoryCreatorDraftStorage.save(updated);
-    await StoryCreatorDraftResumeStorage.touchEdited(
-      draftId: updated.id,
-      atUtc: DateTime.now().toUtc(),
-    );
+    final saved = await repo.saveDraft(updated);
+    ref
+        .read(storyCreatorDraftProvider.notifier)
+        .syncIfSameDraftWasPersistedElsewhere(saved);
     onChanged();
   }
 
-  Future<void> _delete(BuildContext context) async {
+  Future<void> _delete(BuildContext context, WidgetRef ref) async {
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -3106,13 +3112,15 @@ class _ProcessingDraftCard extends StatelessWidget {
       ),
     );
     if (ok != true) return;
-    await StoryCreatorDraftStorage.clear(draftId: item.draftId);
-    await StoryCreatorDraftResumeStorage.clearMeta(item.draftId);
+    await ref.read(storyDraftRepositoryProvider).deleteDraft(item.draftId);
+    ref
+        .read(storyCreatorDraftProvider.notifier)
+        .syncIfDraftWasRemovedExternally(item.draftId);
     onChanged();
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
 
@@ -3214,8 +3222,8 @@ class _ProcessingDraftCard extends StatelessWidget {
                       child: PopupMenuButton<String>(
                         tooltip: 'Story actions',
                         onSelected: (v) {
-                          if (v == 'rename') unawaited(_rename(context));
-                          if (v == 'delete') unawaited(_delete(context));
+                          if (v == 'rename') unawaited(_rename(context, ref));
+                          if (v == 'delete') unawaited(_delete(context, ref));
                         },
                         itemBuilder: (ctx) => const [
                           PopupMenuItem(
