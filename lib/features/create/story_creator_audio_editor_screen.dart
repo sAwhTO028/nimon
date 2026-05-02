@@ -4,8 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:go_router/go_router.dart';
-import 'package:nimon/features/create/creator_route_sync.dart';
+import 'package:nimon/features/create/creator_back_policy.dart';
+import 'package:nimon/features/create/creator_route_sync_listener.dart';
 import 'package:nimon/features/create/story_creator_models.dart';
 import 'package:nimon/features/create/story_creator_provider.dart';
 import 'package:nimon/ui/widgets/nimon_circle_nav_button.dart';
@@ -17,21 +17,42 @@ class StoryCreatorAudioEditorScreen extends ConsumerWidget {
   static const _ink = Color(0xFF1A1917);
   static const _muted = Color(0xFF5C5A55);
 
+  static const _allowedAudioExts = {'mp3', 'm4a', 'wav'};
+
+  static String? _validatePickedAudioExt(PlatformFile f) {
+    final ext = (f.extension ?? '').trim().toLowerCase();
+    if (ext.isEmpty || !_allowedAudioExts.contains(ext)) {
+      return 'Unsupported audio type. Use mp3, m4a, or wav.';
+    }
+    return null;
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    syncCreatorDrawerSessionFromContext(context, ref);
+    void handleCreatorBack() => unawaited(handleCreatorBackPressed(context, ref));
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Listening / Audio'),
-        leading: NimonBackButton(onPressed: () => context.pop()),
-      ),
-      body: StoryCreatorListeningModuleBody(
-        padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
-        showBottomActions: true,
-        showLearnExitButton: true,
-        useCompactModuleHeader: false,
-        onExit: () => context.pop(),
+    return CreatorRouteSyncListener(
+      child: PopScope(
+        canPop: false,
+        onPopInvokedWithResult: (didPop, result) {
+          if (didPop) return;
+          handleCreatorBack();
+        },
+        child: Scaffold(
+          appBar: AppBar(
+            title: const Text('Listening / Audio'),
+            leading: NimonBackButton(
+              onPressed: handleCreatorBack,
+            ),
+          ),
+          body: StoryCreatorListeningModuleBody(
+            padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
+            showBottomActions: true,
+            showLearnExitButton: true,
+            useCompactModuleHeader: false,
+            onExit: handleCreatorBack,
+          ),
+        ),
       ),
     );
   }
@@ -62,17 +83,7 @@ class StoryCreatorAudioEditorScreen extends ConsumerWidget {
     StoryAudioAsset? existing,
   }) async {
     final n = ref.read(storyCreatorDraftProvider.notifier);
-    final theme = Theme.of(context);
-    final nameCtrl = TextEditingController(text: existing?.displayName ?? '');
-    final durCtrl = TextEditingController(
-      text: existing?.durationSeconds?.toString() ?? '',
-    );
-    String? error;
-    PlatformFile? picked;
-
-    final existingFileLabel = (existing?.localFileName ?? '').trim();
-
-    await showModalBottomSheet<void>(
+    final result = await showModalBottomSheet<_AudioUpsertResult?>(
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
@@ -82,169 +93,246 @@ class StoryCreatorAudioEditorScreen extends ConsumerWidget {
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (ctx) {
-        final bottomInset = MediaQuery.viewInsetsOf(ctx).bottom;
-        return StatefulBuilder(
-          builder: (ctx2, setSheetState) {
-            Future<void> pickFile() async {
-              setSheetState(() => error = null);
-              final result = await FilePicker.platform.pickFiles(
-                allowMultiple: false,
-                type: FileType.custom,
-                allowedExtensions: const ['mp3', 'm4a', 'wav'],
-                withData: kIsWeb,
-              );
-              if (result == null || result.files.isEmpty) return;
-              final f = result.files.single;
-              final ext = (f.extension ?? '').trim().toLowerCase();
-              if (ext.isEmpty || !const {'mp3', 'm4a', 'wav'}.contains(ext)) {
-                setSheetState(() => error = 'Unsupported audio type. Use mp3, m4a, or wav.');
-                return;
-              }
-              setSheetState(() => picked = f);
-            }
+        return _AudioUpsertSheet(
+          title: existing == null ? 'Add audio' : 'Replace audio',
+          submitLabel: existing == null ? 'Add audio' : 'Save replacement',
+          existingFileLabel: (existing?.localFileName ?? '').trim(),
+          initialDisplayName: existing?.displayName ?? '',
+          initialDurationSeconds: existing?.durationSeconds,
+        );
+      },
+    );
+    if (!context.mounted || result == null) return;
+    n.setStoryAudioFromPickedFile(
+      pickedFileName: result.pickedFile.name,
+      pickedPath: result.pickedFile.path,
+      pickedSizeBytes: result.pickedFile.size,
+      displayNameRaw: result.displayNameRaw,
+      durationSeconds: result.durationSeconds,
+    );
+  }
+}
 
-            void save() {
-              final f = picked;
-              if (f == null) {
-                setSheetState(() => error = 'Please choose an audio file.');
-                return;
-              }
-              final rawDur = durCtrl.text.trim();
-              int? seconds;
-              if (rawDur.isNotEmpty) {
-                seconds = int.tryParse(rawDur);
-                if (seconds == null || seconds <= 0) {
-                  setSheetState(() => error = 'Duration must be a positive number (seconds).');
-                  return;
-                }
-              }
-              n.setStoryAudioFromPickedFile(
-                pickedFileName: f.name,
-                pickedPath: f.path,
-                pickedSizeBytes: f.size,
-                displayNameRaw: nameCtrl.text,
-                durationSeconds: seconds,
-              );
-              Navigator.pop(ctx2);
-            }
+class _AudioUpsertResult {
+  const _AudioUpsertResult({
+    required this.pickedFile,
+    required this.displayNameRaw,
+    required this.durationSeconds,
+  });
 
-            return Padding(
-              padding: EdgeInsets.fromLTRB(20, 8, 20, 16 + bottomInset),
-              child: SingleChildScrollView(
+  final PlatformFile pickedFile;
+  final String displayNameRaw;
+  final int? durationSeconds;
+}
+
+class _AudioUpsertSheet extends StatefulWidget {
+  const _AudioUpsertSheet({
+    required this.title,
+    required this.submitLabel,
+    required this.existingFileLabel,
+    required this.initialDisplayName,
+    required this.initialDurationSeconds,
+  });
+
+  final String title;
+  final String submitLabel;
+  final String existingFileLabel;
+  final String initialDisplayName;
+  final int? initialDurationSeconds;
+
+  @override
+  State<_AudioUpsertSheet> createState() => _AudioUpsertSheetState();
+}
+
+class _AudioUpsertSheetState extends State<_AudioUpsertSheet> {
+  late final TextEditingController _nameCtrl;
+  late final TextEditingController _durCtrl;
+
+  String? _error;
+  PlatformFile? _picked;
+
+  @override
+  void initState() {
+    super.initState();
+    _nameCtrl = TextEditingController(text: widget.initialDisplayName);
+    _durCtrl = TextEditingController(
+      text: widget.initialDurationSeconds?.toString() ?? '',
+    );
+  }
+
+  @override
+  void dispose() {
+    _nameCtrl.dispose();
+    _durCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _pickFile() async {
+    if (!mounted) return;
+    setState(() => _error = null);
+    final result = await FilePicker.platform.pickFiles(
+      allowMultiple: false,
+      type: FileType.custom,
+      allowedExtensions: const ['mp3', 'm4a', 'wav'],
+      withData: kIsWeb,
+    );
+    if (!mounted) return;
+    if (result == null || result.files.isEmpty) return;
+    final f = result.files.single;
+    final err = StoryCreatorAudioEditorScreen._validatePickedAudioExt(f);
+    if (err != null) {
+      setState(() => _error = err);
+      return;
+    }
+    setState(() => _picked = f);
+  }
+
+  void _submit() {
+    final f = _picked;
+    if (f == null) {
+      setState(() => _error = 'Please choose an audio file.');
+      return;
+    }
+    final rawDur = _durCtrl.text.trim();
+    int? seconds;
+    if (rawDur.isNotEmpty) {
+      seconds = int.tryParse(rawDur);
+      if (seconds == null || seconds <= 0) {
+        setState(
+          () =>
+              _error = 'Duration must be a positive number (seconds).',
+        );
+        return;
+      }
+    }
+    Navigator.pop<_AudioUpsertResult?>(
+      context,
+      _AudioUpsertResult(
+        pickedFile: f,
+        displayNameRaw: _nameCtrl.text,
+        durationSeconds: seconds,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
+    final existingLabel = widget.existingFileLabel;
+
+    return Padding(
+      padding: EdgeInsets.fromLTRB(20, 8, 20, 16 + bottomInset),
+      child: SingleChildScrollView(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              widget.title,
+              style: theme.textTheme.titleLarge?.copyWith(
+                color: StoryCreatorAudioEditorScreen._ink,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Attach one full-story audio file for listening practice. '
+              'You can replace or remove it later.',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: StoryCreatorAudioEditorScreen._muted,
+                height: 1.35,
+              ),
+            ),
+            const SizedBox(height: 16),
+            DecoratedBox(
+              decoration: BoxDecoration(
+                color: theme.colorScheme.surface,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(
+                  color: Colors.black.withValues(alpha: 0.08),
+                ),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     Text(
-                      existing == null ? 'Add audio' : 'Replace audio',
-                      style: theme.textTheme.titleLarge?.copyWith(
-                        color: _ink,
+                      'Audio file',
+                      style: theme.textTheme.labelLarge?.copyWith(
+                        color: StoryCreatorAudioEditorScreen._ink,
                         fontWeight: FontWeight.w800,
                       ),
                     ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Attach one full-story audio file for listening practice. '
-                      'You can replace or remove it later.',
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: _muted,
-                        height: 1.35,
+                    const SizedBox(height: 10),
+                    OutlinedButton.icon(
+                      onPressed: _pickFile,
+                      icon: const Icon(Icons.upload_file_rounded),
+                      label: Text(
+                        _picked == null ? 'Choose file' : 'Change file',
                       ),
-                    ),
-                    const SizedBox(height: 16),
-                    DecoratedBox(
-                      decoration: BoxDecoration(
-                        color: theme.colorScheme.surface,
-                        borderRadius: BorderRadius.circular(14),
-                        border: Border.all(color: Colors.black.withValues(alpha: 0.08)),
-                      ),
-                      child: Padding(
-                        padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            Text(
-                              'Audio file',
-                              style: theme.textTheme.labelLarge?.copyWith(
-                                color: _ink,
-                                fontWeight: FontWeight.w800,
-                              ),
-                            ),
-                            const SizedBox(height: 10),
-                            OutlinedButton.icon(
-                              onPressed: pickFile,
-                              icon: const Icon(Icons.upload_file_rounded),
-                              label: Text(
-                                picked == null ? 'Choose file' : 'Change file',
-                              ),
-                            ),
-                            const SizedBox(height: 10),
-                            Text(
-                              picked?.name ??
-                                  (existingFileLabel.isNotEmpty
-                                      ? existingFileLabel
-                                      : 'No file selected'),
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                color: _muted,
-                                height: 1.35,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                            if (error != null) ...[
-                              const SizedBox(height: 10),
-                              Text(
-                                error!,
-                                style: theme.textTheme.bodySmall?.copyWith(
-                                  color: theme.colorScheme.error,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                            ],
-                          ],
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: nameCtrl,
-                      decoration: InputDecoration(
-                        labelText: 'Display name (optional)',
-                        hintText: 'e.g. Full story narration',
-                        border: const OutlineInputBorder(),
-                        filled: true,
-                        fillColor: theme.colorScheme.surface,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: durCtrl,
-                      decoration: const InputDecoration(
-                        labelText: 'Duration (seconds, optional)',
-                        hintText: 'e.g. 95',
-                        border: OutlineInputBorder(),
-                      ),
-                      keyboardType: TextInputType.number,
-                    ),
-                    const SizedBox(height: 18),
-                    FilledButton(
-                      onPressed: save,
-                      child: Text(existing == null ? 'Add audio' : 'Save replacement'),
                     ),
                     const SizedBox(height: 10),
-                    OutlinedButton(
-                      onPressed: () => Navigator.pop(ctx2),
-                      child: const Text('Cancel'),
+                    Text(
+                      _picked?.name ??
+                          (existingLabel.isNotEmpty
+                              ? existingLabel
+                              : 'No file selected'),
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: StoryCreatorAudioEditorScreen._muted,
+                        height: 1.35,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
+                    if (_error != null) ...[
+                      const SizedBox(height: 10),
+                      Text(
+                        _error!,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.error,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),
-            );
-          },
-        );
-      },
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _nameCtrl,
+              decoration: InputDecoration(
+                labelText: 'Display name (optional)',
+                hintText: 'e.g. Full story narration',
+                border: const OutlineInputBorder(),
+                filled: true,
+                fillColor: theme.colorScheme.surface,
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _durCtrl,
+              decoration: const InputDecoration(
+                labelText: 'Duration (seconds, optional)',
+                hintText: 'e.g. 95',
+                border: OutlineInputBorder(),
+              ),
+              keyboardType: TextInputType.number,
+            ),
+            const SizedBox(height: 18),
+            FilledButton(
+              onPressed: _submit,
+              child: Text(widget.submitLabel),
+            ),
+            const SizedBox(height: 10),
+            OutlinedButton(
+              onPressed: () => Navigator.pop<_AudioUpsertResult?>(context, null),
+              child: const Text('Cancel'),
+            ),
+          ],
+        ),
+      ),
     );
-
-    nameCtrl.dispose();
-    durCtrl.dispose();
   }
 }
 
@@ -382,7 +470,7 @@ class StoryCreatorListeningModuleBody extends ConsumerWidget {
                     style: FilledButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 14),
                     ),
-                    child: const Text('Back to Learn modules'),
+                    child: const Text('Back to story'),
                   ),
                 ],
               ],

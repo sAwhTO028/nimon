@@ -1,8 +1,7 @@
 import 'package:flutter/foundation.dart';
 
-/// TEMPORARY: flip to `false` to silence all creator navigation / embed diagnostics.
-/// Remove this file's usages when verification is complete.
-const bool kCreatorNavigationDebugVerbose = true;
+/// Set to `true` locally to print `[creator_nav|...]` lines from [creatorNavDebug] (kDebugMode only).
+const bool kCreatorNavigationDebugVerbose = false;
 
 void creatorNavDebug(String tag, String message) {
   if (!kDebugMode || !kCreatorNavigationDebugVerbose) return;

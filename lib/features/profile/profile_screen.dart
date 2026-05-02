@@ -1,25 +1,36 @@
 import 'dart:async';
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart' show kDebugMode, debugPrint;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:nimon/features/create/creator_processing_copy.dart';
 import 'package:nimon/data/story_repo.dart';
 import 'package:nimon/features/create/creator_labels.dart';
-import 'package:nimon/features/create/creator_draft_validation.dart';
+import 'package:nimon/features/create/creator_back_policy.dart';
 import 'package:nimon/features/create/creator_readiness.dart';
+import 'package:nimon/features/create/creator_read_only_publish_tracking.dart';
 import 'package:nimon/features/create/creator_resume_draft.dart';
+import 'package:nimon/features/create/data/dto/draft_list_summary_dto.dart';
+import 'package:nimon/features/create/data/remote_backend_config.dart';
 import 'package:nimon/features/create/data/story_draft_repository_provider.dart';
-import 'package:nimon/features/create/story_creator_draft_storage.dart'
-    show CreatorDraftResumeMeta;
 import 'package:nimon/features/create/story_creator_models.dart';
 import 'package:nimon/features/create/story_creator_provider.dart';
+import 'package:nimon/core/pagination/paginated_state.dart';
+import 'package:nimon/features/profile/data/published_mono_display_contract.dart';
+import 'package:nimon/features/profile/data/published_mono_dto.dart';
+import 'package:nimon/features/profile/data/published_mono_reader_mapper.dart';
+import 'package:nimon/features/profile/data/remote_published_mono_repository.dart';
+import 'package:nimon/features/profile/presentation/providers/profile_published_mono_pager.dart';
+import 'package:nimon/features/profile/presentation/providers/profile_workspace_draft_pager.dart';
 import 'package:nimon/features/mono/mono_reader_menu_origin.dart';
-import 'package:nimon/features/mono/mono_screen.dart';
+import 'package:nimon/features/mono/mono_screen.dart'
+    show MonoContentType, MonoFeedItem;
 import 'package:nimon/features/profile/profile_navigation_drawer.dart';
 import 'package:nimon/features/profile/profile_push_drawer_scope.dart';
 import 'package:nimon/features/profile/mono_story_list_row.dart';
+import 'package:nimon/features/profile/profile_processing_refresh.dart';
 import 'package:nimon/features/profile/public_profile_widgets.dart';
 import 'package:nimon/ui/widgets/nimon_circle_nav_button.dart';
 
@@ -31,6 +42,16 @@ class _OneShortItem {
   final String? thumbnailUrl;
   final String? processingStatusLabel;
 
+  /// Local [CreatorStoryV1] id from backend, when the published mono is linked to a draft.
+  /// Used to hide a Published row when that draft is in Workspace "Editing" (and for resume).
+  final String? sourceDraftId;
+
+  /// List row is backed by [RemotePublishedMonoRepository] (real PublishedMono list).
+  final bool isBackendPublished;
+  final String? categoryText;
+  final String? targetDurationText;
+  final String? publishBadgeText;
+
   const _OneShortItem({
     required this.id,
     required this.title,
@@ -38,6 +59,11 @@ class _OneShortItem {
     required this.jlptLevel,
     this.thumbnailUrl,
     this.processingStatusLabel,
+    this.sourceDraftId,
+    this.isBackendPublished = false,
+    this.categoryText,
+    this.targetDurationText,
+    this.publishBadgeText,
   });
 }
 
@@ -194,10 +220,10 @@ String? _firstStoryThumbnailUrl(List<_OneShortItem> items) {
 class ProfileScreen extends ConsumerStatefulWidget {
   final StoryRepo repo;
 
-  /// Profile content tabs: 0 = Published, 1 = Processing, 2 = Saved. Null uses 0.
+  /// Profile content tabs: 0 = Published, 1 = Workspace, 2 = Saved. Null uses 0.
   final int? initialTabIndex;
 
-  /// When opening Processing (e.g. after publish), scroll to and pulse this draft card.
+  /// When opening Workspace (e.g. after publish), scroll to and pulse this draft card.
   final String? highlightDraftId;
 
   const ProfileScreen({
@@ -340,11 +366,12 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
   late List<_StoryFolder> _savedFolders;
   late List<_OneShortItem> _uploadedLooseItems;
   late List<_OneShortItem> _savedLooseItems;
-  late List<_ProcessingDraftItem> _processingItems;
+  bool _publishedLoadedRemote = false;
 
   /// Briefly emphasizes the card for [highlightDraftId] from the route (e.g. after publish).
   String? _pulseDraftId;
   Timer? _pulseTimer;
+  ProviderSubscription<int>? _processingRefreshSub;
 
   late final PageController _pageController;
   late final TabController _tabController;
@@ -352,6 +379,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
 
   /// True while the user is performing a horizontal drawer pan (page or panel).
   final ValueNotifier<bool> _profileDrawerPanSession = ValueNotifier(false);
+
+  ValueNotifier<bool>? _obscuresDock;
 
   @override
   void initState() {
@@ -372,11 +401,184 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
     _savedFolders = List<_StoryFolder>.from(_savedFoldersMock);
     _uploadedLooseItems = List<_OneShortItem>.from(_uploadedLooseMock);
     _savedLooseItems = List<_OneShortItem>.from(_savedLooseMock);
-    _processingItems = const <_ProcessingDraftItem>[];
     _profileDrawerController.addListener(_syncProfileDrawerDockOcclusion);
     _pulseDraftId = widget.highlightDraftId;
     _scheduleProcessingPulseEnd();
-    unawaited(_loadLocalCreatorDraftIntoProcessing());
+    _processingRefreshSub = ref.listenManual<int>(
+      profileProcessingListRefreshProvider,
+      (previous, next) {
+        if (!mounted) return;
+        unawaited(
+          ref.read(profileWorkspaceDraftPagerProvider.notifier).refresh(),
+        );
+        if (RemoteBackendConfig.useRemoteDrafts) {
+          unawaited(
+            ref.read(profilePublishedMonoPagerProvider.notifier).refresh(),
+          );
+        }
+      },
+    );
+    unawaited(
+      ref.read(profileWorkspaceDraftPagerProvider.notifier).loadFirstPage(),
+    );
+    if (!RemoteBackendConfig.useRemoteDrafts) {
+      _debugLogPublishedLoad(
+        stage: 'skip (useRemoteDrafts off)',
+        willCallGet: false,
+      );
+    } else {
+      _debugLogPublishedLoad(
+        stage: 'before GET /v1/published-monos (pager)',
+        willCallGet: true,
+      );
+      unawaited(
+        ref
+            .read(profilePublishedMonoPagerProvider.notifier)
+            .loadFirstPage()
+            .then((_) {
+          if (!mounted) return;
+          final p = ref.read(profilePublishedMonoPagerProvider);
+          _debugLogPublishedLoad(
+            stage: 'after pager loadFirstPage',
+            willCallGet: true,
+            rawCount: p.items.length,
+            mappedCount: p.items.length,
+          );
+          if (!mounted) return;
+          setState(() {
+            _publishedLoadedRemote = true;
+            _uploadedFolders = const <_StoryFolder>[];
+          });
+        }),
+      );
+    }
+  }
+
+  /// When set, a Published list row is hidden only if this id is in the Workspace
+  /// "Editing" set — not merely because a mono has a [sourceDraftId] field.
+  ///
+  /// Rows from [GET /v1/published-monos] are never hidden here: local read-only
+  /// signature / resume state can spuriously mark a draft as "Editing" while the
+  /// same story must stay visible in Published.
+  static bool _hidePublishedItemForWorkspaceEditing(
+    _OneShortItem it,
+    Set<String> editingWorkspaceDraftIds,
+  ) {
+    if (it.isBackendPublished) {
+      return false;
+    }
+    final sid = it.sourceDraftId?.trim();
+    if (sid == null || sid.isEmpty) return false;
+    return editingWorkspaceDraftIds.contains(sid);
+  }
+
+  void _debugLogPublishedLoad({
+    required String stage,
+    required bool willCallGet,
+    int? rawCount,
+    int? mappedCount,
+  }) {
+    final qTab = (() {
+      if (!mounted) return null;
+      try {
+        return GoRouterState.of(context).uri.queryParameters['tab'];
+      } catch (_) {
+        return null;
+      }
+    })();
+    final initialTabW = widget.initialTabIndex;
+    var tabIndex = 0;
+    try {
+      tabIndex = _tabController.index;
+    } catch (_) {}
+
+    final editingIdSet = _workspaceEditingDraftIdsForPublishedHide();
+    final looseForLog = _publishedLooseRowsForDebugLog();
+    var displayed = 0;
+    for (final it in looseForLog) {
+      if (!_hidePublishedItemForWorkspaceEditing(it, editingIdSet)) {
+        displayed++;
+      }
+    }
+    final rc = rawCount == null ? '—' : '$rawCount';
+    final mc = mappedCount == null ? '—' : '$mappedCount';
+
+    // One-line trace (visible in debug/profile consoles).
+    debugPrint(
+      '[Profile Published] $stage: useRemote=${RemoteBackendConfig.useRemoteDrafts} base=${RemoteBackendConfig.apiBaseUrl} routeTab=$qTab initialTabIndex=$initialTabW currentTabIndex=$tabIndex willGET=$willCallGet raw=$rc mapped=$mc editingCount=${editingIdSet.length} shown=$displayed loose=${looseForLog.length} publishedLoadRan=${stage != 'skip (useRemoteDrafts off)'}',
+    );
+
+    if (kDebugMode) {
+      debugPrint(
+        '[Profile Published] editingIds=$editingIdSet',
+      );
+      for (var i = 0; i < looseForLog.length; i++) {
+        final it = looseForLog[i];
+        final sid = it.sourceDraftId?.trim();
+        final inEditing = sid != null &&
+            sid.isNotEmpty &&
+            editingIdSet.contains(sid) &&
+            !it.isBackendPublished;
+        // Pre-fix behavior (mock rows only) for diagnosis logging.
+        final wouldHideIfMockRule = sid != null &&
+            sid.isNotEmpty &&
+            editingIdSet.contains(sid) &&
+            !it.isBackendPublished;
+        final wouldHideWithBackendRowsToo =
+            sid != null && sid.isNotEmpty && editingIdSet.contains(sid);
+        if (wouldHideWithBackendRowsToo) {
+          debugPrint(
+            '[Profile Published] hideReason[$i] id=${it.id} sourceDraftId=$sid '
+            'isBackend=${it.isBackendPublished} inEditingSet=$inEditing '
+            'wouldHideOldRule(allRows)=$wouldHideWithBackendRowsToo wouldHideNewRule(mocks)=$wouldHideIfMockRule',
+          );
+        }
+      }
+    }
+  }
+
+  List<_OneShortItem> _publishedLooseRowsForDebugLog() {
+    if (!RemoteBackendConfig.useRemoteDrafts) return _uploadedLooseItems;
+    return _mapPublishedDtosToLooseItems(
+      ref.read(profilePublishedMonoPagerProvider).items,
+    );
+  }
+
+  List<_OneShortItem> _publishedLooseRowsForUi(
+    PaginatedState<PublishedMonoListItemDto> pager,
+  ) {
+    if (pager.isInitialLoading && pager.items.isEmpty && pager.error == null) {
+      return _uploadedLooseItems;
+    }
+    return _mapPublishedDtosToLooseItems(pager.items);
+  }
+
+  List<_OneShortItem> _mapPublishedDtosToLooseItems(
+    List<PublishedMonoListItemDto> items,
+  ) {
+    return [
+      for (final m in items)
+        _OneShortItem(
+          id: m.id,
+          sourceDraftId: m.sourceDraftId,
+          title: m.title.trim().isEmpty ? 'Untitled' : m.title.trim(),
+          description: m.description.trim(),
+          jlptLevel: m.level.trim().isEmpty ? '—' : m.level.trim(),
+          isBackendPublished: true,
+          thumbnailUrl: m.coverImageUrl,
+          categoryText: m.category.trim().isEmpty ? null : m.category.trim(),
+          targetDurationText: m.targetDurationLabel,
+          publishBadgeText: publishBadgeLabel(
+            displayKindFromApi(m.displayPublishKind),
+          ),
+        ),
+    ];
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _obscuresDock ??= ProfilePushDrawerDockScope.maybeObscuresDockOf(context);
   }
 
   void _scheduleProcessingPulseEnd() {
@@ -398,36 +600,20 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
     context.go(Uri(path: state.uri.path, queryParameters: next).toString());
   }
 
-  Future<void> _loadLocalCreatorDraftIntoProcessing() async {
-    final repo = ref.read(storyDraftRepositoryProvider);
-    final ids = await repo.listDraftIds();
-    final drafts = <_ProcessingDraftItem>[];
-    for (final id in ids) {
-      final d = await repo.loadDraft(id);
-      if (d == null) continue;
-      // Defensive: never show empty/invalid shell drafts.
-      if (!isMeaningfulDraftForProcessing(d)) continue;
-      final meta = await repo.loadResumeMeta(id);
-      drafts.add(
-        _ProcessingDraftItem.fromDraft(
-          draft: d,
-          meta: meta,
-        ),
-      );
-    }
-    if (!mounted) return;
-    if (drafts.isEmpty) {
-      setState(() => _processingItems = const <_ProcessingDraftItem>[]);
-      return;
-    }
-
-    drafts.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
-    setState(() => _processingItems = drafts);
+  /// Draft ids in Workspace "Editing" (used to hide duplicate mock Published rows only).
+  Set<String> _workspaceEditingDraftIdsForPublishedHide() {
+    final p = ref.read(profileWorkspaceDraftPagerProvider);
+    return {
+      for (final s in p.items)
+        if (effectiveDraftListWorkspaceState(s) == 'editing') s.draftId.trim(),
+    };
   }
 
   void _syncProfileDrawerDockOcclusion() {
     if (!mounted) return;
-    final n = ProfilePushDrawerDockScope.maybeObscuresDockOf(context);
+    final n = _obscuresDock ??
+        ProfilePushDrawerDockScope.maybeObscuresDockOf(context);
+    _obscuresDock ??= n;
     if (n == null) return;
     final obscured = _profileDrawerController.value > 0.001;
     if (n.value != obscured) n.value = obscured;
@@ -461,15 +647,26 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
       );
     }
     if (_tabController.index == 1) {
-      unawaited(_loadLocalCreatorDraftIntoProcessing());
+      unawaited(
+          ref.read(profileWorkspaceDraftPagerProvider.notifier).refresh());
+    }
+    if (_tabController.index == 0 && RemoteBackendConfig.useRemoteDrafts) {
+      final published = ref.read(profilePublishedMonoPagerProvider);
+      if (!published.isInitialLoading && !published.isRefreshing) {
+        unawaited(
+          ref.read(profilePublishedMonoPagerProvider.notifier).refresh(),
+        );
+      }
     }
   }
 
   @override
   void dispose() {
     _pulseTimer?.cancel();
+    _processingRefreshSub?.close();
+    _processingRefreshSub = null;
     _profileDrawerController.removeListener(_syncProfileDrawerDockOcclusion);
-    ProfilePushDrawerDockScope.maybeObscuresDockOf(context)?.value = false;
+    _obscuresDock?.value = false;
     _tabController.removeListener(_onTabChanged);
     _tabController.dispose();
     _pageController.dispose();
@@ -497,7 +694,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
         curve: Curves.easeInCubic,
       );
     } else {
-      ProfilePushDrawerDockScope.maybeObscuresDockOf(context)?.value = true;
+      _obscuresDock?.value = true;
       _profileDrawerController.animateTo(
         1,
         duration: _drawerAnimDuration,
@@ -668,6 +865,38 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
     );
   }
 
+  Future<void> _openPublishedTabReader(
+    List<_OneShortItem> list,
+    int idx,
+  ) async {
+    final it = list[idx];
+    if (!it.isBackendPublished) {
+      _openFolderAwareReader(list, idx, fromSaved: false);
+      return;
+    }
+    try {
+      final repo = RemotePublishedMonoRepository(
+        apiBaseUrl: RemoteBackendConfig.apiBaseUrl,
+      );
+      final d = await repo.get(it.id);
+      if (!mounted) return;
+      final feed = monoFeedItemFromPublishedMonoDetail(d);
+      context.push(
+        '/mono-reader',
+        extra: <String, Object?>{
+          'items': <MonoFeedItem>[feed],
+          'initialIndex': 0,
+          'readerMenuOrigin': MonoReaderMenuOrigin.profileUploaded,
+        },
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not open story: $e')),
+      );
+    }
+  }
+
   void _openFolderAwareReader(
     List<_OneShortItem> folderItems,
     int tappedIndex, {
@@ -696,7 +925,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                   _StoryFolder(
                     id: f.id,
                     name: f.name,
-                    items: [for (final it in f.items) if (it.id != rawId) it],
+                    items: [
+                      for (final it in f.items)
+                        if (it.id != rawId) it
+                    ],
                     isPrivate: f.isPrivate,
                   ),
               ];
@@ -718,7 +950,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
       ),
       builder: (ctx) {
         return Padding(
-          padding: EdgeInsets.fromLTRB(20, 0, 20, 16 + MediaQuery.of(ctx).padding.bottom),
+          padding: EdgeInsets.fromLTRB(
+              20, 0, 20, 16 + MediaQuery.of(ctx).padding.bottom),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -798,7 +1031,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
       ),
       builder: (ctx) {
         return Padding(
-          padding: EdgeInsets.fromLTRB(20, 0, 20, 16 + MediaQuery.of(ctx).padding.bottom),
+          padding: EdgeInsets.fromLTRB(
+              20, 0, 20, 16 + MediaQuery.of(ctx).padding.bottom),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -825,9 +1059,17 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                     child: FilledButton(
                       onPressed: () {
                         Navigator.of(ctx).pop();
-                        setState(() {
-                          _uploadedLooseItems.removeWhere((e) => e.id == item.id);
-                        });
+                        if (RemoteBackendConfig.useRemoteDrafts &&
+                            item.isBackendPublished) {
+                          ref
+                              .read(profilePublishedMonoPagerProvider.notifier)
+                              .removeItemsByIds({item.id});
+                        } else {
+                          setState(() {
+                            _uploadedLooseItems
+                                .removeWhere((e) => e.id == item.id);
+                          });
+                        }
                       },
                       style: FilledButton.styleFrom(
                         minimumSize: const Size(0, 44),
@@ -843,10 +1085,16 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                   const SizedBox(width: 12),
                   Expanded(
                     child: OutlinedButton(
-                      onPressed: () {
+                      onPressed: () async {
                         Navigator.of(ctx).pop();
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Edit - Coming soon')),
+                        if (!context.mounted) return;
+                        await CreatorDraftResumeFlow
+                            .tryResumeFromPublishedSurface(
+                          context,
+                          (item.sourceDraftId?.trim().isNotEmpty == true
+                                  ? item.sourceDraftId!
+                                  : item.id)
+                              .trim(),
                         );
                       },
                       style: OutlinedButton.styleFrom(
@@ -951,10 +1199,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                           for (final m in ro.unmetMessages)
                             Text(
                               '• $m',
-                              style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
-                                    color: Colors.black.withOpacity(0.65),
-                                    fontWeight: FontWeight.w600,
-                                  ),
+                              style:
+                                  Theme.of(ctx).textTheme.bodySmall?.copyWith(
+                                        color: Colors.black.withOpacity(0.65),
+                                        fontWeight: FontWeight.w600,
+                                      ),
                             ),
                           const SizedBox(height: 10),
                         ],
@@ -970,10 +1219,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                           for (final m in fl.unmetMessages)
                             Text(
                               '• $m',
-                              style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
-                                    color: Colors.black.withOpacity(0.65),
-                                    fontWeight: FontWeight.w600,
-                                  ),
+                              style:
+                                  Theme.of(ctx).textTheme.bodySmall?.copyWith(
+                                        color: Colors.black.withOpacity(0.65),
+                                        fontWeight: FontWeight.w600,
+                                      ),
                             ),
                         ],
                       ],
@@ -992,7 +1242,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                               Navigator.of(ctx).pop();
                               ScaffoldMessenger.of(context).showSnackBar(
                                 const SnackBar(
-                                  content: Text('Upload Read-only (coming soon)'),
+                                  content:
+                                      Text('Upload Read-only (coming soon)'),
                                 ),
                               );
                             },
@@ -1014,7 +1265,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                               Navigator.of(ctx).pop();
                               ScaffoldMessenger.of(context).showSnackBar(
                                 const SnackBar(
-                                  content: Text('Upload Full Learn (coming soon)'),
+                                  content:
+                                      Text('Upload Full Learn (coming soon)'),
                                 ),
                               );
                             },
@@ -1042,8 +1294,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                           ref
                               .read(storyCreatorDraftProvider.notifier)
                               .syncIfDraftWasRemovedExternally(item.id);
-                          if (!mounted) return;
-                          await _loadLocalCreatorDraftIntoProcessing();
+                          ref
+                              .read(profileWorkspaceDraftPagerProvider.notifier)
+                              .removeDraftById(item.id);
                         }());
                       },
                       icon: const Icon(Icons.delete_outline, size: 18),
@@ -1061,10 +1314,18 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                   const SizedBox(width: 12),
                   Expanded(
                     child: FilledButton(
-                      onPressed: () {
-                        Navigator.of(ctx).pop();
-                        unawaited(CreatorDraftResumeFlow.resume(context, item.id));
-                      },
+                      onPressed: draft == null
+                          ? null
+                          : () {
+                              Navigator.of(ctx).pop();
+                              unawaited(
+                                CreatorDraftResumeFlow.resumeFromProcessing(
+                                  context,
+                                  item.id,
+                                  publishState: draft.publishState,
+                                ),
+                              );
+                            },
                       style: FilledButton.styleFrom(
                         minimumSize: const Size(0, 44),
                         shape: RoundedRectangleBorder(
@@ -1135,6 +1396,13 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
               child: ListenableBuilder(
                 listenable: _profileDrawerController,
                 builder: (context, _) {
+                  final workspacePager =
+                      ref.watch(profileWorkspaceDraftPagerProvider);
+                  final workspaceProcessingRows = [
+                    for (final s in workspacePager.items)
+                      if (effectiveDraftListWorkspaceState(s) != 'synced')
+                        _ProcessingDraftItem.fromSummary(s),
+                  ];
                   return PageView(
                     physics: _profileDrawerController.value > 0.001
                         ? const NeverScrollableScrollPhysics()
@@ -1146,75 +1414,150 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                       }
                     },
                     children: [
-                  _FolderGroupList(
-                    title: 'Published',
-                    folders: _uploadedFolders,
-                    looseItems: _uploadedLooseItems,
-                    bottomPadding:
-                        bottomNavHeight + bottomPadding + extraBottomPadding,
-                    trailingAction: _OneShortCardAction.edit,
-                    isSavedSection: false,
-                    onStoryTap: (list, idx) =>
-                        _openFolderAwareReader(list, idx, fromSaved: false),
-                    onLooseItemDetail: _showUploadedLooseItemSheet,
-                    onCreateFolder: () => _openCreateFolderDialog(
-                      onCreate: (name) => setState(() {
-                        _uploadedFolders = [
-                          ..._uploadedFolders,
-                          _StoryFolder(
-                            id: 'uf_${DateTime.now().millisecondsSinceEpoch}',
-                            name: name,
-                            items: const [],
-                            isPrivate: false,
-                          ),
+                      () {
+                        final editingIds = {
+                          for (final s in workspacePager.items)
+                            if (effectiveDraftListWorkspaceState(s) ==
+                                'editing')
+                              s.draftId.trim(),
+                        };
+                        final filteredFolders = [
+                          for (final f in _uploadedFolders)
+                            _StoryFolder(
+                              id: f.id,
+                              name: f.name,
+                              isPrivate: f.isPrivate,
+                              items: [
+                                for (final it in f.items)
+                                  if (!_hidePublishedItemForWorkspaceEditing(
+                                    it,
+                                    editingIds,
+                                  ))
+                                    it,
+                              ],
+                            ),
                         ];
-                      }),
-                    ),
-                    onRenameFolder: (f) => _renameFolder(saved: false, folder: f),
-                    onDeleteFolder: (f) => _deleteFolder(saved: false, folder: f),
-                    onBulkDeleteLoose: (ids) => setState(() {
-                      _uploadedLooseItems =
-                          _uploadedLooseItems.where((e) => !ids.contains(e.id)).toList();
-                    }),
-                  ),
-                  _ProcessingDraftManagerTab(
-                    items: _processingItems,
-                    highlightDraftId: _pulseDraftId,
-                    bottomPadding:
-                        bottomNavHeight + bottomPadding + extraBottomPadding,
-                    onChanged: () => unawaited(_loadLocalCreatorDraftIntoProcessing()),
-                  ),
-                  _FolderGroupList(
-                    title: 'Saved',
-                    folders: _savedFolders,
-                    looseItems: _savedLooseItems,
-                    bottomPadding:
-                        bottomNavHeight + bottomPadding + extraBottomPadding,
-                    trailingAction: _OneShortCardAction.bookmark,
-                    isSavedSection: true,
-                    onStoryTap: (list, idx) =>
-                        _openFolderAwareReader(list, idx, fromSaved: true),
-                    onLooseItemDetail: _showSavedLooseItemSheet,
-                    onCreateFolder: () => _openCreateFolderDialog(
-                      onCreate: (name) => setState(() {
-                        _savedFolders = [
-                          ..._savedFolders,
-                          _StoryFolder(
-                            id: 'sf_${DateTime.now().millisecondsSinceEpoch}',
-                            name: name,
-                            items: const [],
-                            isPrivate: false,
-                          ),
+                        final publishedPager =
+                            RemoteBackendConfig.useRemoteDrafts
+                                ? ref.watch(profilePublishedMonoPagerProvider)
+                                : null;
+                        final publishedSource = publishedPager != null
+                            ? _publishedLooseRowsForUi(publishedPager)
+                            : _uploadedLooseItems;
+                        final filteredLoose = [
+                          for (final it in publishedSource)
+                            if (!_hidePublishedItemForWorkspaceEditing(
+                              it,
+                              editingIds,
+                            ))
+                              it,
                         ];
-                      }),
-                    ),
-                    onRenameFolder: (f) => _renameFolder(saved: true, folder: f),
-                    onDeleteFolder: (f) => _deleteFolder(saved: true, folder: f),
-                    onBulkUnsaveLoose: (ids) => setState(() {
-                      _savedLooseItems =
-                          _savedLooseItems.where((e) => !ids.contains(e.id)).toList();
-                    }),
-                  ),
+                        return _FolderGroupList(
+                          title: 'Published',
+                          folders: filteredFolders,
+                          looseItems: filteredLoose,
+                          bottomPadding: bottomNavHeight +
+                              bottomPadding +
+                              extraBottomPadding,
+                          trailingAction: _OneShortCardAction.edit,
+                          isSavedSection: false,
+                          onLooseListNearEnd:
+                              RemoteBackendConfig.useRemoteDrafts
+                                  ? () => ref
+                                      .read(profilePublishedMonoPagerProvider
+                                          .notifier)
+                                      .loadMore()
+                                  : null,
+                          onStoryTap: (list, idx) {
+                            unawaited(_openPublishedTabReader(list, idx));
+                          },
+                          onLooseItemDetail: _showUploadedLooseItemSheet,
+                          onCreateFolder: () => _openCreateFolderDialog(
+                            onCreate: (name) => setState(() {
+                              _uploadedFolders = [
+                                ..._uploadedFolders,
+                                _StoryFolder(
+                                  id: 'uf_${DateTime.now().millisecondsSinceEpoch}',
+                                  name: name,
+                                  items: const [],
+                                  isPrivate: false,
+                                ),
+                              ];
+                            }),
+                          ),
+                          onRenameFolder: (f) =>
+                              _renameFolder(saved: false, folder: f),
+                          onDeleteFolder: (f) =>
+                              _deleteFolder(saved: false, folder: f),
+                          onBulkDeleteLoose: (ids) {
+                            if (RemoteBackendConfig.useRemoteDrafts) {
+                              ref
+                                  .read(profilePublishedMonoPagerProvider
+                                      .notifier)
+                                  .removeItemsByIds(ids);
+                            } else {
+                              setState(() {
+                                _uploadedLooseItems = _uploadedLooseItems
+                                    .where((e) => !ids.contains(e.id))
+                                    .toList();
+                              });
+                            }
+                          },
+                        );
+                      }(),
+                      _ProcessingDraftManagerTab(
+                        items: workspaceProcessingRows,
+                        pagerState: workspacePager,
+                        highlightDraftId: _pulseDraftId,
+                        bottomPadding: bottomNavHeight +
+                            bottomPadding +
+                            extraBottomPadding,
+                        onChanged: () => unawaited(
+                          ref
+                              .read(profileWorkspaceDraftPagerProvider.notifier)
+                              .refresh(),
+                        ),
+                        onNearEnd: () => unawaited(
+                          ref
+                              .read(profileWorkspaceDraftPagerProvider.notifier)
+                              .loadMore(),
+                        ),
+                      ),
+                      _FolderGroupList(
+                        title: 'Saved',
+                        folders: _savedFolders,
+                        looseItems: _savedLooseItems,
+                        bottomPadding: bottomNavHeight +
+                            bottomPadding +
+                            extraBottomPadding,
+                        trailingAction: _OneShortCardAction.bookmark,
+                        isSavedSection: true,
+                        onStoryTap: (list, idx) =>
+                            _openFolderAwareReader(list, idx, fromSaved: true),
+                        onLooseItemDetail: _showSavedLooseItemSheet,
+                        onCreateFolder: () => _openCreateFolderDialog(
+                          onCreate: (name) => setState(() {
+                            _savedFolders = [
+                              ..._savedFolders,
+                              _StoryFolder(
+                                id: 'sf_${DateTime.now().millisecondsSinceEpoch}',
+                                name: name,
+                                items: const [],
+                                isPrivate: false,
+                              ),
+                            ];
+                          }),
+                        ),
+                        onRenameFolder: (f) =>
+                            _renameFolder(saved: true, folder: f),
+                        onDeleteFolder: (f) =>
+                            _deleteFolder(saved: true, folder: f),
+                        onBulkUnsaveLoose: (ids) => setState(() {
+                          _savedLooseItems = _savedLooseItems
+                              .where((e) => !ids.contains(e.id))
+                              .toList();
+                        }),
+                      ),
                     ],
                   );
                 },
@@ -1281,7 +1624,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                             displayName: 'Just4withYou',
                             handle: '@just4withyou',
                             closeDrawer: _closeProfilePushDrawer,
-                            lockScrollForHorizontalPan: _profileDrawerPanSession,
+                            lockScrollForHorizontalPan:
+                                _profileDrawerPanSession,
                             drawerMotion: _profileDrawerController,
                           ),
                         ),
@@ -1358,6 +1702,7 @@ class _FolderGroupList extends StatefulWidget {
   final bool isSavedSection;
   final void Function(List<_OneShortItem> folderItems, int tappedIndex)?
       onStoryTap;
+
   /// Content detail sheet opener (Saved/Published loose items only). Not used for organization actions.
   final void Function(_OneShortItem item)? onLooseItemDetail;
   final VoidCallback? onCreateFolder;
@@ -1365,6 +1710,9 @@ class _FolderGroupList extends StatefulWidget {
   final void Function(_StoryFolder folder)? onDeleteFolder;
   final void Function(Set<String> ids)? onBulkDeleteLoose;
   final void Function(Set<String> ids)? onBulkUnsaveLoose;
+
+  /// Published-tab infinite scroll hook (monos filter only); safe no-op when null.
+  final VoidCallback? onLooseListNearEnd;
 
   const _FolderGroupList({
     required this.title,
@@ -1380,6 +1728,7 @@ class _FolderGroupList extends StatefulWidget {
     this.onDeleteFolder,
     this.onBulkDeleteLoose,
     this.onBulkUnsaveLoose,
+    this.onLooseListNearEnd,
   });
 
   @override
@@ -1434,7 +1783,8 @@ class _FolderGroupListState extends State<_FolderGroupList> {
               ListTile(
                 leading: const Icon(Icons.checklist_rounded),
                 title: const Text('Multi Select'),
-                subtitle: const Text('Select multiple items, then apply a bulk action.'),
+                subtitle: const Text(
+                    'Select multiple items, then apply a bulk action.'),
                 onTap: () => Navigator.pop(ctx, 'multi'),
               ),
               ListTile(
@@ -1673,6 +2023,9 @@ class _FolderGroupListState extends State<_FolderGroupList> {
                     jlptLevel: it.jlptLevel,
                     thumbnailUrl: it.thumbnailUrl,
                     onMenuTap: () => _showOutsideOrgSheet(it),
+                    categoryText: it.categoryText,
+                    durationText: it.targetDurationText,
+                    publishBadgeText: it.publishBadgeText,
                   ),
                 ),
                 if (_selecting)
@@ -1705,9 +2058,25 @@ class _FolderGroupListState extends State<_FolderGroupList> {
         );
       },
     );
+    Widget scrolled = list;
+    if (widget.onLooseListNearEnd != null) {
+      scrolled = NotificationListener<ScrollNotification>(
+        onNotification: (ScrollNotification n) {
+          if (n.metrics.axis != Axis.vertical) return false;
+          if (n is! ScrollUpdateNotification) return false;
+          final m = n.metrics;
+          if (m.maxScrollExtent <= 0) return false;
+          if (m.pixels >= m.maxScrollExtent - 220) {
+            widget.onLooseListNearEnd!();
+          }
+          return false;
+        },
+        child: list,
+      );
+    }
     return ColoredBox(
       color: const Color(0xFFF5F5F5),
-      child: list,
+      child: scrolled,
     );
   }
 }
@@ -1894,7 +2263,7 @@ class _FolderDetailScreen extends StatelessWidget {
   final _OneShortCardAction trailingAction;
   final void Function(List<_OneShortItem> folderItems, int tappedIndex)?
       onStoryTap;
-  
+
   @override
   Widget build(BuildContext context) {
     // Deprecated: kept for file-local history. Use [_FolderDetailScreenStateful].
@@ -2240,6 +2609,7 @@ class _ProfileTopHeaderBar extends StatelessWidget {
 class _ProfileSummaryRow extends StatelessWidget {
   final String displayName;
   final String handle;
+
   /// Short line under the handle (e.g. role); omit when null/empty.
   final String? tagline;
   final String bio;
@@ -2597,10 +2967,7 @@ class _ProfileIconTabs extends StatelessWidget {
                     icon: Icons.cloud_done_outlined,
                     label: 'Published',
                   ),
-                  tab(
-                      idx: 1,
-                      icon: Icons.schedule_rounded,
-                      label: 'Processing'),
+                  tab(idx: 1, icon: Icons.schedule_rounded, label: 'Workspace'),
                   tab(
                     idx: 2,
                     icon: Icons.bookmark_border_rounded,
@@ -2655,9 +3022,39 @@ class _OneShortList extends StatelessWidget {
 // Processing: local draft manager (V1)
 // -----------------------------------------------------------------------------
 
+enum _WorkspaceState {
+  draft,
+  editing,
+}
+
+/// Maps API/summary [DraftListSummaryDto.publishState] to domain enum.
+StoryPublishState publishStateFromDraftSummaryKey(String key) {
+  switch (key.trim()) {
+    case 'reading_only_published':
+      return StoryPublishState.readingOnlyPublished;
+    case 'full_learn_published':
+      return StoryPublishState.fullLearnPublished;
+    default:
+      return StoryPublishState.draft;
+  }
+}
+
+/// Draft vs Editing chip for rows shown in Workspace (synced summaries are filtered out).
+_WorkspaceState workspaceStateFromDraftSummary(DraftListSummaryDto s) {
+  return effectiveDraftListWorkspaceState(s) == 'editing'
+      ? _WorkspaceState.editing
+      : _WorkspaceState.draft;
+}
+
 class _ProcessingDraftItem {
-  final CreatorStoryV1 draft;
-  final CreatorDraftResumeMeta? resumeMeta;
+  /// Workspace index row — avoid loading full [CreatorStoryV1] for display.
+  final DraftListSummaryDto summary;
+
+  /// Resolved from [summary.publishState] for resume / buttons.
+  final StoryPublishState resolvedPublishState;
+
+  /// Workspace classification (Draft vs Editing) derived from summary only.
+  final _WorkspaceState workspaceState;
   final String title;
   final String preview;
   final String level;
@@ -2666,8 +3063,9 @@ class _ProcessingDraftItem {
   final DateTime updatedAt;
 
   const _ProcessingDraftItem({
-    required this.draft,
-    required this.resumeMeta,
+    required this.summary,
+    required this.resolvedPublishState,
+    required this.workspaceState,
     required this.title,
     required this.preview,
     required this.level,
@@ -2676,72 +3074,95 @@ class _ProcessingDraftItem {
     required this.updatedAt,
   });
 
-  String get draftId => draft.id;
+  String get draftId => summary.draftId.trim();
 
-  static _ProcessingDraftItem fromDraft({
-    required CreatorStoryV1 draft,
-    required CreatorDraftResumeMeta? meta,
-  }) {
-    final basics = draft.basics;
-    final title = basics.title.trim().isEmpty ? 'Untitled draft' : basics.title.trim();
-    final desc = basics.description.trim();
-    final preview = desc.isNotEmpty ? desc : _fallbackPreview(draft);
-
-    final level = basics.level.trim().isEmpty ? '—' : basics.level.trim();
-    final category = basics.category.trim().isEmpty ? '—' : basics.category.trim();
-    final duration = switch ((basics.targetDurationBandKey ?? '').trim()) {
-      '3_5' => '3–5 mins',
-      '5_7' => '5–7 mins',
-      '7_9' => '7–9 mins',
-      _ => '—',
-    };
+  factory _ProcessingDraftItem.fromSummary(DraftListSummaryDto s) {
+    final ps = publishStateFromDraftSummaryKey(s.publishState);
+    final ws = workspaceStateFromDraftSummary(s);
+    final title = s.title.trim().isEmpty ? 'Untitled draft' : s.title.trim();
+    final preview = (s.previewText != null && s.previewText!.trim().isNotEmpty)
+        ? s.previewText!.trim()
+        : 'Continue editing your draft';
+    final level = s.level.trim().isEmpty ? '—' : s.level.trim();
+    final category = s.category.trim().isEmpty ? '—' : s.category.trim();
+    var updatedAt = DateTime.tryParse(s.updatedAt ?? '');
+    updatedAt ??= DateTime.fromMillisecondsSinceEpoch(0, isUtc: true);
 
     return _ProcessingDraftItem(
-      draft: draft,
-      resumeMeta: meta,
+      summary: s,
+      resolvedPublishState: ps,
+      workspaceState: ws,
       title: title,
       preview: preview,
       level: level,
       category: category,
-      durationLabel: duration,
-      updatedAt: basics.updatedAt,
+      durationLabel: CreatorProcessingCopy.draftSummaryDurationChip(
+        s.targetDurationBandKey,
+      ),
+      updatedAt: updatedAt,
     );
   }
-
-  static String _fallbackPreview(CreatorStoryV1 d) {
-    final firstSentence = d.sentences
-        .where((s) => s.isValidV1)
-        .map((s) => s.japaneseText.trim())
-        .firstWhere((t) => t.isNotEmpty, orElse: () => '');
-    if (firstSentence.isNotEmpty) return firstSentence;
-    return 'Continue editing your draft';
-  }
-
 }
 
 class _ProcessingDraftManagerTab extends StatefulWidget {
   const _ProcessingDraftManagerTab({
     required this.items,
+    required this.pagerState,
     required this.highlightDraftId,
     required this.bottomPadding,
     required this.onChanged,
+    this.onNearEnd,
   });
 
   final List<_ProcessingDraftItem> items;
+  final PaginatedState<DraftListSummaryDto> pagerState;
   final String? highlightDraftId;
   final double bottomPadding;
   final VoidCallback onChanged;
+  final VoidCallback? onNearEnd;
 
   @override
   State<_ProcessingDraftManagerTab> createState() =>
       _ProcessingDraftManagerTabState();
 }
 
-class _ProcessingDraftManagerTabState extends State<_ProcessingDraftManagerTab> {
+class _ProcessingDraftManagerTabState
+    extends State<_ProcessingDraftManagerTab> {
   final ScrollController _scrollController = ScrollController();
   final Map<String, GlobalKey> _cardKeys = <String, GlobalKey>{};
 
   GlobalKey _keyFor(String id) => _cardKeys.putIfAbsent(id, GlobalKey.new);
+
+  /// Stable signature for list identity: publish state moves, sort order, and timestamps.
+  static String _itemsLayoutSignature(List<_ProcessingDraftItem> items) {
+    final sorted = List<_ProcessingDraftItem>.from(items)
+      ..sort((a, b) => a.draftId.compareTo(b.draftId));
+    final buf = StringBuffer();
+    for (final e in sorted) {
+      buf
+        ..write(e.draftId)
+        ..write(':')
+        ..write(e.resolvedPublishState.index)
+        ..write(':')
+        ..write(e.updatedAt.microsecondsSinceEpoch)
+        ..write('|');
+    }
+    return buf.toString();
+  }
+
+  void _pruneCardKeysForCurrentItems() {
+    final valid = widget.items.map((e) => e.draftId).toSet();
+    _cardKeys.removeWhere((id, _) => !valid.contains(id));
+  }
+
+  /// Target must be in the tree, painted, and under a [Scrollable] before [Scrollable.ensureVisible]
+  /// (avoids web-only `_elements.contains(element)` during post-frame vs layout races).
+  static bool _contextSafeForEnsureVisible(BuildContext ctx) {
+    if (!ctx.mounted) return false;
+    final ro = ctx.findRenderObject();
+    if (ro == null || !ro.attached) return false;
+    return Scrollable.maybeOf(ctx) != null;
+  }
 
   @override
   void dispose() {
@@ -2749,12 +3170,26 @@ class _ProcessingDraftManagerTabState extends State<_ProcessingDraftManagerTab> 
     super.dispose();
   }
 
-  void _scrollToHighlightIfNeeded() {
+  void _scrollToHighlightIfNeeded({int attempt = 0}) {
+    if (!mounted) return;
     final id = widget.highlightDraftId;
     if (id == null || id.isEmpty) return;
     if (!widget.items.any((e) => e.draftId == id)) return;
+
     final ctx = _keyFor(id).currentContext;
-    if (ctx == null) return;
+    if (ctx == null || !_contextSafeForEnsureVisible(ctx)) {
+      if (attempt < 2 &&
+          mounted &&
+          (widget.highlightDraftId ?? '').isNotEmpty &&
+          widget.items.any((e) => e.draftId == id)) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          _scrollToHighlightIfNeeded(attempt: attempt + 1);
+        });
+      }
+      return;
+    }
+
     Scrollable.ensureVisible(
       ctx,
       alignment: 0.12,
@@ -2766,17 +3201,25 @@ class _ProcessingDraftManagerTabState extends State<_ProcessingDraftManagerTab> 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance
-        .addPostFrameCallback((_) => _scrollToHighlightIfNeeded());
+    _pruneCardKeysForCurrentItems();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _scrollToHighlightIfNeeded();
+    });
   }
 
   @override
   void didUpdateWidget(covariant _ProcessingDraftManagerTab oldWidget) {
     super.didUpdateWidget(oldWidget);
+    final layoutChanged = _itemsLayoutSignature(widget.items) !=
+        _itemsLayoutSignature(oldWidget.items);
     if (widget.highlightDraftId != oldWidget.highlightDraftId ||
-        widget.items.length != oldWidget.items.length) {
-      WidgetsBinding.instance
-          .addPostFrameCallback((_) => _scrollToHighlightIfNeeded());
+        layoutChanged) {
+      _pruneCardKeysForCurrentItems();
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _scrollToHighlightIfNeeded();
+      });
     }
   }
 
@@ -2786,17 +3229,16 @@ class _ProcessingDraftManagerTabState extends State<_ProcessingDraftManagerTab> 
     final cs = theme.colorScheme;
 
     final drafts = <_ProcessingDraftItem>[];
-    final readOnlyPub = <_ProcessingDraftItem>[];
-    final fullLearnPub = <_ProcessingDraftItem>[];
+    final editing = <_ProcessingDraftItem>[];
 
     for (final it in widget.items) {
-      switch (it.draft.publishState) {
-        case StoryPublishState.draft:
-          drafts.add(it);
-        case StoryPublishState.readingOnlyPublished:
-          readOnlyPub.add(it);
-        case StoryPublishState.fullLearnPublished:
-          fullLearnPub.add(it);
+      // Workspace contains only:
+      // - Draft: never published.
+      // - Editing: previously published (see [workspaceStateFromDraftSummary] limitations).
+      if (it.workspaceState == _WorkspaceState.editing) {
+        editing.add(it);
+      } else if (it.resolvedPublishState == StoryPublishState.draft) {
+        drafts.add(it);
       }
     }
 
@@ -2805,14 +3247,24 @@ class _ProcessingDraftManagerTabState extends State<_ProcessingDraftManagerTab> 
     }
 
     sortByUpdated(drafts);
-    sortByUpdated(readOnlyPub);
-    sortByUpdated(fullLearnPub);
+    sortByUpdated(editing);
 
     final draftCount = drafts.length;
-    final roCount = readOnlyPub.length;
-    final flCount = fullLearnPub.length;
+    final editingCount = editing.length;
 
     if (widget.items.isEmpty) {
+      if (widget.pagerState.isInitialLoading &&
+          widget.pagerState.error == null) {
+        return ColoredBox(
+          color: const Color(0xFFF5F5F5),
+          child: Center(
+            child: Padding(
+              padding: EdgeInsets.only(bottom: widget.bottomPadding),
+              child: const CircularProgressIndicator(),
+            ),
+          ),
+        );
+      }
       return ColoredBox(
         color: const Color(0xFFF5F5F5),
         child: ListView(
@@ -2824,7 +3276,8 @@ class _ProcessingDraftManagerTabState extends State<_ProcessingDraftManagerTab> 
               surfaceTintColor: Colors.transparent,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(18),
-                side: BorderSide(color: cs.outlineVariant.withValues(alpha: 0.7)),
+                side:
+                    BorderSide(color: cs.outlineVariant.withValues(alpha: 0.7)),
               ),
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(18, 18, 18, 18),
@@ -2864,7 +3317,12 @@ class _ProcessingDraftManagerTabState extends State<_ProcessingDraftManagerTab> 
                     ),
                     const SizedBox(height: 16),
                     FilledButton(
-                      onPressed: () => context.push('/create'),
+                      onPressed: () {
+                        ProviderScope.containerOf(context, listen: false)
+                            .read(creatorEntryChannelProvider.notifier)
+                            .state = CreatorEntryChannel.shellMore;
+                        context.push('/create');
+                      },
                       style: FilledButton.styleFrom(
                         minimumSize: const Size(0, 52),
                         shape: RoundedRectangleBorder(
@@ -2915,35 +3373,52 @@ class _ProcessingDraftManagerTabState extends State<_ProcessingDraftManagerTab> 
 
     return ColoredBox(
       color: const Color(0xFFF5F5F5),
-      child: ListView(
-        controller: _scrollController,
-        padding: EdgeInsets.fromLTRB(16, 14, 16, widget.bottomPadding),
-        children: [
-          _ProcessingSummaryBar(
-            draftCount: draftCount,
-            readOnlyPublished: roCount,
-            fullLearnPublished: flCount,
-          ),
-          const SizedBox(height: 14),
-          if (drafts.isNotEmpty) section('Drafts', drafts),
-          if (readOnlyPub.isNotEmpty) section('Ready for Full Learn', readOnlyPub),
-          if (fullLearnPub.isNotEmpty) section('Full Learn published', fullLearnPub),
-        ],
+      child: NotificationListener<ScrollNotification>(
+        onNotification: (ScrollNotification n) {
+          final m = n.metrics;
+          if (m.maxScrollExtent <= 0) return false;
+          if (m.pixels >= m.maxScrollExtent * 0.72) {
+            widget.onNearEnd?.call();
+          }
+          return false;
+        },
+        child: ListView(
+          controller: _scrollController,
+          padding: EdgeInsets.fromLTRB(16, 14, 16, widget.bottomPadding),
+          children: [
+            _WorkspaceSummaryBar(
+              draftCount: draftCount,
+              editingCount: editingCount,
+            ),
+            const SizedBox(height: 14),
+            if (drafts.isNotEmpty) section('Drafts', drafts),
+            if (editing.isNotEmpty) section('Editing', editing),
+            if (widget.pagerState.isLoadingMore)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 12),
+                child: Center(
+                  child: SizedBox(
+                    width: 22,
+                    height: 22,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }
 }
 
-class _ProcessingSummaryBar extends StatelessWidget {
-  const _ProcessingSummaryBar({
+class _WorkspaceSummaryBar extends StatelessWidget {
+  const _WorkspaceSummaryBar({
     required this.draftCount,
-    required this.readOnlyPublished,
-    required this.fullLearnPublished,
+    required this.editingCount,
   });
 
   final int draftCount;
-  final int readOnlyPublished;
-  final int fullLearnPublished;
+  final int editingCount;
 
   @override
   Widget build(BuildContext context) {
@@ -2992,8 +3467,7 @@ class _ProcessingSummaryBar extends StatelessWidget {
       runSpacing: 6,
       children: [
         pill('Draft', draftCount),
-        pill('Read Only', readOnlyPublished),
-        pill('Full Learn', fullLearnPublished),
+        pill('Editing', editingCount),
       ],
     );
   }
@@ -3073,16 +3547,19 @@ class _ProcessingDraftCard extends ConsumerWidget {
         ],
       ),
     );
+    if (!context.mounted) return;
     final title = (next ?? '').trim();
     if (title.isEmpty || title == item.title) return;
 
     final repo = ref.read(storyDraftRepositoryProvider);
     final loaded = await repo.loadDraft(item.draftId);
+    if (!context.mounted) return;
     if (loaded == null) return;
     final updated = loaded.copyWith(
       basics: loaded.basics.copyWith(title: title),
     );
     final saved = await repo.saveDraft(updated);
+    if (!context.mounted) return;
     ref
         .read(storyCreatorDraftProvider.notifier)
         .syncIfSameDraftWasPersistedElsewhere(saved);
@@ -3111,12 +3588,16 @@ class _ProcessingDraftCard extends ConsumerWidget {
         ],
       ),
     );
+    if (!context.mounted) return;
     if (ok != true) return;
     await ref.read(storyDraftRepositoryProvider).deleteDraft(item.draftId);
+    if (!context.mounted) return;
     ref
         .read(storyCreatorDraftProvider.notifier)
         .syncIfDraftWasRemovedExternally(item.draftId);
-    onChanged();
+    ref
+        .read(profileWorkspaceDraftPagerProvider.notifier)
+        .removeDraftById(item.draftId);
   }
 
   @override
@@ -3124,15 +3605,34 @@ class _ProcessingDraftCard extends ConsumerWidget {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
 
-    final secondary = CreatorProcessingCopy.secondaryLine(item.draft);
+    final secondary = item.preview.trim().isNotEmpty
+        ? item.preview
+        : CreatorProcessingCopy.secondaryLineSummaryOnly(
+            item.resolvedPublishState,
+          );
     final actionLabel =
-        CreatorProcessingCopy.primaryButton(item.draft.publishState);
+        CreatorProcessingCopy.primaryButton(item.resolvedPublishState);
+
+    final statusChip = switch (item.workspaceState) {
+      _WorkspaceState.draft => const _ProcessingChip(
+          label: 'Draft',
+          background: Color(0xFFDF3B3B),
+          foreground: Colors.white,
+          border: Color(0xFFDF3B3B),
+        ),
+      _WorkspaceState.editing => const _ProcessingChip(
+          label: 'Editing • Previously published',
+          background: Color(0xFF2F6FED),
+          foreground: Colors.white,
+          border: Color(0xFF2F6FED),
+        ),
+    };
 
     void onResume() => unawaited(
           CreatorDraftResumeFlow.resumeFromProcessing(
             context,
             item.draftId,
-            publishState: item.draft.publishState,
+            publishState: item.resolvedPublishState,
           ),
         );
 
@@ -3166,92 +3666,97 @@ class _ProcessingDraftCard extends ConsumerWidget {
             borderRadius: BorderRadius.circular(4),
           ),
           child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _ProcessingThumb(title: item.title),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        item.title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.titleSmall?.copyWith(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: -0.1,
-                          height: 1.15,
-                          color: cs.onSurface,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        secondary,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: cs.onSurfaceVariant,
-                          fontSize: 12,
-                          height: 1.25,
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      Wrap(
-                        spacing: 6,
-                        runSpacing: 4,
-                        children: [
-                          _ProcessingChip(label: item.level),
-                          _ProcessingChip(label: item.category),
-                          _ProcessingChip(label: item.durationLabel),
-                          _ProcessingChip(label: 'Updated ${_updatedLabel()}'),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 4),
-                Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.end,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _ProcessingThumb(title: item.title),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    SizedBox(
-                      width: 32,
-                      height: 32,
-                      child: PopupMenuButton<String>(
-                        tooltip: 'Story actions',
-                        onSelected: (v) {
-                          if (v == 'rename') unawaited(_rename(context, ref));
-                          if (v == 'delete') unawaited(_delete(context, ref));
-                        },
-                        itemBuilder: (ctx) => const [
-                          PopupMenuItem(
-                            value: 'rename',
-                            child: Text('Rename'),
-                          ),
-                          PopupMenuItem(
-                            value: 'delete',
-                            child: Text('Delete from this device'),
-                          ),
-                        ],
-                        icon: Icon(
-                          Icons.more_horiz_rounded,
-                          size: 18,
-                          color: cs.onSurfaceVariant,
-                        ),
-                        padding: EdgeInsets.zero,
+                    Text(
+                      item.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.titleSmall?.copyWith(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: -0.1,
+                        height: 1.15,
+                        color: cs.onSurface,
                       ),
                     ),
                     const SizedBox(height: 2),
-                    _ProcessingActionButton(
-                      label: actionLabel,
-                      onTap: onResume,
+                    Text(
+                      secondary,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: cs.onSurfaceVariant,
+                        fontSize: 12,
+                        height: 1.25,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 4,
+                      children: [
+                        statusChip,
+                        _ProcessingChip(label: item.level),
+                        _ProcessingChip(label: item.category),
+                        _ProcessingChip(label: item.durationLabel),
+                        if (item.summary.sentenceCount > 0)
+                          _ProcessingChip(
+                            label: '${item.summary.sentenceCount} sentences',
+                          ),
+                        _ProcessingChip(label: 'Updated ${_updatedLabel()}'),
+                      ],
                     ),
                   ],
                 ),
-              ],
-            ),
+              ),
+              const SizedBox(width: 4),
+              Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  SizedBox(
+                    width: 32,
+                    height: 32,
+                    child: PopupMenuButton<String>(
+                      tooltip: 'Story actions',
+                      onSelected: (v) {
+                        if (v == 'rename') unawaited(_rename(context, ref));
+                        if (v == 'delete') unawaited(_delete(context, ref));
+                      },
+                      itemBuilder: (ctx) => const [
+                        PopupMenuItem(
+                          value: 'rename',
+                          child: Text('Rename'),
+                        ),
+                        PopupMenuItem(
+                          value: 'delete',
+                          child: Text('Delete from this device'),
+                        ),
+                      ],
+                      icon: Icon(
+                        Icons.more_horiz_rounded,
+                        size: 18,
+                        color: cs.onSurfaceVariant,
+                      ),
+                      padding: EdgeInsets.zero,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  _ProcessingActionButton(
+                    label: actionLabel,
+                    onTap: onResume,
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -3354,9 +3859,17 @@ class _ProcessingActionButton extends StatelessWidget {
 /// Smaller, lighter than the previous pill so a row can show 4+ without
 /// inflating height.
 class _ProcessingChip extends StatelessWidget {
-  const _ProcessingChip({required this.label});
+  const _ProcessingChip({
+    required this.label,
+    this.background,
+    this.foreground,
+    this.border,
+  });
 
   final String label;
+  final Color? background;
+  final Color? foreground;
+  final Color? border;
 
   @override
   Widget build(BuildContext context) {
@@ -3364,9 +3877,11 @@ class _ProcessingChip extends StatelessWidget {
     final cs = theme.colorScheme;
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: cs.surfaceContainerLow.withValues(alpha: 0.65),
+        color: background ?? cs.surfaceContainerLow.withValues(alpha: 0.65),
         borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.38)),
+        border: Border.all(
+          color: border ?? cs.outlineVariant.withValues(alpha: 0.38),
+        ),
       ),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
@@ -3375,7 +3890,7 @@ class _ProcessingChip extends StatelessWidget {
           style: theme.textTheme.labelSmall?.copyWith(
             fontSize: 11,
             fontWeight: FontWeight.w700,
-            color: cs.onSurface.withValues(alpha: 0.78),
+            color: foreground ?? cs.onSurface.withValues(alpha: 0.78),
             height: 1.0,
           ),
         ),
@@ -3477,117 +3992,117 @@ class _ProcessingSelectableListState extends State<_ProcessingSelectableList> {
         padding: EdgeInsets.fromLTRB(16, 12, 16, widget.bottomPadding),
         itemCount: widget.items.length + 1,
         itemBuilder: (context, index) {
-        if (index == 0 && _selecting) {
-          final count = _selectedIds.length;
-          return Padding(
-            padding: const EdgeInsets.only(bottom: 10),
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                color: Colors.grey.shade100,
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: Colors.black.withOpacity(0.06)),
+          if (index == 0 && _selecting) {
+            final count = _selectedIds.length;
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade100,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: Colors.black.withOpacity(0.06)),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          '$count selected',
+                          style:
+                              Theme.of(context).textTheme.labelLarge?.copyWith(
+                                    fontWeight: FontWeight.w900,
+                                  ),
+                        ),
+                      ),
+                      TextButton(
+                        onPressed: () => setState(() {
+                          _selecting = false;
+                          _selectedIds.clear();
+                        }),
+                        child: const Text('Cancel'),
+                      ),
+                      const SizedBox(width: 6),
+                      FilledButton(
+                        onPressed: count == 0
+                            ? null
+                            : () {
+                                widget.onDeleteSelected(
+                                  Set<String>.from(_selectedIds),
+                                );
+                                setState(() {
+                                  _selecting = false;
+                                  _selectedIds.clear();
+                                });
+                              },
+                        child: const Text('Delete'),
+                      ),
+                    ],
+                  ),
+                ),
               ),
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
-                child: Row(
+            );
+          }
+
+          final i = index - 1;
+          if (i < 0) return const SizedBox.shrink();
+          final it = widget.items[i];
+          final selected = _selectedIds.contains(it.id);
+
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                borderRadius: BorderRadius.circular(12),
+                onTap: _selecting
+                    ? () => _toggle(it)
+                    : (widget.onOpenDetail == null
+                        ? null
+                        : () => widget.onOpenDetail!(it)),
+                onLongPress: () => _showOrgSheet(it),
+                child: Stack(
                   children: [
-                    Expanded(
-                      child: Text(
-                        '$count selected',
-                        style:
-                            Theme.of(context).textTheme.labelLarge?.copyWith(
-                                  fontWeight: FontWeight.w900,
-                                ),
+                    AnimatedOpacity(
+                      duration: const Duration(milliseconds: 120),
+                      opacity: selected ? 0.85 : 1.0,
+                      child: MonoStoryListRow(
+                        title: it.title,
+                        description: it.description,
+                        jlptLevel: it.jlptLevel,
+                        thumbnailUrl: it.thumbnailUrl,
+                        onMenuTap: () => _showOrgSheet(it),
                       ),
                     ),
-                    TextButton(
-                      onPressed: () => setState(() {
-                        _selecting = false;
-                        _selectedIds.clear();
-                      }),
-                      child: const Text('Cancel'),
-                    ),
-                    const SizedBox(width: 6),
-                    FilledButton(
-                      onPressed: count == 0
-                          ? null
-                          : () {
-                              widget.onDeleteSelected(
-                                Set<String>.from(_selectedIds),
-                              );
-                              setState(() {
-                                _selecting = false;
-                                _selectedIds.clear();
-                              });
-                            },
-                      child: const Text('Delete'),
-                    ),
+                    if (_selecting)
+                      Positioned(
+                        top: 8,
+                        left: 4,
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            color: selected ? Colors.black : Colors.white,
+                            borderRadius: BorderRadius.circular(999),
+                            border: Border.all(
+                                color: Colors.black.withOpacity(0.20)),
+                          ),
+                          child: SizedBox(
+                            width: 22,
+                            height: 22,
+                            child: Icon(
+                              selected
+                                  ? Icons.check_rounded
+                                  : Icons.circle_outlined,
+                              size: 16,
+                              color: selected ? Colors.white : Colors.black,
+                            ),
+                          ),
+                        ),
+                      ),
                   ],
                 ),
               ),
             ),
           );
-        }
-
-        final i = index - 1;
-        if (i < 0) return const SizedBox.shrink();
-        final it = widget.items[i];
-        final selected = _selectedIds.contains(it.id);
-
-        return Padding(
-          padding: const EdgeInsets.only(bottom: 12),
-          child: Material(
-            color: Colors.transparent,
-            child: InkWell(
-              borderRadius: BorderRadius.circular(12),
-              onTap: _selecting
-                  ? () => _toggle(it)
-                  : (widget.onOpenDetail == null
-                      ? null
-                      : () => widget.onOpenDetail!(it)),
-              onLongPress: () => _showOrgSheet(it),
-              child: Stack(
-                children: [
-                  AnimatedOpacity(
-                    duration: const Duration(milliseconds: 120),
-                    opacity: selected ? 0.85 : 1.0,
-                    child: MonoStoryListRow(
-                      title: it.title,
-                      description: it.description,
-                      jlptLevel: it.jlptLevel,
-                      thumbnailUrl: it.thumbnailUrl,
-                      onMenuTap: () => _showOrgSheet(it),
-                    ),
-                  ),
-                  if (_selecting)
-                    Positioned(
-                      top: 8,
-                      left: 4,
-                      child: DecoratedBox(
-                        decoration: BoxDecoration(
-                          color: selected ? Colors.black : Colors.white,
-                          borderRadius: BorderRadius.circular(999),
-                          border:
-                              Border.all(color: Colors.black.withOpacity(0.20)),
-                        ),
-                        child: SizedBox(
-                          width: 22,
-                          height: 22,
-                          child: Icon(
-                            selected
-                                ? Icons.check_rounded
-                                : Icons.circle_outlined,
-                            size: 16,
-                            color: selected ? Colors.white : Colors.black,
-                          ),
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-            ),
-          ),
-        );
         },
       ),
     );

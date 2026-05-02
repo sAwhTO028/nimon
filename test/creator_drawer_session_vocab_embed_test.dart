@@ -32,15 +32,17 @@ void main() {
       expect(s.sentencesMainStep == CreatorWorkspaceStep.storySentences, isFalse);
     });
 
-    test('reportRoute: vocabulary sticky when URI drops panel query on same host', () {
+    test(
+        'reportRoute: no panel= on sentences host is canonical main storytelling (V1 router truth)',
+        () {
       goVocabEmbed();
       n.reportRoute(
         '/create/story/sentences',
         locationUri: Uri.parse('/create/story/sentences'),
       );
       final s = container.read(creatorDrawerSessionProvider);
-      expect(s.sentencesMainStep, CreatorWorkspaceStep.vocabulary);
-      expect(s.activeModule, CreatorModule.vocabulary);
+      expect(s.sentencesMainStep, CreatorWorkspaceStep.storySentences);
+      expect(s.activeModule, CreatorModule.storySentences);
     });
 
     test('reportRoute: leaving sentences host resets embedded step to story sentences', () {

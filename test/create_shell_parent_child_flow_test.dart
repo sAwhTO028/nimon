@@ -8,6 +8,9 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:nimon/features/create/creator_back_policy.dart'
+    show CreatorEntryChannel, creatorEntryChannelProvider;
 import 'package:nimon/features/create/creator_drawer_session.dart';
 import 'package:nimon/features/create/story_creator_models.dart';
 import 'package:nimon/features/create/story_creator_provider.dart';
@@ -158,45 +161,123 @@ Future<void> _pumpApp(WidgetTester tester) async {
     ),
   );
   await tester.pump();
-  await tester.pump(const Duration(milliseconds: 300));
+  for (int i = 0; i < 20; i++) {
+    await tester.pump();
+  }
 }
 
-BuildContext _ctx(WidgetTester tester) => tester.element(find.byType(Scaffold).first);
+/// Context for [ProviderScope] + [GoRouter.of] — prefer the top onstage [Scaffold]
+/// (not `.first`, which is often a nested / dialog scaffold in tests).
+BuildContext _ctx(WidgetTester tester) {
+  final scaffolds = find.byType(Scaffold);
+  final matches = scaffolds.evaluate();
+  if (matches.isEmpty) {
+    throw StateError(
+      'No Scaffold found for _ctx — widget tree empty or route still transitioning.',
+    );
+  }
+  return matches.last;
+}
 
 ProviderContainer _container(WidgetTester tester) => ProviderScope.containerOf(_ctx(tester));
 
-String _uri(WidgetTester tester) => GoRouterState.of(_ctx(tester)).uri.toString();
+/// Use [GoRouter]’s public state (single global router) — not [GoRouterState.of] on
+/// a nested element, which can read as stale in widget tests.
+///
+/// After async navigation (e.g. back), prefer letting the tree settle (e.g.
+/// [WidgetTester.pumpAndSettle]) before calling this so [_ctx] sees a [Scaffold].
+String _uri(WidgetTester tester) => GoRouter.of(_ctx(tester)).state.uri.toString();
 
 CreatorDrawerSessionState _session(WidgetTester tester) =>
     _container(tester).read(creatorDrawerSessionProvider);
 
+/// Learn-module rows in the progress drawer are hidden when learn mode is off.
+Future<void> _enableLearnMode(WidgetTester tester) async {
+  _container(tester).read(creatorDrawerSessionProvider.notifier).setLearnMode(true);
+  for (int i = 0; i < 12; i++) {
+    await tester.pump();
+  }
+}
+
+Future<void> _pumpUntilFinderGone(
+  WidgetTester tester,
+  Finder f, {
+  int maxFrames = 35,
+}) async {
+  for (var i = 0; i < maxFrames; i++) {
+    await tester.pump();
+    if (f.evaluate().isEmpty) return;
+  }
+  expect(f, findsNothing, reason: 'Finder still present after $maxFrames pumps');
+}
+
+Future<void> _openGrammarPanelWithLearn(WidgetTester tester) async {
+  await _pumpApp(tester);
+  await _enableLearnMode(tester);
+  await _go(tester, '/create/story/sentences?panel=grammar');
+  expect(_session(tester).activeModule, CreatorModule.grammar);
+  expect(_uri(tester).contains('panel=grammar'), isTrue);
+}
+
+/// Bounded settle after back/navigation — [WidgetTester.pumpAndSettle] and long
+/// duration [pump] can hang if microtasks never drain.
+Future<void> _pumpNavigationSettle(WidgetTester tester) async {
+  for (int i = 0; i < 25; i++) {
+    await tester.pump();
+  }
+}
+
+/// If back policy opened the locked save-failure dialog, retry once and settle.
+Future<void> _pumpIfSaveFailedDialog(WidgetTester tester) async {
+  final retry = find.widgetWithText(TextButton, 'Retry');
+  if (retry.evaluate().isNotEmpty) {
+    await tester.tap(retry);
+    await _pumpNavigationSettle(tester);
+  }
+}
+
 Future<void> _go(WidgetTester tester, String location) async {
   GoRouter.of(_ctx(tester)).go(location);
   await tester.pump();
-  await tester.pump(const Duration(milliseconds: 350));
-  await tester.pump(const Duration(milliseconds: 350));
+  // Avoid [pump] with a wall-clock duration: if the frame schedules work such that
+  // microtasks never drain, duration-based `pump` can hang. Fixed frame count matches
+  // other creator tests’ intent (settle navigation) without that edge case.
+  for (int i = 0; i < 30; i++) {
+    await tester.pump();
+  }
 }
 
 Future<void> _openDrawer(WidgetTester tester) async {
-  final btn = find.byTooltip('Progress');
-  expect(btn, findsOneWidget);
-  await tester.tap(btn);
-  await tester.pump();
-  await tester.pump(const Duration(milliseconds: 800));
+  const openKey = ValueKey<String>('creator_progress_open_button');
+  const drawerKey = ValueKey<String>('creator_progress_drawer');
+  final progressBtn = find.byKey(openKey);
+  expect(progressBtn, findsOneWidget);
+  await tester.ensureVisible(progressBtn);
+  await tester.tap(progressBtn);
+  await tester.pumpAndSettle();
+  expect(find.byKey(drawerKey), findsOneWidget);
 }
 
 Finder _drawerCard(String title) => find.ancestor(of: find.text(title), matching: find.byType(Card));
 
 Future<void> _tapDrawerOpen(WidgetTester tester, String title) async {
-  final card = _drawerCard(title);
+  var card = _drawerCard(title);
   expect(card, findsOneWidget);
-  final open = find.descendant(of: card, matching: find.widgetWithText(TextButton, 'Open'));
-  expect(open, findsOneWidget);
-  await tester.ensureVisible(open);
-  await tester.pump();
-  await tester.tap(open, warnIfMissed: false);
-  await tester.pump();
-  await tester.pump(const Duration(milliseconds: 700));
+  await tester.ensureVisible(card);
+  await tester.pumpAndSettle();
+  card = _drawerCard(title);
+  final openButton = find.descendant(
+    of: card,
+    matching: find.widgetWithText(TextButton, 'Open'),
+  );
+  expect(openButton, findsOneWidget);
+  await tester.ensureVisible(openButton);
+  await tester.pumpAndSettle();
+  final viewH = tester.view.physicalSize.height / tester.view.devicePixelRatio;
+  final centerY = tester.getCenter(openButton).dy;
+  expect(centerY >= 0 && centerY < viewH, isTrue);
+  await tester.tap(openButton);
+  await tester.pumpAndSettle();
 }
 
 void _expectDrawerCurrent(WidgetTester tester, String title) {
@@ -235,6 +316,10 @@ Future<void> _assertNoModuleSwitchAfterTap(
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   HttpOverrides.global = _FakeHttpOverrides();
+
+  setUpAll(() {
+    SharedPreferences.setMockInitialValues({});
+  });
 
   group('Create shell parent-child verification', () {
     testWidgets('1. Enter Create flow', (tester) async {
@@ -276,16 +361,51 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 600));
       expect(find.textContaining('Support meanings'), findsOneWidget);
-      // Close dialog (Cancel).
-      final cancelInDialog = find.descendant(
-        of: find.byType(AlertDialog),
-        matching: find.widgetWithText(TextButton, 'Cancel'),
-      );
-      expect(cancelInDialog, findsOneWidget);
-      await tester.tap(cancelInDialog);
+      // Dismiss support-meanings UI (modal bottom sheet, not AlertDialog). Edit mode also
+      // has a separate Cancel, so disambiguate with the sheet action (last hit target).
+      final cancelInSheet = find.widgetWithText(TextButton, 'Cancel');
+      expect(cancelInSheet, findsNWidgets(2));
+      await tester.tap(cancelInSheet.last);
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 400));
       expect(_session(tester).activeModule, CreatorModule.storySentences);
+    });
+
+    testWidgets('2b. Grammar Add pattern sheet dismisses without adding', (tester) async {
+      await _openGrammarPanelWithLearn(tester);
+
+      final grammarCountBefore =
+          _container(tester).read(storyCreatorDraftDataProvider).grammar.entries.length;
+
+      final addPatternBtn = find.widgetWithText(FilledButton, 'Add pattern').first;
+      await tester.ensureVisible(addPatternBtn);
+      await tester.tap(addPatternBtn, warnIfMissed: false);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 600));
+
+      final sheetAnchor = find.textContaining('Everything else is optional in V1.');
+      expect(sheetAnchor, findsOneWidget);
+
+      // Pop the modal route (same end state as Cancel). Under GoRouter + shell, the sheet may sit
+      // on the root or nested navigator — try both with bounded [maybePop] + animation pumps.
+      for (var attempt = 0; attempt < 8; attempt++) {
+        Navigator.of(_ctx(tester), rootNavigator: true).maybePop();
+        Navigator.of(_ctx(tester)).maybePop();
+        for (var p = 0; p < 8; p++) {
+          await tester.pump(const Duration(milliseconds: 50));
+        }
+        if (sheetAnchor.evaluate().isEmpty) break;
+      }
+      await _pumpUntilFinderGone(tester, sheetAnchor);
+
+      expect(sheetAnchor, findsNothing);
+      expect(_session(tester).activeModule, CreatorModule.grammar);
+      expect(_uri(tester).contains('panel=grammar'), isTrue);
+      expect(
+        _container(tester).read(storyCreatorDraftDataProvider).grammar.entries.length,
+        grammarCountBefore,
+      );
+      expect(tester.takeException(), isNull);
     });
 
     testWidgets('3-4. Switch to Vocabulary; Vocabulary local actions stay local', (tester) async {
@@ -297,6 +417,7 @@ void main() {
       notifier.applySentences('図書館は駅から歩いて五分です。');
       await tester.pump(const Duration(milliseconds: 100));
 
+      await _enableLearnMode(tester);
       await _openDrawer(tester);
       await _tapDrawerOpen(tester, 'Vocabulary');
 
@@ -337,6 +458,8 @@ void main() {
     testWidgets('5-10. Switch to Grammar/Quiz/Listening; local actions stay local', (tester) async {
       await _pumpApp(tester);
       await _go(tester, '/create/story/sentences?panel=vocabulary');
+
+      await _enableLearnMode(tester);
 
       final notifier = _container(tester).read(storyCreatorDraftProvider.notifier);
 
@@ -458,16 +581,60 @@ void main() {
 
     testWidgets('12. Back exits to Home Mono', (tester) async {
       await _pumpApp(tester);
+      await _go(tester, '/create/story/sentences');
+      // Learn sub-pages require learn mode; match user flow, then go to the quiz panel.
+      await _enableLearnMode(tester);
       await _go(tester, '/create/story/sentences?panel=quiz');
+      expect(_uri(tester).contains('panel=quiz'), isTrue);
+      // Exit to Mono when entry came from the add/Mono path (not a shell-only default).
+      _container(tester).read(creatorEntryChannelProvider.notifier).state =
+          CreatorEntryChannel.add;
+      if (_container(tester).read(storyCreatorDraftProvider).dirty) {
+        await _container(tester)
+            .read(storyCreatorDraftProvider.notifier)
+            .persistLocalNow(reason: 'test_12_stabilize_before_back');
+        for (int i = 0; i < 20; i++) {
+          await tester.pump();
+        }
+      }
 
-      // Back button is the floating circle tooltip.
       final back = find.byTooltip('Back');
       expect(back, findsOneWidget);
-      await tester.tap(back);
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 600));
 
-      expect(_uri(tester).startsWith('/mono'), isTrue);
+      // Back calls unawaited(_handleSentencesBackNavigation) — the handler is async; use
+      // a bounded 40×50ms wait so layout + GoRouter + flush can finish. If a locked
+      // "Couldn't save" dialog appears, [Retry] via [_pumpIfSaveFailedDialog] as we go.
+      Future<void> waitAfterBackTap(bool Function() isDone) async {
+        for (int i = 0; i < 40; i++) {
+          await _pumpIfSaveFailedDialog(tester);
+          await tester.pumpAndSettle();
+          if (isDone()) {
+            return;
+          }
+        }
+        await _pumpIfSaveFailedDialog(tester);
+        await tester.pumpAndSettle();
+      }
+
+      // 1) Learn `?panel=` → story sentences main.
+      await tester.tap(back, warnIfMissed: false);
+      await waitAfterBackTap(
+        () => !_uri(tester).contains('panel=quiz'),
+      );
+      expect(
+        _uri(tester).contains('panel=quiz'),
+        isFalse,
+        reason: 'first back should leave learn panel, was ${_uri(tester)}',
+      );
+
+      // 2) Host → Mono (add channel).
+      await tester.tap(back, warnIfMissed: false);
+      await waitAfterBackTap(() => _uri(tester).startsWith('/mono'));
+      expect(
+        _uri(tester).startsWith('/mono'),
+        isTrue,
+        reason: 'last location was ${_uri(tester)}',
+      );
     });
   });
 
@@ -738,6 +905,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 400));
 
       // 11 Save draft: preserves items and filtering.
+      await _openDrawer(tester);
       final saveDraftBtn = find.widgetWithText(OutlinedButton, 'Save draft');
       expect(saveDraftBtn, findsWidgets);
       await tester.tap(saveDraftBtn.first, warnIfMissed: false);

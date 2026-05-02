@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:nimon/features/create/create_story_basics_form.dart';
+import 'package:nimon/features/create/creator_back_policy.dart';
 import 'package:nimon/features/create/story_creator_provider.dart';
 import 'package:nimon/ui/widgets/nimon_circle_nav_button.dart';
 
@@ -25,7 +26,18 @@ class CreateScreen extends ConsumerStatefulWidget {
 }
 
 class _CreateScreenState extends ConsumerState<CreateScreen> {
-  final _formKey = GlobalKey<CreateStoryBasicsFormState>();
+  // Use separate keys for the two mutually-exclusive modes.
+  // This avoids accidental GlobalKey reuse if both subtrees ever overlap during
+  // route transitions/animations.
+  final _createFormKey = GlobalKey<CreateStoryBasicsFormState>(
+    debugLabel: 'CreateScreen_create_form',
+  );
+  final _editFromReviewFormKey = GlobalKey<CreateStoryBasicsFormState>(
+    debugLabel: 'CreateScreen_edit_from_review_form',
+  );
+
+  GlobalKey<CreateStoryBasicsFormState> get _formKey =>
+      widget.editFromReview ? _editFromReviewFormKey : _createFormKey;
 
   Future<void> _handleCreate() async {
     final payload = _formKey.currentState?.buildPayloadIfValid();
@@ -60,7 +72,7 @@ class _CreateScreenState extends ConsumerState<CreateScreen> {
           coverImageUrl: payload.coverImageUrl,
         );
     if (!mounted) return;
-    context.pop();
+    await handleCreatorBackPressed(context, ref);
   }
 
   @override
@@ -77,7 +89,9 @@ class _CreateScreenState extends ConsumerState<CreateScreen> {
           scrolledUnderElevation: 0,
           surfaceTintColor: Colors.transparent,
           backgroundColor: theme.colorScheme.surface,
-          leading: NimonBackButton(onPressed: () => context.pop()),
+          leading: NimonBackButton(
+            onPressed: () => unawaited(handleCreatorBackPressed(context, ref)),
+          ),
           title: Text(
             'Story basics',
             style: theme.textTheme.titleLarge?.copyWith(
@@ -125,7 +139,7 @@ class _CreateScreenState extends ConsumerState<CreateScreen> {
         backgroundColor: Colors.white,
         elevation: 0,
         leading: NimonBackButton(
-          onPressed: () => context.pop(),
+          onPressed: () => unawaited(handleCreatorBackPressed(context, ref)),
           icon: Icons.close_rounded,
           tooltip: 'Close',
         ),

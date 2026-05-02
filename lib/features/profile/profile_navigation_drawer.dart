@@ -1,6 +1,8 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:nimon/features/create/creator_back_policy.dart';
 
 /// V1 Profile menu content for the in-page **push** drawer (right menu, main layer slides left).
 class ProfileNavigationDrawer extends StatefulWidget {
@@ -336,7 +338,13 @@ class _ProfileNavigationDrawerState extends State<ProfileNavigationDrawer> {
                           label: 'Story Creator',
                           onTap: () {
                             _closeThenRun(() {
-                              widget.hostContext.push('/create/story');
+                              ProviderScope.containerOf(
+                                widget.hostContext,
+                                listen: false,
+                              )
+                                  .read(creatorEntryChannelProvider.notifier)
+                                  .state = CreatorEntryChannel.shellMore;
+                              widget.hostContext.push('/create');
                             });
                           },
                         ),

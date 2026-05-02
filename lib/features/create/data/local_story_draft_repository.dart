@@ -1,6 +1,15 @@
+import 'dart:math' show min;
+
+import 'package:nimon/core/pagination/page_request.dart';
+import 'package:nimon/core/pagination/page_result.dart';
+import 'package:nimon/core/pagination/pagination_defaults.dart';
+import 'package:nimon/features/create/data/dto/draft_list_summary_dto.dart';
 import 'package:nimon/features/create/data/story_draft_repository.dart';
 import 'package:nimon/features/create/story_creator_draft_storage.dart';
 import 'package:nimon/features/create/story_creator_models.dart';
+
+/// Prefix for [LocalStoryDraftRepository.fetchWorkspaceDraftPage] cursors (offset-based).
+const _localDraftListCursorPrefix = 'nimon_local_o_';
 
 /// Thin adapter over [StoryCreatorDraftStorage] + [StoryCreatorDraftResumeStorage].
 class LocalStoryDraftRepository implements StoryDraftRepository {
@@ -39,6 +48,35 @@ class LocalStoryDraftRepository implements StoryDraftRepository {
   Future<List<String>> listDraftIds() => StoryCreatorDraftStorage.loadAllIds();
 
   @override
+  Future<PageResult<DraftListSummaryDto>> fetchWorkspaceDraftPage(
+    PageRequest request,
+  ) async {
+    /// Interim local pager: SharedPreferences index order + offset cursor.
+    /// Loads up to [PaginationDefaults.workspacePageLimit] full drafts per page — does **not**
+    /// mirror server-side `publishState` / `updatedAfter` filters (local index only).
+    final ids = await listDraftIds();
+    final offset = _decodeLocalDraftListCursor(request.cursor);
+    final pageLimit = min(request.limit, PaginationDefaults.workspacePageLimit);
+    final slice = ids.skip(offset).take(pageLimit + 1).toList();
+    final hasMore = slice.length > pageLimit;
+    final pageIds = hasMore ? slice.sublist(0, pageLimit) : slice;
+    final items = <DraftListSummaryDto>[];
+    for (final id in pageIds) {
+      final d = await loadDraft(id);
+      if (d != null) {
+        items.add(DraftListSummaryDto.fromCreatorStoryV1(d));
+      }
+    }
+    final nextOffset = offset + pageIds.length;
+    return PageResult<DraftListSummaryDto>(
+      items: items,
+      nextCursor: hasMore ? _encodeLocalDraftListCursor(nextOffset) : null,
+      hasMore: hasMore,
+      totalCount: null,
+    );
+  }
+
+  @override
   Future<CreatorStoryV1> saveDraft(CreatorStoryV1 draft) async {
     final now = DateTime.now();
     final next = draft.copyWith(
@@ -56,6 +94,26 @@ class LocalStoryDraftRepository implements StoryDraftRepository {
   Future<CreatorStoryV1> saveDraftNow(CreatorStoryV1 draft) => saveDraft(draft);
 
   @override
+  Future<CreatorStoryV1> flushDraftToProcessing(
+    CreatorStoryV1 draft, {
+    CreatorLastActiveModule? lastActiveModule,
+    String? lastActiveSubPage,
+    DateTime? touchEditedAtUtc,
+  }) async {
+    final persisted = await saveDraftNow(draft);
+    final id = persisted.id.trim();
+    if (id.isNotEmpty) {
+      await updateResumeMeta(
+        id,
+        lastActiveModule: lastActiveModule,
+        lastActiveSubPage: lastActiveSubPage,
+        touchEditedAtUtc: touchEditedAtUtc,
+      );
+    }
+    return persisted;
+  }
+
+  @override
   Future<void> deleteDraft(String draftId) async {
     await StoryCreatorDraftStorage.clear(draftId: draftId);
     await StoryCreatorDraftResumeStorage.clearMeta(draftId);
@@ -69,8 +127,7 @@ class LocalStoryDraftRepository implements StoryDraftRepository {
       StoryCreatorDraftStorage.loadSavedAt(draftId: draftId);
 
   @override
-  Future<bool> hasAnyIndexedDraft() async =>
-      (await listDraftIds()).isNotEmpty;
+  Future<bool> hasAnyIndexedDraft() async => (await listDraftIds()).isNotEmpty;
 
   @override
   Future<DateTime?> savedAtActiveDraft() =>
@@ -137,3 +194,13 @@ class LocalStoryDraftRepository implements StoryDraftRepository {
   Future<void> clearResumeMeta(String draftId) =>
       StoryCreatorDraftResumeStorage.clearMeta(draftId);
 }
+
+int _decodeLocalDraftListCursor(String? cursor) {
+  if (cursor == null || cursor.trim().isEmpty) return 0;
+  final t = cursor.trim();
+  if (!t.startsWith(_localDraftListCursorPrefix)) return 0;
+  return int.tryParse(t.substring(_localDraftListCursorPrefix.length)) ?? 0;
+}
+
+String _encodeLocalDraftListCursor(int offset) =>
+    '$_localDraftListCursorPrefix$offset';

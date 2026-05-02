@@ -2,15 +2,16 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
-import 'package:nimon/features/create/creator_route_sync.dart';
+import 'package:nimon/features/create/creator_back_policy.dart';
+import 'package:nimon/features/create/creator_quiz_ui_state.dart';
+import 'package:nimon/features/create/creator_route_sync_listener.dart';
 import 'package:nimon/features/create/creator_reorder_handle.dart';
 import 'package:nimon/features/create/story_creator_models.dart';
 import 'package:nimon/features/create/story_creator_provider.dart';
 import 'package:nimon/ui/widgets/nimon_circle_nav_button.dart';
 
-/// Shared state: current Quiz tab selection inside the Create shell.
-final quizTabIndexProvider = StateProvider<int>((_) => 0);
+export 'package:nimon/features/create/creator_quiz_ui_state.dart'
+    show quizTabIndexProvider;
 
 /// Quiz editor tabs: Semantics (vocab + kanji), Grammar, Sentence.
 const int kQuizEditorTabCount = 3;
@@ -77,19 +78,30 @@ class StoryCreatorQuizEditorScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    syncCreatorDrawerSessionFromContext(context, ref);
+    void handleCreatorBack() => unawaited(handleCreatorBackPressed(context, ref));
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Quiz Practice'),
-        leading: NimonBackButton(onPressed: () => context.pop()),
-      ),
-      body: StoryCreatorQuizModuleBody(
-        padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
-        showBottomActions: true,
-        showLearnExitButton: true,
-        useCompactModuleHeader: false,
-        onExit: () => context.pop(),
+    return CreatorRouteSyncListener(
+      child: PopScope(
+        canPop: false,
+        onPopInvokedWithResult: (didPop, result) {
+          if (didPop) return;
+          handleCreatorBack();
+        },
+        child: Scaffold(
+          appBar: AppBar(
+            title: const Text('Quiz Practice'),
+            leading: NimonBackButton(
+              onPressed: handleCreatorBack,
+            ),
+          ),
+          body: StoryCreatorQuizModuleBody(
+            padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
+            showBottomActions: true,
+            showLearnExitButton: true,
+            useCompactModuleHeader: false,
+            onExit: handleCreatorBack,
+          ),
+        ),
       ),
     );
   }
@@ -751,7 +763,7 @@ class _QuizModuleBodyInnerState extends ConsumerState<_QuizModuleBodyInner>
                     style: FilledButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 14),
                     ),
-                    child: const Text('Back to Learn modules'),
+                    child: const Text('Back to story'),
                   ),
                 ],
               ],

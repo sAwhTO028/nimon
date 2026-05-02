@@ -4,8 +4,11 @@ import 'package:flutter/foundation.dart' show kDebugMode, debugPrint;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:nimon/features/auth/dev_current_user_provider.dart';
 import 'package:nimon/features/create/creator_readiness.dart';
+import 'package:nimon/features/create/data/remote_backend_config.dart';
+import 'package:nimon/features/create/creator_read_only_publish_tracking.dart';
 import 'package:nimon/features/create/data/story_draft_repository.dart';
 import 'package:nimon/features/create/data/story_draft_repository_provider.dart';
+import 'package:nimon/features/profile/profile_processing_refresh.dart';
 import 'package:nimon/features/create/story_creator_draft_storage.dart'
     show CreatorDraftResumeMeta, CreatorLastActiveModule;
 import 'package:nimon/features/create/story_creator_models.dart';
@@ -52,6 +55,7 @@ class StoryCreatorDraftState {
     required this.saveStatus,
     required this.lastSavedAt,
     required this.lastSaveError,
+    required this.readOnlyPublishedCoreSig,
   });
 
   final CreatorStoryV1 draft;
@@ -59,6 +63,8 @@ class StoryCreatorDraftState {
   final CreatorDraftSaveStatus saveStatus;
   final DateTime? lastSavedAt;
   final String? lastSaveError;
+  /// Stored signature of the last successfully **Read Only** published story core.
+  final String? readOnlyPublishedCoreSig;
 
   factory StoryCreatorDraftState.initial({required String creatorOwnerId}) =>
       StoryCreatorDraftState(
@@ -67,6 +73,7 @@ class StoryCreatorDraftState {
         saveStatus: CreatorDraftSaveStatus.idle,
         lastSavedAt: null,
         lastSaveError: null,
+        readOnlyPublishedCoreSig: null,
       );
 
   StoryCreatorDraftState copyWith({
@@ -76,6 +83,8 @@ class StoryCreatorDraftState {
     DateTime? lastSavedAt,
     String? lastSaveError,
     bool clearLastSaveError = false,
+    String? readOnlyPublishedCoreSig,
+    bool clearReadOnlyPublishedCoreSig = false,
   }) {
     return StoryCreatorDraftState(
       draft: draft ?? this.draft,
@@ -84,15 +93,27 @@ class StoryCreatorDraftState {
       lastSavedAt: lastSavedAt ?? this.lastSavedAt,
       lastSaveError:
           clearLastSaveError ? null : (lastSaveError ?? this.lastSaveError),
+      readOnlyPublishedCoreSig: clearReadOnlyPublishedCoreSig
+          ? null
+          : (readOnlyPublishedCoreSig ?? this.readOnlyPublishedCoreSig),
     );
   }
 }
 
 class StoryCreatorDraftNotifier extends StateNotifier<StoryCreatorDraftState> {
-  StoryCreatorDraftNotifier(this._drafts, this._devOwnerId)
-      : super(StoryCreatorDraftState.initial(creatorOwnerId: _devOwnerId));
+  StoryCreatorDraftNotifier(
+    this._drafts,
+    this._devOwnerId, {
+    void Function()? onProfileProcessingListChanged,
+  })  : _onProfileProcessingListChanged = onProfileProcessingListChanged,
+        super(StoryCreatorDraftState.initial(creatorOwnerId: _devOwnerId));
 
   final StoryDraftRepository _drafts;
+  final void Function()? _onProfileProcessingListChanged;
+
+  void _bumpProfileProcessingListRefresh() {
+    _onProfileProcessingListChanged?.call();
+  }
 
   /// Development (later: authenticated) user id for [StoryBasics.creatorOwnerId].
   final String _devOwnerId;
@@ -110,15 +131,38 @@ class StoryCreatorDraftNotifier extends StateNotifier<StoryCreatorDraftState> {
   }
 
   /// Explicitly load a specific local draft (no implicit resume in the Add/Create entry point).
-  Future<void> loadDraftById(String draftId) async {
+  ///
+  /// When [forceReloadFromDisk] is false (default), if [draftId] is already the active in-memory
+  /// draft id, returns immediately **without** reading storage — so unsaved edits are not wiped
+  /// by redundant reloads (e.g. route reconcile after popping Story Basics).
+  ///
+  /// Resume / Processing / Published reopen passes [forceReloadFromDisk: true] so the session
+  /// is rehydrated from disk for that entry flow.
+  Future<void> loadDraftById(
+    String draftId, {
+    bool forceReloadFromDisk = false,
+  }) async {
     final id = draftId.trim();
     if (id.isEmpty) return;
+    if (!forceReloadFromDisk && state.draft.id.trim() == id) {
+      return;
+    }
     var loaded = await _drafts.loadDraft(id);
     _hydrated = true;
     if (loaded == null) return;
+    // Align stored owner with current dev identity (fixes legacy `dev_user_1` etc.).
     final needsOwnerBackfill =
-        loaded.basics.creatorOwnerId.trim().isEmpty;
+        loaded.basics.creatorOwnerId.trim() != _devOwnerId.trim();
     if (needsOwnerBackfill) {
+      if (kDebugMode) {
+        debugPrint(
+          '[creator_draft] owner_backfill draftId=$id '
+          'remote=${RemoteBackendConfig.useRemoteDrafts} '
+          'was="${loaded.basics.creatorOwnerId}" '
+          'expected_dev_owner="${RemoteBackendConfig.devOwnerId}" '
+          'notifier_dev="${_devOwnerId}"',
+        );
+      }
       loaded = loaded.copyWith(
         basics: loaded.basics.copyWith(creatorOwnerId: _devOwnerId),
       );
@@ -130,9 +174,18 @@ class StoryCreatorDraftNotifier extends StateNotifier<StoryCreatorDraftState> {
       lastSavedAt: await _drafts.savedAt(id),
       clearLastSaveError: true,
     );
+    unawaited(_hydrateReadOnlyPublishSig(id));
     if (needsOwnerBackfill) {
       await persistLocalNow(reason: 'owner_backfill');
     }
+  }
+
+  Future<void> _hydrateReadOnlyPublishSig(String draftId) async {
+    final id = draftId.trim();
+    if (id.isEmpty) return;
+    final sig = await loadReadOnlyPublishedCoreSignature(id);
+    if (state.draft.id != id) return;
+    state = state.copyWith(readOnlyPublishedCoreSig: sig);
   }
 
   /// Start a brand-new local draft session (empty, new id) and persist immediately.
@@ -200,6 +253,66 @@ class StoryCreatorDraftNotifier extends StateNotifier<StoryCreatorDraftState> {
     }
   }
 
+  /// Flush meaningful creator state so Profile > Processing reflects it.
+  ///
+  /// - Persists draft JSON when dirty (local/remote depending on repository).
+  /// - Updates resume meta (last meaningful section) for reliable resume.
+  /// - Does **not** reset any content state.
+  Future<bool> flushDraftToProcessing({
+    required String reason,
+    CreatorLastActiveModule? lastActiveModule,
+    String? lastActiveSubPage,
+  }) async {
+    _persistDebounce?.cancel();
+    state = state.copyWith(
+      saveStatus: CreatorDraftSaveStatus.saving,
+      clearLastSaveError: true,
+    );
+    try {
+      final id = state.draft.id.trim();
+      final nowUtc = DateTime.now().toUtc();
+
+      // If no dirty edits, avoid bumping updatedAt; still record resume meta deterministically.
+      if (!state.dirty) {
+        if (id.isNotEmpty &&
+            (lastActiveModule != null || lastActiveSubPage != null)) {
+          await _drafts.updateResumeMeta(
+            id,
+            lastActiveModule: lastActiveModule,
+            lastActiveSubPage: lastActiveSubPage,
+            touchEditedAtUtc: nowUtc,
+          );
+        }
+        state = state.copyWith(saveStatus: CreatorDraftSaveStatus.saved);
+        _bumpProfileProcessingListRefresh();
+        return true;
+      }
+
+      final persisted = await _drafts.flushDraftToProcessing(
+        state.draft,
+        lastActiveModule: lastActiveModule,
+        lastActiveSubPage: lastActiveSubPage,
+        touchEditedAtUtc: nowUtc,
+      );
+      state = state.copyWith(
+        draft: persisted,
+        dirty: false,
+        saveStatus: CreatorDraftSaveStatus.saved,
+        lastSavedAt: DateTime.now(),
+        clearLastSaveError: true,
+      );
+      _bumpProfileProcessingListRefresh();
+      return true;
+    } catch (e) {
+      state = state.copyWith(
+        dirty: true,
+        saveStatus: CreatorDraftSaveStatus.failed,
+        lastSaveError: e.toString(),
+      );
+      return false;
+    }
+  }
+
   /// Global reassurance action: flush pending debounced saves and force a local persist.
   ///
   /// Local-only. Never uploads. Intended for the creator shell/drawer "Save draft".
@@ -208,6 +321,9 @@ class StoryCreatorDraftNotifier extends StateNotifier<StoryCreatorDraftState> {
     _persistDebounce?.cancel();
     await persistLocalNow(reason: 'global_save');
     if (kDebugMode) debugPrint('[creator_global_save] saved_local_ok');
+    if (state.saveStatus == CreatorDraftSaveStatus.saved) {
+      _bumpProfileProcessingListRefresh();
+    }
   }
 
   void persistLocalDebounced({
@@ -273,6 +389,7 @@ class StoryCreatorDraftNotifier extends StateNotifier<StoryCreatorDraftState> {
         saveStatus: CreatorDraftSaveStatus.idle,
         lastSavedAt: null,
         clearLastSaveError: true,
+        clearReadOnlyPublishedCoreSig: true,
       );
 
   void applyBasics({
@@ -500,6 +617,12 @@ class StoryCreatorDraftNotifier extends StateNotifier<StoryCreatorDraftState> {
       ),
     );
     await persistLocalNow(reason: 'publish_reading_only');
+    if (state.saveStatus == CreatorDraftSaveStatus.saved) {
+      final sig = computeReadOnlyPublishedCoreSignature(state.draft);
+      await saveReadOnlyPublishedCoreSignature(draftId: state.draft.id, signature: sig);
+      state = state.copyWith(readOnlyPublishedCoreSig: sig);
+      _bumpProfileProcessingListRefresh();
+    }
     return state.saveStatus == CreatorDraftSaveStatus.saved;
   }
 
@@ -512,6 +635,13 @@ class StoryCreatorDraftNotifier extends StateNotifier<StoryCreatorDraftState> {
       ),
     );
     await persistLocalNow(reason: 'publish_full_learn');
+    if (state.saveStatus == CreatorDraftSaveStatus.saved) {
+      // Full Learn implies a Read Only published baseline exists for the story core.
+      final sig = computeReadOnlyPublishedCoreSignature(state.draft);
+      await saveReadOnlyPublishedCoreSignature(draftId: state.draft.id, signature: sig);
+      state = state.copyWith(readOnlyPublishedCoreSig: sig);
+      _bumpProfileProcessingListRefresh();
+    }
     return state.saveStatus == CreatorDraftSaveStatus.saved;
   }
 
@@ -524,6 +654,9 @@ class StoryCreatorDraftNotifier extends StateNotifier<StoryCreatorDraftState> {
       ),
     );
     await persistLocalNow(reason: 'publish_state_draft');
+    if (state.saveStatus == CreatorDraftSaveStatus.saved) {
+      _bumpProfileProcessingListRefresh();
+    }
     return state.saveStatus == CreatorDraftSaveStatus.saved;
   }
 
@@ -1027,6 +1160,10 @@ final storyCreatorDraftProvider =
   return StoryCreatorDraftNotifier(
     ref.watch(storyDraftRepositoryProvider),
     ref.watch(devCurrentUserProvider).userId,
+    onProfileProcessingListChanged: () {
+      final c = ref.read(profileProcessingListRefreshProvider.notifier);
+      c.state = c.state + 1;
+    },
   );
 });
 

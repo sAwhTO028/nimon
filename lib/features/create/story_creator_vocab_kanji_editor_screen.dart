@@ -5,14 +5,16 @@ import 'package:flutter/gestures.dart' show DragStartBehavior;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:nimon/features/create/creator_back_policy.dart';
 import 'package:nimon/features/create/creator_drawer_session.dart';
 import 'package:nimon/features/create/creator_navigation_debug.dart';
 import 'package:nimon/features/create/creator_reorder_handle.dart';
 import 'package:nimon/features/create/creator_drawer_publish.dart';
 import 'package:nimon/features/create/creator_learn_mode_sync.dart';
 import 'package:nimon/features/create/creator_progress_drawer.dart';
-import 'package:nimon/features/create/creator_route_sync.dart';
+import 'package:nimon/features/create/creator_route_sync_listener.dart';
 import 'package:nimon/features/create/creator_workspace_step.dart';
+import 'package:nimon/features/create/creator_read_only_publish_tracking.dart';
 import 'package:nimon/features/create/story_creator_furigana_tokens.dart';
 import 'package:nimon/features/create/story_creator_models.dart';
 import 'package:nimon/features/create/story_creator_provider.dart';
@@ -93,94 +95,118 @@ class StoryCreatorVocabKanjiEditorScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    syncCreatorDrawerSessionFromContext(context, ref);
+    void handleCreatorBack() {
+      unawaited(handleCreatorBackPressed(context, ref));
+    }
+
     final draft = ref.watch(storyCreatorDraftDataProvider);
     final session = ref.watch(creatorDrawerSessionProvider);
     final progress = buildCreatorDrawerProgressModel(draft: draft);
     final publishModel = buildStoryReviewDisplayModel(draft);
+    final draftState = ref.watch(storyCreatorDraftProvider);
+    final roSig = draftState.readOnlyPublishedCoreSig;
+    final roExists =
+        roSig != null || draft.publishState != StoryPublishState.draft;
+    final roDirty = roSig != null &&
+        computeReadOnlyPublishedCoreSignature(draft) != roSig;
+    final flExists =
+        draft.publishState == StoryPublishState.fullLearnPublished;
+    final flDirty = draftState.dirty;
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Vocabulary / Kanji'),
-        leading: NimonBackButton(onPressed: () => context.pop()),
-        actions: [
-          IconButton(
-            tooltip: 'Review created vocabulary',
-            icon: const Icon(Icons.fact_check_outlined),
-            onPressed: () => StoryCreatorVocabKanjiEditorScreen._showVocabReview(
+    return CreatorRouteSyncListener(
+      child: PopScope(
+        canPop: false,
+        onPopInvokedWithResult: (didPop, result) {
+          if (didPop) return;
+          handleCreatorBack();
+        },
+        child: Scaffold(
+          appBar: AppBar(
+            title: const Text('Vocabulary / Kanji'),
+            leading: NimonBackButton(
+              onPressed: handleCreatorBack,
+            ),
+            actions: [
+              IconButton(
+                tooltip: 'Review created vocabulary',
+                icon: const Icon(Icons.fact_check_outlined),
+                onPressed: () =>
+                    StoryCreatorVocabKanjiEditorScreen._showVocabReview(
                   context,
                   ref,
                 ),
+              ),
+              IconButton(
+                tooltip: 'How to add vocabulary / kanji',
+                icon: const Icon(Icons.help_outline_rounded),
+                onPressed: () =>
+                    StoryCreatorVocabKanjiEditorScreen._showVocabHowTo(context),
+              ),
+              Builder(
+                builder: (ctx) {
+                  return IconButton(
+                    tooltip: 'Creator progress',
+                    icon: const Icon(Icons.menu_rounded),
+                    onPressed: () => Scaffold.of(ctx).openEndDrawer(),
+                  );
+                },
+              ),
+            ],
           ),
-          IconButton(
-            tooltip: 'How to add vocabulary / kanji',
-            icon: const Icon(Icons.help_outline_rounded),
-            onPressed: () =>
-                StoryCreatorVocabKanjiEditorScreen._showVocabHowTo(context),
-          ),
-          Builder(
-            builder: (ctx) {
-              return IconButton(
-                tooltip: 'Creator progress',
-                icon: const Icon(Icons.menu_rounded),
-                onPressed: () => Scaffold.of(ctx).openEndDrawer(),
+          endDrawer: CreatorProgressDrawer(
+            drawerKeySlot: kCreatorProgressDrawerKeyVocabulary,
+            coreItems: progress.coreItems,
+            learnItems: progress.learnItems,
+            publishModel: publishModel,
+            readOnlyPublishedExists: roExists,
+            readOnlyHasUnpublishedChanges: roDirty,
+            fullLearnPublishedExists: flExists,
+            fullLearnHasUnpublishedChanges: flDirty,
+            learnModeEnabled: session.learnModeEnabled,
+            currentStepId: creatorEffectiveActiveStep(session),
+            onLearnModeChanged: (v) {
+              applyCreatorLearnMode(
+                context: context,
+                ref: ref,
+                learnModeEnabled: v,
+                closeDrawerOnTurnOff: () => Navigator.of(context).maybePop(),
+              );
+            },
+            onOpenStep: (route) {
+              Navigator.of(context).maybePop(); // close drawer if open
+              final id = ref.read(storyCreatorDraftDataProvider).id;
+              context.push(createStoryProgressRouteWithDraftId(route, id));
+            },
+            onSaveDraft: () async {
+              Navigator.of(context).maybePop();
+              await ref
+                  .read(storyCreatorDraftProvider.notifier)
+                  .globalSaveDraftNow();
+              if (!context.mounted) return;
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('All changes saved locally.'),
+                  behavior: SnackBarBehavior.floating,
+                ),
+              );
+            },
+            onPublish: (mode) async {
+              Navigator.of(context).maybePop();
+              await performCreatorDrawerPublish(
+                ref: ref,
+                context: context,
+                mode: mode,
               );
             },
           ),
-        ],
-      ),
-      endDrawer: CreatorProgressDrawer(
-        coreItems: progress.coreItems,
-        learnItems: progress.learnItems,
-        publishModel: publishModel,
-        learnModeEnabled: session.learnModeEnabled,
-        onLearnModeChanged: (v) {
-          applyCreatorLearnMode(
-            context: context,
-            ref: ref,
-            learnModeEnabled: v,
-            closeDrawerOnTurnOff: () => Navigator.of(context).maybePop(),
-          );
-        },
-        onOpenStep: (route) {
-          Navigator.of(context).maybePop(); // close drawer if open
-          final id = ref.read(storyCreatorDraftDataProvider).id;
-          if (route.startsWith('/create/story/basics')) {
-            context.push('$route?draftId=$id');
-            return;
-          }
-          if (route.startsWith('/create/story/sentences')) {
-            context.push('/create/story/sentences?draftId=$id');
-            return;
-          }
-          context.push(route);
-        },
-        onSaveDraft: () async {
-          Navigator.of(context).maybePop();
-          await ref.read(storyCreatorDraftProvider.notifier).globalSaveDraftNow();
-          if (!context.mounted) return;
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('All changes saved locally.'),
-              behavior: SnackBarBehavior.floating,
-            ),
-          );
-        },
-        onPublish: (mode) async {
-          Navigator.of(context).maybePop();
-          await performCreatorDrawerPublish(
-            ref: ref,
-            context: context,
-            mode: mode,
-          );
-        },
-      ),
-      body: StoryCreatorVocabKanjiModuleBody(
-        padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
-        showBottomActions: true,
-        showLearnExitButton: true,
-        useCompactModuleHeader: false,
-        onExit: () => context.pop(),
+          body: StoryCreatorVocabKanjiModuleBody(
+            padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
+            showBottomActions: true,
+            showLearnExitButton: true,
+            useCompactModuleHeader: false,
+            onExit: handleCreatorBack,
+          ),
+        ),
       ),
     );
   }
@@ -1641,7 +1667,7 @@ class StoryCreatorVocabKanjiModuleBody extends ConsumerWidget {
                       style: FilledButton.styleFrom(
                         padding: const EdgeInsets.symmetric(vertical: 14),
                       ),
-                      child: const Text('Back to Learn modules'),
+                      child: const Text('Back to story'),
                     ),
                   ],
                 ],

@@ -1,3 +1,6 @@
+import 'package:nimon/core/pagination/page_request.dart';
+import 'package:nimon/core/pagination/page_result.dart';
+import 'package:nimon/features/create/data/dto/draft_list_summary_dto.dart';
 import 'package:nimon/features/create/story_creator_draft_storage.dart';
 import 'package:nimon/features/create/story_creator_models.dart';
 
@@ -12,12 +15,28 @@ abstract interface class StoryDraftRepository {
 
   Future<List<String>> listDraftIds();
 
+  /// Cursor-paged draft summaries for Workspace / Processing lists (no full story bodies).
+  Future<PageResult<DraftListSummaryDto>> fetchWorkspaceDraftPage(
+      PageRequest request);
+
   /// Bumps [StoryBasics.updatedAt], writes draft JSON, then touches resume `lastEditedAtUtc`.
   /// Returns the aggregate actually written (including the new [StoryBasics.updatedAt]).
   Future<CreatorStoryV1> saveDraft(CreatorStoryV1 draft);
 
   /// Local-only flush alias; same semantics as [saveDraft] until a queue exists.
   Future<CreatorStoryV1> saveDraftNow(CreatorStoryV1 draft);
+
+  /// Flush the draft so Profile > Processing (and resume) reflect the latest state.
+  ///
+  /// This is a *local persistence* operation (and may be remote-backed depending on
+  /// implementation), but it must not change storage structure. It is intended to
+  /// be called by centralized back/exit logic.
+  Future<CreatorStoryV1> flushDraftToProcessing(
+    CreatorStoryV1 draft, {
+    CreatorLastActiveModule? lastActiveModule,
+    String? lastActiveSubPage,
+    DateTime? touchEditedAtUtc,
+  });
 
   Future<void> deleteDraft(String draftId);
 

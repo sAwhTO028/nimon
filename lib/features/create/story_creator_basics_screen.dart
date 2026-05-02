@@ -1,11 +1,12 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:nimon/features/create/create_story_basics_form.dart';
-import 'package:nimon/features/create/creator_route_sync.dart';
-import 'package:nimon/features/create/data/story_draft_repository_provider.dart';
+import 'package:nimon/features/create/creator_back_policy.dart';
+import 'package:nimon/features/create/creator_route_sync_listener.dart';
 import 'package:nimon/features/create/story_creator_provider.dart';
 import 'package:nimon/ui/widgets/nimon_circle_nav_button.dart';
 
@@ -20,7 +21,9 @@ class StoryCreatorBasicsScreen extends ConsumerStatefulWidget {
 
 class _StoryCreatorBasicsScreenState
     extends ConsumerState<StoryCreatorBasicsScreen> {
-  final _formKey = GlobalKey<CreateStoryBasicsFormState>();
+  final _formKey = GlobalKey<CreateStoryBasicsFormState>(
+    debugLabel: 'StoryCreatorBasicsScreen_form',
+  );
   bool _formDirty = false;
   bool _nextBusy = false;
 
@@ -45,87 +48,17 @@ class _StoryCreatorBasicsScreenState
   }
 
   Future<void> _attemptExit() async {
-    if (!mounted) return;
-
-    // Untouched session: exit immediately (no saves, no prompts).
-    if (!_formDirty) {
-      if (mounted) context.pop();
-      return;
-    }
-
-    final draftId = ref.read(storyCreatorDraftDataProvider).id;
-
-    // Dirty session: flush a local save before leaving, so the draft appears in Processing.
-    try {
-      await ref.read(storyCreatorDraftProvider.notifier).persistLocalNow(
-            reason: 'exit_story_basics',
-          );
-      if (!mounted) return;
-      context.pop();
-      return;
-    } catch (_) {
-      // Fall through to confirmation dialog (rare; persistence should normally not throw).
-    }
-
-    if (!mounted) return;
-
-    final hasPersisted =
-        await ref.read(storyDraftRepositoryProvider).hasDraft(draftId);
-    if (!mounted) return;
-
-    final action = await showDialog<String>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Save draft before leaving?'),
-        content: Text(
-          hasPersisted
-              ? 'We couldn’t save your latest changes. What would you like to do?'
-              : 'We couldn’t save yet. What would you like to do?',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop('cancel'),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop('discard'),
-            child: const Text('Discard changes'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(ctx).pop('save_exit'),
-            child: const Text('Save and exit'),
-          ),
-        ],
-      ),
+    await handleCreatorBackPressed(
+      context,
+      ref,
+      storyBasicsHasMeaningfulEdits: _formDirty,
     );
-
-    if (!mounted) return;
-    if (action == null || action == 'cancel') return;
-
-    if (action == 'save_exit') {
-      await ref.read(storyCreatorDraftProvider.notifier).persistLocalNow(
-            reason: 'exit_story_basics_retry',
-          );
-      if (!mounted) return;
-      context.pop();
-      return;
-    }
-
-    if (action == 'discard') {
-      // If the draft never persisted, ensure nothing remains in local storage.
-      if (!hasPersisted) {
-        await ref.read(storyDraftRepositoryProvider).deleteDraft(draftId);
-      }
-      ref.read(storyCreatorDraftProvider.notifier).reset();
-      if (!mounted) return;
-      context.pop();
-    }
   }
 
   @override
   void didChangeDependencies() {
+    // Build should render only. Route/session sync is owned by CreatorRouteSyncListener.
     super.didChangeDependencies();
-    syncCreatorDrawerSessionFromContext(context, ref);
   }
 
   Future<void> _continue() async {
@@ -150,18 +83,37 @@ class _StoryCreatorBasicsScreenState
 
   @override
   Widget build(BuildContext context) {
+    if (!mounted) return const SizedBox.shrink();
+    try {
+      final r = GoRouter.maybeOf(context);
+      if (r == null || !r.state.uri.path.startsWith('/create/story')) {
+        return const SizedBox.shrink();
+      }
+    } catch (_) {
+      return const SizedBox.shrink();
+    }
     final theme = Theme.of(context);
-    final routeDraftId = GoRouterState.of(context).uri.queryParameters['draftId'];
+    String? routeDraftId;
+    try {
+      routeDraftId = GoRouterState.of(context).uri.queryParameters['draftId'];
+    } catch (_) {
+      // During route transitions this element can be deactivating; avoid inherited
+      // lookups that can throw ("deactivated widget's ancestor is unsafe").
+      routeDraftId = null;
+    }
     final cleanedRouteId =
         (routeDraftId == null || routeDraftId.trim().isEmpty) ? null : routeDraftId.trim();
     if (cleanedRouteId != null) {
       final current = ref.watch(storyCreatorDraftDataProvider);
       if (current.id != cleanedRouteId) {
-        unawaited(ref.read(storyCreatorDraftProvider.notifier).loadDraftById(cleanedRouteId));
+        // Draft load is owned by [syncCreatorDrawerSessionForRouter] + [_reconcileDraftIdWithRouter]
+        // from [CreatorRouteSyncListener] — not from build().
         return Scaffold(
           appBar: AppBar(
             title: const Text('Story basics'),
-            leading: NimonBackButton(onPressed: () => context.pop()),
+            leading: NimonBackButton(
+                onPressed: () => unawaited(_attemptExit()),
+              ),
           ),
           body: const Center(child: CircularProgressIndicator()),
         );
@@ -171,13 +123,24 @@ class _StoryCreatorBasicsScreenState
     final canContinue = _formKey.currentState?.isStep1Complete ?? false;
     final nextEnabled = canContinue && !_nextBusy;
 
-    return PopScope(
-      canPop: false,
-      onPopInvokedWithResult: (didPop, result) {
-        if (didPop) return;
-        unawaited(_attemptExit());
-      },
-      child: Scaffold(
+    return CreatorRouteSyncListener(
+      child: PopScope(
+        canPop: false,
+        onPopInvokedWithResult: (didPop, result) {
+          if (kDebugMode) {
+            String u = '(no_uri)';
+            try {
+              u = GoRouter.maybeOf(context)?.state.uri.toString() ?? u;
+            } catch (_) {}
+            debugPrint(
+              '[NIMON_BACK_TRACE] StoryCreatorBasicsScreen PopScope '
+              'didPop=$didPop result=$result uri=$u -> _attemptExit',
+            );
+          }
+          if (didPop) return;
+          unawaited(_attemptExit());
+        },
+        child: Scaffold(
         appBar: AppBar(
           title: const Text('Story basics'),
           leading: NimonBackButton(
@@ -227,6 +190,7 @@ class _StoryCreatorBasicsScreenState
           ),
         ],
       ),
+        ),
       ),
     );
   }

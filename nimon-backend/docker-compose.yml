@@ -1,0 +1,27 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: nimon-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: nimon
+      POSTGRES_USER: nimon
+      POSTGRES_PASSWORD: nimon
+    ports:
+      - "5432:5432"
+    volumes:
+      - nimon_postgres_data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    container_name: nimon-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - nimon_redis_data:/data
+
+volumes:
+  nimon_postgres_data:
+  nimon_redis_data:
+

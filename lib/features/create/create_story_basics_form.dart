@@ -1,5 +1,7 @@
-import 'dart:io';
+import 'dart:io' show File;
+import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:nimon/features/create/story_creator_models.dart';
@@ -104,6 +106,9 @@ class CreateStoryBasicsFormState extends State<CreateStoryBasicsForm> {
 
   /// Local gallery path for preview; optional http(s) local path passes through to draft URL.
   String? _coverLocalPath;
+
+  /// Picked image bytes (Flutter web — no [File] / [Image.file] for local picks).
+  Uint8List? _coverWebBytes;
 
   /// Remote cover from existing draft (preview only until user replaces).
   String? _coverNetworkUrl;
@@ -219,6 +224,7 @@ class CreateStoryBasicsFormState extends State<CreateStoryBasicsForm> {
       _coverNetworkUrl = null;
     }
     _coverLocalPath = null;
+    _coverWebBytes = null;
     _notifyParent();
     _seedSnapshot = StoryBasicsDraftFields(
       title: _titleController.text.trim(),
@@ -254,10 +260,26 @@ class CreateStoryBasicsFormState extends State<CreateStoryBasicsForm> {
     final x = await ImagePicker().pickImage(source: ImageSource.gallery);
     if (!mounted) return;
     if (x != null) {
-      setState(() {
-        _coverLocalPath = x.path;
-        _coverNetworkUrl = null;
-      });
+      if (kIsWeb) {
+        final p = x.path.trim();
+        Uint8List? b;
+        if (p.isEmpty || p.startsWith('http://') || p.startsWith('https://') || p.startsWith('blob:')) {
+          b = null;
+        } else {
+          b = await x.readAsBytes();
+        }
+        setState(() {
+          _coverLocalPath = p.isNotEmpty ? p : null;
+          _coverWebBytes = b;
+          _coverNetworkUrl = null;
+        });
+      } else {
+        setState(() {
+          _coverLocalPath = x.path;
+          _coverWebBytes = null;
+          _coverNetworkUrl = null;
+        });
+      }
       _notifyParent();
       _notifyDraftFieldsChanged();
     }
@@ -266,6 +288,7 @@ class CreateStoryBasicsFormState extends State<CreateStoryBasicsForm> {
   void _clearCover() {
     setState(() {
       _coverLocalPath = null;
+      _coverWebBytes = null;
       _coverNetworkUrl = null;
     });
     _notifyParent();
@@ -315,6 +338,10 @@ class CreateStoryBasicsFormState extends State<CreateStoryBasicsForm> {
   }
 
   bool get _hasCoverThumbnail {
+    if (kIsWeb) {
+      final w = _coverWebBytes;
+      if (w != null && w.isNotEmpty) return true;
+    }
     final lp = _coverLocalPath?.trim();
     if (lp != null && lp.isNotEmpty) return true;
     final n = _coverNetworkUrl?.trim();
@@ -322,10 +349,6 @@ class CreateStoryBasicsFormState extends State<CreateStoryBasicsForm> {
   }
 
   Widget? _buildThumbnailImage(BoxFit fit) {
-    final lp = _coverLocalPath?.trim();
-    if (lp != null && lp.isNotEmpty) {
-      return Image.file(File(lp), fit: fit);
-    }
     final n = _coverNetworkUrl?.trim();
     if (n != null && n.isNotEmpty) {
       return Image.network(
@@ -333,6 +356,30 @@ class CreateStoryBasicsFormState extends State<CreateStoryBasicsForm> {
         fit: fit,
         errorBuilder: (_, __, ___) => const Icon(Icons.broken_image_outlined),
       );
+    }
+    if (kIsWeb) {
+      final w = _coverWebBytes;
+      if (w != null && w.isNotEmpty) {
+        return Image.memory(w, fit: fit);
+      }
+      final lpw = _coverLocalPath?.trim();
+      if (lpw != null && lpw.isNotEmpty) {
+        if (lpw.startsWith('http://') ||
+            lpw.startsWith('https://') ||
+            lpw.startsWith('blob:')) {
+          return Image.network(
+            lpw,
+            fit: fit,
+            errorBuilder: (_, __, ___) => const Icon(Icons.broken_image_outlined),
+          );
+        }
+        return const Icon(Icons.broken_image_outlined);
+      }
+      return null;
+    }
+    final lp = _coverLocalPath?.trim();
+    if (lp != null && lp.isNotEmpty) {
+      return Image.file(File(lp), fit: fit);
     }
     return null;
   }

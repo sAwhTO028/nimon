@@ -1,24 +1,31 @@
 import 'dart:math';
+
 import 'package:uuid/uuid.dart';
 import 'package:nimon/data/story_repo.dart';
+import 'package:nimon/models/oneshot.dart';
 import 'package:nimon/models/story.dart';
-import '../models/section_key.dart';
+
 import '../models/filter_state.dart';
-import '../models/oneshot.dart';
-import 'story_repo.dart';
-import '../models/story.dart';
+import '../models/section_key.dart';
 import 'episode_mock_data.dart'; // CANONICAL mock data source
 
 final _uuid = const Uuid();
 
 final List<String> _covers = List.generate(
   12,
-      (i) => 'https://picsum.photos/seed/nimon$i/600/800.webp',
+  (i) => 'https://picsum.photos/seed/nimon$i/600/800.webp',
 );
 
-late final List<Story> _stories = _genStories();
-late final List<Episode> _episodes = _genEpisodes();
-late final List<OneShot> _oneShots = _genOneShots();
+/// Memoized mock catalogs — populated on first access via [StoryRepo] methods only.
+List<Story>? _storiesMemo;
+List<Episode>? _episodesMemo;
+List<OneShot>? _oneShotsMemo;
+
+List<Story> get _stories => _storiesMemo ??= _genStories();
+
+List<Episode> get _episodes => _episodesMemo ??= _genEpisodes();
+
+List<OneShot> get _oneShots => _oneShotsMemo ??= _genOneShots();
 
 List<Story> _genStories() {
   final rnd = Random(7);
@@ -41,7 +48,7 @@ List<Story> _genStories() {
       id: _uuid.v4(),
       title: 'Story #${i + 1} – Rainy Kyoto',
       description:
-      'A rainy-day encounter in Kyoto leads to small conversations, warm umbrellas, and gentle lessons.',
+          'A rainy-day encounter in Kyoto leads to small conversations, warm umbrellas, and gentle lessons.',
       coverUrl: _covers[i % _covers.length],
       jlptLevel: lv[i % lv.length],
       tags: [categories[i % categories.length]],
@@ -83,11 +90,16 @@ List<Episode> _genEpisodes() {
             type: BlockType.narration,
             text: getMockEpisodeText(e), // Long multi-page content
           ),
-          EpisodeBlock(type: BlockType.dialog, speaker: 'YAMADA', text: 'あ… かさ を わすれました。'),
-          EpisodeBlock(type: BlockType.dialog, speaker: 'AYANA', text: 'いっしょに いきますか。'),
+          EpisodeBlock(
+              type: BlockType.dialog,
+              speaker: 'YAMADA',
+              text: 'あ… かさ を わすれました。'),
+          EpisodeBlock(
+              type: BlockType.dialog, speaker: 'AYANA', text: 'いっしょに いきますか。'),
           EpisodeBlock(
             type: BlockType.narration,
-            text: 'Aya tilted her umbrella, covering him too. Their shoulders touched slightly.',
+            text:
+                'Aya tilted her umbrella, covering him too. Their shoulders touched slightly.',
           ),
         ],
       ));
@@ -99,8 +111,14 @@ List<Episode> _genEpisodes() {
 List<OneShot> _genOneShots() {
   final rnd = Random(13);
   final lv = ['N5', 'N4', 'N3', 'N2', 'N1'];
-  final writers = ['Writer Tanaka', 'Writer Sato', 'Writer Kimura', 'Writer Yamamoto', 'Writer Suzuki'];
-  
+  final writers = [
+    'Writer Tanaka',
+    'Writer Sato',
+    'Writer Kimura',
+    'Writer Yamamoto',
+    'Writer Suzuki'
+  ];
+
   return List.generate(20, (i) {
     return OneShot(
       id: _uuid.v4(),
@@ -153,9 +171,9 @@ class StoryRepoMock implements StoryRepo {
   Future<void> addEpisode({required Episode episode}) async {
     await Future<void>.delayed(const Duration(milliseconds: 120));
     final nextIndex = (_episodes
-        .where((e) => e.storyId == episode.storyId)
-        .map((e) => e.index)
-        .fold<int>(0, (p, c) => c > p ? c : p)) +
+            .where((e) => e.storyId == episode.storyId)
+            .map((e) => e.index)
+            .fold<int>(0, (p, c) => c > p ? c : p)) +
         1;
     _episodes.add(episode.copyWith(
       id: _uuid.v4(),
@@ -169,37 +187,37 @@ class StoryRepoMock implements StoryRepo {
   @override
   Future<List<Story>> getStoriesBySection(SectionKey section) async {
     await Future<void>.delayed(const Duration(milliseconds: 300));
-    
+
     // Return different subsets based on section
     switch (section) {
       case SectionKey.continueReading:
         // Return stories user has started reading (mock: first 5 stories)
         return _stories.take(5).toList();
-      
+
       case SectionKey.recommendStories:
         // Return recommended stories (mock: stories with high likes)
         final recommended = _stories.where((s) => s.likes > 200).toList();
         recommended.shuffle(Random(42));
         return recommended;
-      
+
       case SectionKey.trendingForYou:
         // Return trending stories (mock: most liked stories)
         final trending = List<Story>.from(_stories);
         trending.sort((a, b) => b.likes.compareTo(a.likes));
         return trending.take(20).toList();
-      
+
       case SectionKey.fromTheCommunity:
         // Return community stories (mock: random selection)
         final community = List<Story>.from(_stories);
         community.shuffle(Random(123));
         return community.take(15).toList();
-      
+
       case SectionKey.topCharts:
         // Return top chart stories (mock: highest liked)
         final topCharts = List<Story>.from(_stories);
         topCharts.sort((a, b) => b.likes.compareTo(a.likes));
         return topCharts;
-      
+
       case SectionKey.popularMonoCollections:
       case SectionKey.newWritersSpotlight:
       case SectionKey.readingChallenges:
@@ -209,22 +227,26 @@ class StoryRepoMock implements StoryRepo {
   }
 
   @override
-  Future<List<Story>> getFilteredStories(SectionKey section, FilterState filter) async {
+  Future<List<Story>> getFilteredStories(
+      SectionKey section, FilterState filter) async {
     await Future<void>.delayed(const Duration(milliseconds: 400));
-    
+
     // Get base stories for the section
     List<Story> stories = await getStoriesBySection(section);
-    
+
     // Apply level filter
     if (filter.selectedLevel != null) {
-      stories = stories.where((s) => s.jlptLevel == filter.selectedLevel).toList();
+      stories =
+          stories.where((s) => s.jlptLevel == filter.selectedLevel).toList();
     }
-    
+
     // Apply category filter
     if (filter.selectedCategory != null) {
-      stories = stories.where((s) => s.tags.contains(filter.selectedCategory)).toList();
+      stories = stories
+          .where((s) => s.tags.contains(filter.selectedCategory))
+          .toList();
     }
-    
+
     // Apply sorting
     switch (filter.sortBy) {
       case SortBy.newest:
@@ -242,7 +264,7 @@ class StoryRepoMock implements StoryRepo {
         stories.sort((a, b) => a.title.compareTo(b.title));
         break;
     }
-    
+
     return stories;
   }
 

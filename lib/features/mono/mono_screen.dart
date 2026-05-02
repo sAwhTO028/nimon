@@ -1,3 +1,4 @@
+import 'dart:async' show unawaited;
 import 'dart:math' as math;
 import 'dart:ui' show ImageFilter;
 
@@ -7,8 +8,10 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:nimon/data/story_repo.dart';
+import 'package:nimon/features/create/creator_back_policy.dart';
 import 'package:nimon/features/mono/mono_content_model.dart';
 import 'package:nimon/features/mono/mono_reading_layout.dart';
+import 'package:nimon/features/profile/data/published_mono_display_contract.dart';
 import 'package:nimon/features/mono/mono_reader_dock.dart';
 import 'package:nimon/features/mono/mono_reader_menu_origin.dart';
 import 'package:nimon/ui/reading/nimon_ruby_text.dart';
@@ -86,6 +89,9 @@ class MonoFeedItem {
   /// When [coverImageUrl] is null, pick fallback art; when null, inferred from [contentType].
   final MonoCoverCategory? coverCategory;
 
+  /// When from Published tab API, drives Learn gating in [_MonoScreenState._openLearn].
+  final PublishedMonoAccess? publishedAccess;
+
   const MonoFeedItem({
     required this.id,
     required this.writerName,
@@ -97,6 +103,7 @@ class MonoFeedItem {
     this.content,
     this.coverImageUrl,
     this.coverCategory,
+    this.publishedAccess,
   });
 
   /// V1 reader compatibility: use structured content when present, otherwise
@@ -2084,6 +2091,7 @@ class _MonoScreenState extends ConsumerState<MonoScreen> {
     List<MonoFeedItem> items,
     int centerIndex,
   ) {
+    if (!context.mounted) return;
     for (final j in [centerIndex - 1, centerIndex, centerIndex + 1]) {
       if (j < 0 || j >= items.length) continue;
       final it = items[j];
@@ -2234,10 +2242,11 @@ class _MonoScreenState extends ConsumerState<MonoScreen> {
     return PageView.builder(
       controller: controller,
       scrollDirection: Axis.vertical,
-      key: ValueKey(
+      // Stable identity: do not key on feed length — length churn resets the whole
+      // pager subtree (web-sensitive). Segment + JLPT filter already define the feed.
+      key: ValueKey<String>(
         'v_${segmentKind.name}_'
-        '${segmentKind == _MonoMainFeedKind.forYou ? _selectedLevel : 'all'}_'
-        '${data.length}',
+        '${segmentKind == _MonoMainFeedKind.forYou ? _selectedLevel : 'all'}',
       ),
       onPageChanged: (i) {
         if (_mainFeedKind != segmentKind) return;
@@ -2322,6 +2331,59 @@ class _MonoScreenState extends ConsumerState<MonoScreen> {
   }
 
   void _openLearn(MonoFeedItem item) {
+    final p = item.publishedAccess;
+    if (p != null) {
+      if (p.isFullLearnPublished) {
+        if (!p.learnModulesInPayload) {
+          unawaited(
+            showModalBottomSheet<void>(
+              context: context,
+              useRootNavigator: true,
+              showDragHandle: true,
+              builder: (ctx) {
+                return Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Text(
+                        'Full learn',
+                        style: Theme.of(ctx).textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.w800,
+                            ),
+                      ),
+                      const SizedBox(height: 10),
+                      const Text(
+                        'Full learn is published, but the server has not yet stored learn module data on this mono. The app will not show placeholder vocabulary, grammar, quiz, or listening until the backend provides it.',
+                      ),
+                      const SizedBox(height: 16),
+                      FilledButton(
+                        onPressed: () => Navigator.pop(ctx),
+                        child: const Text('OK'),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+          );
+          return;
+        }
+        // V1: when [learn] exists, fall through to the generic Learn route below.
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              p.isReadOnlyPublished
+                  ? 'Learn is not included in a Read only publish. Publish full learn to add learn content.'
+                  : 'Learn is not available for this published item until it is a full learn publish with server-side learn data.',
+            ),
+          ),
+        );
+        return;
+      }
+    }
     final url = item.coverImageUrl?.trim();
     final effectiveCategory = _monoEffectiveCoverCategory(item);
     final fallbackAsset = _monoCoverFallbackAsset(effectiveCategory);
@@ -2749,6 +2811,8 @@ class _MonoScreenState extends ConsumerState<MonoScreen> {
         case 1:
           final loc = GoRouterState.of(context).uri.toString();
           if (loc == '/create' || loc.startsWith('/create?')) return;
+          ref.read(creatorEntryChannelProvider.notifier).state =
+              CreatorEntryChannel.add;
           context.push('/create');
           break;
         case 2:
@@ -2988,8 +3052,8 @@ class _MonoScreenState extends ConsumerState<MonoScreen> {
                                 : (items.isEmpty
                                     ? _monoEmptyFeed(theme)
                                     : PageView.builder(
-                                        key: ValueKey(
-                                          'reader_${items.length}_$_selectedLevel',
+                                        key: ValueKey<String>(
+                                          'reader_$_selectedLevel',
                                         ),
                                         controller: _readerFeedController,
                                         scrollDirection: Axis.vertical,
@@ -3043,6 +3107,8 @@ class _MonoScreenState extends ConsumerState<MonoScreen> {
                   ? MonoReaderDock(
                       onAddMono: () {
                         hideMonoStoryOptionsPanel();
+                        ref.read(creatorEntryChannelProvider.notifier).state =
+                            CreatorEntryChannel.add;
                         context.push('/create');
                       },
                       onMenu: () => _openReaderDockStoryOptionsPanel(items),

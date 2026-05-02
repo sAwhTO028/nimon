@@ -1,3 +1,5 @@
+import 'dart:ui' show PlatformDispatcher;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:go_router/go_router.dart';
@@ -28,15 +30,35 @@ import 'package:nimon/features/learn/vocab_kanji_list_screen.dart';
 import 'package:nimon/features/create/create_screen.dart';
 import 'package:nimon/features/create/story_creator_add_tab_screen.dart';
 import 'package:nimon/features/create/story_creator_basics_screen.dart';
-import 'package:nimon/features/create/story_creator_learn_hub_screen.dart';
+import 'package:nimon/features/create/creator_back_policy.dart';
 import 'package:nimon/features/create/story_creator_sentences_screen.dart';
 import 'package:nimon/core/theme.dart';
 import 'package:nimon/features/settings/help_feedback_screen.dart';
 import 'package:nimon/features/settings/settings_providers.dart';
 import 'package:nimon/features/settings/settings_screen.dart';
+import 'package:nimon/ui/app_messenger.dart';
 import 'package:nimon/widgets/floating_dock_nav_bar.dart';
 
-void main() => runApp(const ProviderScope(child: NimonApp()));
+void main() {
+  // Temporary crash stack capture (remove when resolved).
+  FlutterError.onError = (details) {
+    debugPrint('[NIMON_CRASH_STACK] FlutterError: ${details.exceptionAsString()}');
+    if (details.stack != null) {
+      debugPrint('[NIMON_CRASH_STACK] stack:\n${details.stack}');
+    }
+    // Preserve default behavior (prints + may terminate in debug).
+    FlutterError.presentError(details);
+  };
+
+  PlatformDispatcher.instance.onError = (error, stack) {
+    debugPrint('[NIMON_CRASH_STACK] PlatformDispatcher error: $error');
+    debugPrint('[NIMON_CRASH_STACK] stack:\n$stack');
+    // Return false so the error is not swallowed.
+    return false;
+  };
+
+  runApp(const ProviderScope(child: NimonApp()));
+}
 
 final _router = GoRouter(
   initialLocation: '/login',
@@ -94,21 +116,23 @@ final _router = GoRouter(
         ),
       ],
     ),
-    // V1: Create is outside ShellRoute so it doesn't show bottom nav
+    // V1: Create is outside ShellRoute so it doesn't show bottom nav.
+    // Use [NoTransitionPage] so leaving create for `/mono` or `/more` does not
+    // keep a Material-canvas transition page alive — that overlap was still
+    // building creator subtrees and tripping duplicate keys / inactive elements.
     GoRoute(
       path: '/create',
-      builder: (_, state) {
-        // `/create` is the dock **Add** entry. V1 UX: show a lightweight hub for
-        // continuing local drafts + starting a new story.
-        //
-        // `editBasics=1` opens the shared draft form (return path preserved).
-        if (state.uri.queryParameters['editBasics'] == '1') {
-          return CreateScreen(
-            initialTab: state.uri.queryParameters['tab'],
-            editFromReview: true,
-          );
-        }
-        return const StoryCreatorAddTabScreen();
+      pageBuilder: (context, state) {
+        final child = state.uri.queryParameters['editBasics'] == '1'
+            ? CreateScreen(
+                initialTab: state.uri.queryParameters['tab'],
+                editFromReview: true,
+              )
+            : const StoryCreatorAddTabScreen();
+        return NoTransitionPage<void>(
+          key: state.pageKey,
+          child: child,
+        );
       },
     ),
     GoRoute(
@@ -125,15 +149,40 @@ final _router = GoRouter(
       routes: [
         GoRoute(
           path: 'basics',
-          builder: (_, __) => const StoryCreatorBasicsScreen(),
+          pageBuilder: (context, state) {
+            return NoTransitionPage<void>(
+              key: state.pageKey,
+              child: const StoryCreatorBasicsScreen(),
+            );
+          },
         ),
         GoRoute(
           path: 'sentences',
-          builder: (_, __) => const StoryCreatorSentencesScreen(),
+          pageBuilder: (context, state) {
+            return NoTransitionPage<void>(
+              key: state.pageKey,
+              child: const StoryCreatorSentencesScreen(),
+            );
+          },
         ),
         GoRoute(
           path: 'learn',
-          builder: (_, __) => const StoryCreatorLearnHubScreen(),
+          redirect: (context, state) {
+            // Hard-remove standalone "Learn modules" hub from the creator flow.
+            // Deep links to `/create/story/learn/...` still work via child redirects
+            // (e.g. /learn/vocabulary -> sentences?panel=).
+            if (state.uri.path == '/create/story/learn' ||
+                state.uri.path == '/create/story/learn/') {
+              final d = state.uri.queryParameters['draftId']?.trim() ?? '';
+              if (d.isNotEmpty) {
+                return '/create/story/sentences?draftId='
+                    '${Uri.encodeQueryComponent(d)}';
+              }
+              return '/create/story/sentences';
+            }
+            return null;
+          },
+          builder: (_, __) => const SizedBox.shrink(),
           routes: [
             GoRoute(
               path: 'vocabulary',
@@ -327,13 +376,19 @@ final _router = GoRouter(
           routes: <RouteBase>[
             GoRoute(
               path: '/mono',
-              builder: (_, state) {
+              // Match create routes: no Material cross-fade when replacing a
+              // full-screen /create/... page — reduces outgoing creator subtree
+              // overlap with Mono during exit.
+              pageBuilder: (context, state) {
                 final extra = state.extra;
                 final MonoFeedItem? initial =
                     extra is MonoFeedItem ? extra : null;
-                return MonoScreen(
-                  repo: repo,
-                  initialItemOverride: initial,
+                return NoTransitionPage<void>(
+                  key: state.pageKey,
+                  child: MonoScreen(
+                    repo: repo,
+                    initialItemOverride: initial,
+                  ),
                 );
               },
             ),
@@ -343,22 +398,26 @@ final _router = GoRouter(
           routes: <RouteBase>[
             GoRoute(
               path: '/more',
-              builder: (_, state) {
+              pageBuilder: (context, state) {
                 final q = state.uri.queryParameters;
                 int? initialTab;
                 if (q['tab'] == 'saved' || q['saved'] == '1') {
                   initialTab = 2;
-                } else if (q['tab'] == 'processing') {
+                } else if (q['tab'] == 'workspace') {
                   initialTab = 1;
                 } else if (q['tab'] == 'uploaded') {
                   initialTab = 0;
                 }
                 final highlight = q['highlight']?.trim();
-                return ProfileScreen(
-                  repo: repo,
-                  initialTabIndex: initialTab,
-                  highlightDraftId:
-                      highlight != null && highlight.isNotEmpty ? highlight : null,
+                return NoTransitionPage<void>(
+                  key: state.pageKey,
+                  child: ProfileScreen(
+                    repo: repo,
+                    initialTabIndex: initialTab,
+                    highlightDraftId: highlight != null && highlight.isNotEmpty
+                        ? highlight
+                        : null,
+                  ),
                 );
               },
             ),
@@ -381,6 +440,7 @@ class NimonApp extends ConsumerWidget {
     return MaterialApp.router(
       routerConfig: _router,
       debugShowCheckedModeBanner: false,
+      scaffoldMessengerKey: nimonRootScaffoldMessengerKey,
       theme: buildTheme(),
       darkTheme: buildDarkTheme(),
       themeMode: themeMode,
@@ -445,6 +505,11 @@ class _AppShellState extends State<AppShell> {
       return; // Already on create page, do nothing
     }
 
+    ProviderScope.containerOf(context, listen: false)
+        .read(creatorEntryChannelProvider.notifier)
+        .state = creatorEntryChannelForShellPath(
+      GoRouterState.of(context).uri.path,
+    );
     // Push create page as a full-screen route (outside shell, so no bottom nav)
     context.push('/create');
   }
@@ -456,15 +521,29 @@ class _AppShellState extends State<AppShell> {
     final theme = Theme.of(context);
 
     final onDockTap = (int i) {
+      final go = GoRouter.of(context);
+      final onCreateStack = go.state.uri.path.startsWith('/create');
+      // [goBranch] only switches the shell’s IndexedStack; it does not pop a
+      // full-screen `/create/...` route. That can leave the creator subtree alive
+      // (or mid-transition) while the global location is already `/mono`, causing
+      // inactive element / duplicate key issues. Use [go] to leave create entirely.
       switch (i) {
         case 0:
-          widget.navigationShell.goBranch(0);
+          if (onCreateStack) {
+            go.go('/mono');
+          } else {
+            widget.navigationShell.goBranch(0);
+          }
           break;
         case 1:
           _openCreate(context);
           break;
         case 2:
-          widget.navigationShell.goBranch(1);
+          if (onCreateStack) {
+            go.go('/more');
+          } else {
+            widget.navigationShell.goBranch(1);
+          }
           break;
       }
     };

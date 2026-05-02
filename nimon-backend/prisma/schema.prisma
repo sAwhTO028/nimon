@@ -1,0 +1,178 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum PublishState {
+  draft
+  reading_only_published
+  full_learn_published
+}
+
+enum ModuleTaskStatus {
+  not_started
+  in_progress
+  completed
+}
+
+model User {
+  id        String   @id @default(uuid()) @db.Uuid
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  /// optional for V1; auth is not implemented yet
+  email String? @unique
+
+  storyDrafts    StoryDraft[]
+  publishedMonos PublishedMono[]
+
+  @@map("users")
+}
+
+model StoryDraft {
+  id        String   @id @default(uuid()) @db.Uuid
+  ownerId   String   @db.Uuid
+  owner     User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  schemaVersion Int @default(1)
+
+  /// optimistic concurrency (ETag-style) can be built on top later
+  version Int @default(1)
+
+  publishState PublishState @default(draft)
+
+  publishedMonoId String?        @db.Uuid
+  publishedMono   PublishedMono? @relation(fields: [publishedMonoId], references: [id], onDelete: SetNull)
+
+  readingOnlyPublishedAt DateTime?
+  fullLearnPublishedAt   DateTime?
+
+  // "basics" in the contract (V1 simple; avoid over-normalizing)
+  title            String @default("")
+  category         String @default("")
+  level            String @default("")
+  description      String @default("")
+  promptSourceNote String @default("")
+  targetDurationBandKey String?
+  coverImageUrl         String?
+
+  // moduleWorkflowStatuses: Map<learnModuleId, ModuleTaskStatus> (stored as JSON for V1)
+  moduleWorkflowStatuses Json @default("{}")
+
+  /// True when publishState is not `draft` and working copy may differ from last published snapshot.
+  /// New rows default false; migration sets true for existing non-draft rows (conservative).
+  hasUnpublishedCoreChanges Boolean @default(false)
+
+  sentences      DraftSentence[]
+  vocabEntries   DraftVocabEntry[]
+  grammarEntries DraftGrammarEntry[]
+  quizEntries    DraftQuizEntry[]
+  audios         DraftAudio[]
+
+  @@index([ownerId, updatedAt])
+  @@index([ownerId, publishState])
+  @@map("story_drafts")
+}
+
+model DraftSentence {
+  id        String   @id @default(uuid()) @db.Uuid
+  draftId   String   @db.Uuid
+  draft     StoryDraft @relation(fields: [draftId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  order Int
+
+  /// Sentence content shape is evolving; keep JSON for V1.
+  content Json
+
+  @@unique([draftId, order])
+  @@index([draftId])
+  @@map("draft_sentences")
+}
+
+model DraftVocabEntry {
+  id        String   @id @default(uuid()) @db.Uuid
+  draftId   String   @db.Uuid
+  draft     StoryDraft @relation(fields: [draftId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  order Int
+  content Json
+
+  @@unique([draftId, order])
+  @@index([draftId])
+  @@map("draft_vocab_entries")
+}
+
+model DraftGrammarEntry {
+  id        String   @id @default(uuid()) @db.Uuid
+  draftId   String   @db.Uuid
+  draft     StoryDraft @relation(fields: [draftId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  order Int
+  content Json
+
+  @@unique([draftId, order])
+  @@index([draftId])
+  @@map("draft_grammar_entries")
+}
+
+model DraftQuizEntry {
+  id        String   @id @default(uuid()) @db.Uuid
+  draftId   String   @db.Uuid
+  draft     StoryDraft @relation(fields: [draftId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  order Int
+  content Json
+
+  @@unique([draftId, order])
+  @@index([draftId])
+  @@map("draft_quiz_entries")
+}
+
+model DraftAudio {
+  id        String   @id @default(uuid()) @db.Uuid
+  draftId   String   @db.Uuid
+  draft     StoryDraft @relation(fields: [draftId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  /// for V1 we only need a single "storyAudio" blob; JSON keeps it flexible
+  kind String @default("storyAudio")
+  content Json
+
+  @@index([draftId])
+  @@map("draft_audio")
+}
+
+model PublishedMono {
+  id        String   @id @default(uuid()) @db.Uuid
+  ownerId   String   @db.Uuid
+  owner     User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // V1 simple fields; expand later
+  title       String @default("")
+  category    String @default("")
+  level       String @default("")
+  description String @default("")
+
+  content Json @default("{}")
+
+  drafts StoryDraft[]
+
+  @@index([ownerId, updatedAt])
+  @@map("published_monos")
+}

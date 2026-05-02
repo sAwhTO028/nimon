@@ -52,7 +52,9 @@ CreatorStepId? creatorActiveStepFromMatchedPath(String matchedPath) {
       'basics' => CreatorStepId.basics,
       'sentences' => CreatorStepId.sentences,
       'review' => CreatorStepId.reviewPublish,
-      'learn' => CreatorStepId.learnHub,
+      // Standalone /create/story/learn hub is removed from the product flow.
+      // If the router ever reports it (unexpected), treat it as sentences.
+      'learn' => CreatorStepId.sentences,
       _ => null,
     };
   }
@@ -63,7 +65,7 @@ CreatorStepId? creatorActiveStepFromMatchedPath(String matchedPath) {
       'grammar' => CreatorStepId.grammar,
       'quiz' => CreatorStepId.quiz,
       'audio' => CreatorStepId.listening,
-      _ => CreatorStepId.learnHub,
+      _ => CreatorStepId.sentences,
     };
   }
 
@@ -95,7 +97,6 @@ CreatorStepId? creatorEffectiveActiveStep(CreatorDrawerSessionState session) {
       CreatorModule.storyBasics => CreatorStepId.basics,
       CreatorModule.storyHub => CreatorStepId.sentences,
       CreatorModule.review => CreatorStepId.sentences,
-      CreatorModule.learnHub => CreatorStepId.sentences,
     };
   }
   return creatorActiveStepFromMatchedPath(session.matchedPath);
@@ -170,7 +171,7 @@ CreatorDrawerProgressModel buildCreatorDrawerProgressModel({
       subtitle: vocab.$3,
       statusLabel: vocab.$1,
       actionLabel: vocab.$2,
-      route: '/create/story/learn/vocabulary',
+      route: '/create/story/sentences?panel=vocabulary',
     ),
     CreatorProgressItem(
       id: CreatorStepId.grammar,
@@ -178,7 +179,7 @@ CreatorDrawerProgressModel buildCreatorDrawerProgressModel({
       subtitle: grammar.$3,
       statusLabel: grammar.$1,
       actionLabel: grammar.$2,
-      route: '/create/story/learn/grammar',
+      route: '/create/story/sentences?panel=grammar',
     ),
     CreatorProgressItem(
       id: CreatorStepId.quiz,
@@ -186,7 +187,7 @@ CreatorDrawerProgressModel buildCreatorDrawerProgressModel({
       subtitle: quiz.$3,
       statusLabel: quiz.$1,
       actionLabel: quiz.$2,
-      route: '/create/story/learn/quiz',
+      route: '/create/story/sentences?panel=quiz',
     ),
     CreatorProgressItem(
       id: CreatorStepId.listening,
@@ -194,7 +195,7 @@ CreatorDrawerProgressModel buildCreatorDrawerProgressModel({
       subtitle: listening.$3,
       statusLabel: listening.$1,
       actionLabel: listening.$2,
-      route: '/create/story/learn/audio',
+      route: '/create/story/sentences?panel=listening',
     ),
   ];
 
@@ -225,28 +226,51 @@ CreatorDrawerProgressModel buildCreatorDrawerProgressModel({
 // Drawer UI
 // -----------------------------------------------------------------------------
 
-/// Test / finder scope for the creator progress panel (not a [Scaffold] drawer).
-const ValueKey<String> kCreatorProgressDrawerKey =
-    ValueKey<String>('creator_progress_drawer');
+/// Distinct [KeyedSubtree] keys so Sentences + module editors can coexist briefly
+/// (e.g. during navigation) without "Duplicate key" / GlobalKey-style collisions.
+const ValueKey<String> kCreatorProgressDrawerKeySentences =
+    ValueKey<String>('creator_progress_drawer_sentences');
+const ValueKey<String> kCreatorProgressDrawerKeyVocabulary =
+    ValueKey<String>('creator_progress_drawer_vocabulary');
+const ValueKey<String> kCreatorProgressDrawerKeyGrammar =
+    ValueKey<String>('creator_progress_drawer_grammar');
 
 class CreatorProgressDrawer extends StatefulWidget {
   const CreatorProgressDrawer({
     super.key,
+    /// Must match [kCreatorProgressDrawerKey*] used for this host (sentences / vocab / grammar).
+    required this.drawerKeySlot,
     required this.coreItems,
     required this.learnItems,
     required this.publishModel,
+    required this.readOnlyPublishedExists,
+    required this.readOnlyHasUnpublishedChanges,
+    required this.fullLearnPublishedExists,
+    required this.fullLearnHasUnpublishedChanges,
     required this.learnModeEnabled,
+    required this.currentStepId,
     required this.onLearnModeChanged,
     required this.onOpenStep,
     required this.onSaveDraft,
     required this.onPublish,
   });
 
+  /// Drives a unique [KeyedSubtree] so multiple creator surfaces never share one key.
+  final ValueKey<String> drawerKeySlot;
   final List<CreatorProgressItem> coreItems;
   final List<CreatorProgressItem> learnItems;
   final StoryReviewDisplayModel publishModel;
+  /// True when a Read Only version exists (published at least once).
+  final bool readOnlyPublishedExists;
+  /// True when the current draft core differs from the last Read Only published core.
+  final bool readOnlyHasUnpublishedChanges;
+  /// True when [CreatorStoryV1.publishState] is [StoryPublishState.fullLearnPublished].
+  final bool fullLearnPublishedExists;
+  /// True when the in-memory draft has unsaved / unpublished edits ([StoryCreatorDraftState.dirty]).
+  final bool fullLearnHasUnpublishedChanges;
   /// From [CreatorDrawerSessionState.learnModeEnabled] — single source of truth.
   final bool learnModeEnabled;
+  final CreatorStepId? currentStepId;
   final ValueChanged<bool> onLearnModeChanged;
   final void Function(String route) onOpenStep;
   final VoidCallback onSaveDraft;
@@ -259,15 +283,46 @@ class CreatorProgressDrawer extends StatefulWidget {
 class _CreatorProgressDrawerState extends State<CreatorProgressDrawer> {
   bool _publishing = false;
 
+  @override
+  void didUpdateWidget(covariant CreatorProgressDrawer oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.publishModel.isFullLearnReady != widget.publishModel.isFullLearnReady ||
+        oldWidget.publishModel.isReadingOnlyReady != widget.publishModel.isReadingOnlyReady ||
+        oldWidget.fullLearnPublishedExists != widget.fullLearnPublishedExists ||
+        oldWidget.fullLearnHasUnpublishedChanges !=
+            widget.fullLearnHasUnpublishedChanges) {
+      setState(() {});
+    }
+  }
+
   StoryReviewPublishMode get _publishMode => widget.learnModeEnabled
       ? StoryReviewPublishMode.fullLearn
       : StoryReviewPublishMode.readingOnly;
 
-  bool get _publishEnabled =>
-      isStoryReviewModeAllowed(_publishMode, widget.publishModel);
+  bool get _readOnlyUpToDate =>
+      widget.readOnlyPublishedExists && !widget.readOnlyHasUnpublishedChanges;
+
+  bool get _fullLearnUpToDate =>
+      widget.fullLearnPublishedExists && !widget.fullLearnHasUnpublishedChanges;
+
+  bool get _publishEnabled {
+    if (_publishMode == StoryReviewPublishMode.readingOnly && _readOnlyUpToDate) {
+      return false;
+    }
+    if (_publishMode == StoryReviewPublishMode.fullLearn && _fullLearnUpToDate) {
+      return false;
+    }
+    return isStoryReviewModeAllowed(_publishMode, widget.publishModel);
+  }
 
   String? _publishHelperText() {
     if (_publishEnabled) return null;
+    if (!widget.learnModeEnabled && _readOnlyUpToDate) {
+      return 'Published version exists and is up to date.';
+    }
+    if (widget.learnModeEnabled && _fullLearnUpToDate) {
+      return 'Published version is up to date.';
+    }
     if (!widget.learnModeEnabled) {
       return widget.publishModel.isReadingOnlyReady
           ? null
@@ -295,13 +350,21 @@ class _CreatorProgressDrawerState extends State<CreatorProgressDrawer> {
     final cs = theme.colorScheme;
     final onVar = cs.onSurfaceVariant;
     final helper = _publishHelperText();
-    final publishLabel = widget.learnModeEnabled ? 'Full Learn' : 'Read Only';
+    final publishLabel = widget.learnModeEnabled
+        ? (_fullLearnUpToDate ? 'Full Learn Published' : 'Full Learn')
+        : (_readOnlyUpToDate
+            ? 'Read Only Published'
+            : (widget.readOnlyPublishedExists &&
+                    widget.readOnlyHasUnpublishedChanges
+                ? 'Update Read Only'
+                : 'Read Only Publish'));
 
     return KeyedSubtree(
-      key: kCreatorProgressDrawerKey,
+      key: widget.drawerKeySlot,
       child: LayoutBuilder(
         builder: (context, constraints) {
           return Drawer(
+            key: const ValueKey<String>('creator_progress_drawer'),
             width: constraints.maxWidth.isFinite && constraints.maxWidth > 0
                 ? constraints.maxWidth
                 : 304,
@@ -309,8 +372,18 @@ class _CreatorProgressDrawerState extends State<CreatorProgressDrawer> {
             shape: const RoundedRectangleBorder(
               borderRadius: BorderRadius.horizontal(left: Radius.circular(20)),
             ),
-            child: SafeArea(
-              child: ListView(
+            // Full-bounds [ColoredBox] under the scroll content: the Drawer itself
+            // does not always make every sub-area participate in hit testing. An explicit
+            // same-color layer ensures pointer events in the open drawer never fall through
+            // to the translated story page behind (Group A: Open on learn rows).
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                Positioned.fill(
+                  child: ColoredBox(color: cs.surface),
+                ),
+                SafeArea(
+                  child: ListView(
                 padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
                 children: [
                   Text(
@@ -353,6 +426,7 @@ class _CreatorProgressDrawerState extends State<CreatorProgressDrawer> {
                   _CreatorProgressSection(
                     title: 'Core progress',
                     items: widget.coreItems,
+                    currentStepId: widget.currentStepId,
                     onOpenStep: widget.onOpenStep,
                   ),
                   const SizedBox(height: 16),
@@ -360,6 +434,7 @@ class _CreatorProgressDrawerState extends State<CreatorProgressDrawer> {
                     learnItems: widget.learnItems,
                     learnModeEnabled: widget.learnModeEnabled,
                     onLearnModeChanged: widget.onLearnModeChanged,
+                    currentStepId: widget.currentStepId,
                     onOpenStep: widget.onOpenStep,
                     theme: theme,
                     colorScheme: cs,
@@ -375,7 +450,9 @@ class _CreatorProgressDrawerState extends State<CreatorProgressDrawer> {
                     ),
                   ],
                 ],
-              ),
+                  ),
+                ),
+              ],
             ),
           );
         },
@@ -389,6 +466,7 @@ class _LearnModulesBlock extends StatelessWidget {
     required this.learnItems,
     required this.learnModeEnabled,
     required this.onLearnModeChanged,
+    required this.currentStepId,
     required this.onOpenStep,
     required this.theme,
     required this.colorScheme,
@@ -397,6 +475,7 @@ class _LearnModulesBlock extends StatelessWidget {
   final List<CreatorProgressItem> learnItems;
   final bool learnModeEnabled;
   final ValueChanged<bool> onLearnModeChanged;
+  final CreatorStepId? currentStepId;
   final void Function(String route) onOpenStep;
   final ThemeData theme;
   final ColorScheme colorScheme;
@@ -454,7 +533,11 @@ class _LearnModulesBlock extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       for (final i in learnItems)
-                        _CreatorProgressRow(item: i, onOpenStep: onOpenStep),
+                        _CreatorProgressRow(
+                          item: i,
+                          isCurrent: i.id == currentStepId,
+                          onOpenStep: onOpenStep,
+                        ),
                     ],
                   ),
                 )
@@ -469,11 +552,13 @@ class _CreatorProgressSection extends StatelessWidget {
   const _CreatorProgressSection({
     required this.title,
     required this.items,
+    required this.currentStepId,
     required this.onOpenStep,
   });
 
   final String title;
   final List<CreatorProgressItem> items;
+  final CreatorStepId? currentStepId;
   final void Function(String route) onOpenStep;
 
   @override
@@ -491,7 +576,13 @@ class _CreatorProgressSection extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 10),
-        ...items.map((i) => _CreatorProgressRow(item: i, onOpenStep: onOpenStep)),
+        ...items.map(
+          (i) => _CreatorProgressRow(
+            item: i,
+            isCurrent: i.id == currentStepId,
+            onOpenStep: onOpenStep,
+          ),
+        ),
       ],
     );
   }
@@ -500,10 +591,12 @@ class _CreatorProgressSection extends StatelessWidget {
 class _CreatorProgressRow extends StatelessWidget {
   const _CreatorProgressRow({
     required this.item,
+    required this.isCurrent,
     required this.onOpenStep,
   });
 
   final CreatorProgressItem item;
+  final bool isCurrent;
   final void Function(String route) onOpenStep;
 
   static const _completeGreen = Color(0xFFDDF5E3);
@@ -541,39 +634,50 @@ class _CreatorProgressRow extends StatelessWidget {
         child: LayoutBuilder(
           builder: (context, c) {
             final narrow = c.maxWidth < 232;
-            final titleChipRow = Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  child: Text(
-                    item.title,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.titleSmall?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 4,
-                  ),
-                  decoration: BoxDecoration(
-                    color: chipColor,
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                  child: Text(
-                    chipLabel,
-                    style: theme.textTheme.labelSmall?.copyWith(
-                      color: chipTextColor,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-              ],
+            final titleText = Text(
+              item.title,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.titleSmall?.copyWith(
+                fontWeight: FontWeight.w700,
+              ),
             );
+            final chip = Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 8,
+                vertical: 4,
+              ),
+              decoration: BoxDecoration(
+                color: chipColor,
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: Text(
+                chipLabel,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: chipTextColor,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            );
+            final titleChipRow = narrow
+                ? Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      titleText,
+                      const SizedBox(height: 6),
+                      Align(alignment: Alignment.centerLeft, child: chip),
+                    ],
+                  )
+                : Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(child: titleText),
+                      const SizedBox(width: 8),
+                      Flexible(child: chip),
+                    ],
+                  );
             final subtitle = Text(
               item.subtitle,
               style: theme.textTheme.bodySmall?.copyWith(
@@ -587,9 +691,9 @@ class _CreatorProgressRow extends StatelessWidget {
                 tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                 visualDensity: VisualDensity.compact,
               ),
-              onPressed: () => onOpenStep(item.route),
+              onPressed: isCurrent ? null : () => onOpenStep(item.route),
               child: Text(
-                actionLabel,
+                isCurrent ? 'You are here' : actionLabel,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
@@ -598,6 +702,16 @@ class _CreatorProgressRow extends StatelessWidget {
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
+                  if (isCurrent) ...[
+                    Text(
+                      'Current',
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: cs.onSurfaceVariant,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                  ],
                   titleChipRow,
                   const SizedBox(height: 4),
                   subtitle,
@@ -615,6 +729,16 @@ class _CreatorProgressRow extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      if (isCurrent) ...[
+                        Text(
+                          'Current',
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            color: cs.onSurfaceVariant,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                      ],
                       titleChipRow,
                       const SizedBox(height: 4),
                       subtitle,

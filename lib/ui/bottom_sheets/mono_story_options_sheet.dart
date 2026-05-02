@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:nimon/features/create/creator_resume_draft.dart';
 import 'package:nimon/features/mono/mono_reader_dock.dart';
 import 'package:nimon/features/mono/mono_reader_menu_origin.dart';
 import 'package:nimon/features/mono/mono_screen.dart';
@@ -420,13 +421,12 @@ class _MonoStoryOptionsContent extends StatelessWidget {
                       const SizedBox(width: 12),
                       Expanded(
                         child: OutlinedButton.icon(
-                          onPressed: () {
+                          onPressed: () async {
                             HapticFeedback.selectionClick();
                             onClose?.call();
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('Edit - Coming soon'),
-                              ),
+                            await CreatorDraftResumeFlow.tryResumeFromPublishedSurface(
+                              context,
+                              item.id,
                             );
                           },
                           icon: const Icon(Icons.edit_outlined, size: 18),

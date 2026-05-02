@@ -19,7 +19,6 @@ enum CreatorModule {
   quiz,
   listeningPronunciation,
   review,
-  learnHub,
 }
 
 /// In-memory route + “visited learn editor” tracking so the creator progress
@@ -77,6 +76,14 @@ class CreatorDrawerSessionNotifier extends StateNotifier<CreatorDrawerSessionSta
     state = state.copyWith(learnModeEnabled: enabled);
   }
 
+  /// Reset *ephemeral* UI session tracking while preserving persistent choices.
+  ///
+  /// Persistent examples: Learn mode selection.
+  void resetEphemeralUiState() {
+    final preserveLearnMode = state.learnModeEnabled;
+    state = CreatorDrawerSessionState(learnModeEnabled: preserveLearnMode);
+  }
+
   /// Prefer the real navigation [Uri.path]; [matchedPath] alone can be a
   /// subtree location while the user is still on `/create/story/sentences`.
   static String _canonicalCreateStoryPath(String matchedPath, Uri? locationUri) {
@@ -116,15 +123,6 @@ class CreatorDrawerSessionNotifier extends StateNotifier<CreatorDrawerSessionSta
     if (path.startsWith('/create/story/basics')) {
       return CreatorModule.storyBasics;
     }
-    if (path.startsWith('/create/story/learn')) {
-      if (path.contains('/learn/vocabulary')) return CreatorModule.vocabulary;
-      if (path.contains('/learn/grammar')) return CreatorModule.grammar;
-      if (path.contains('/learn/quiz')) return CreatorModule.quiz;
-      if (path.contains('/learn/audio')) {
-        return CreatorModule.listeningPronunciation;
-      }
-      return CreatorModule.learnHub;
-    }
     if (isStorySentencesCreatorPath(path)) {
       final fromPanel = creatorWorkspaceStepForSentencesPanel(query['panel']);
       final step = fromPanel ?? embedStep;
@@ -138,10 +136,7 @@ class CreatorDrawerSessionNotifier extends StateNotifier<CreatorDrawerSessionSta
   /// the embedded Vocabulary / Grammar / Quiz / Audio workspace).
   static bool _preserveSentencesWorkspaceStep(String path) {
     if (isStorySentencesCreatorPath(path)) return true;
-    return path.contains('/create/story/learn/vocabulary') ||
-        path.contains('/create/story/learn/grammar') ||
-        path.contains('/create/story/learn/quiz') ||
-        path.contains('/create/story/learn/audio');
+    return false;
   }
 
   /// Updates path and records a learn-module visit when [path] targets an editor.
@@ -187,7 +182,11 @@ class CreatorDrawerSessionNotifier extends StateNotifier<CreatorDrawerSessionSta
     final beforeSentenceVisible = beforeStep == CreatorWorkspaceStep.storySentences;
 
     final CreatorWorkspaceStep nextSentencesMainStep;
-    if (_preserveSentencesWorkspaceStep(path)) {
+    if (onSentencesHost) {
+      // V1: `?panel=` on the sentences host (or absence → main story sentences) is canonical.
+      nextSentencesMainStep = fromPanel ?? CreatorWorkspaceStep.storySentences;
+    } else if (_preserveSentencesWorkspaceStep(path)) {
+      // Legacy learn deep paths / redirect flicker: keep last embed until path stabilizes.
       nextSentencesMainStep = fromPanel ?? state.sentencesMainStep;
     } else {
       nextSentencesMainStep = CreatorWorkspaceStep.storySentences;

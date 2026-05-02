@@ -4,14 +4,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:nimon/features/create/creator_resume_draft.dart';
-import 'package:nimon/features/create/creator_readiness.dart';
-import 'package:nimon/features/create/creator_labels.dart';
-import 'package:nimon/features/create/data/story_draft_repository.dart';
-import 'package:nimon/features/create/data/story_draft_repository_provider.dart';
-import 'package:nimon/features/create/story_creator_draft_storage.dart'
-    show CreatorDraftResumeMeta, CreatorLastActiveModule;
-import 'package:nimon/features/create/story_creator_models.dart';
+import 'package:nimon/features/create/creator_back_policy.dart';
+import 'package:nimon/features/create/creator_processing_copy.dart';
+import 'package:nimon/features/create/data/dto/draft_list_summary_dto.dart';
+import 'package:nimon/features/create/presentation/providers/story_creator_add_tab_draft_summary_provider.dart';
 import 'package:nimon/features/create/story_creator_provider.dart';
+import 'package:nimon/features/profile/profile_processing_refresh.dart';
 import 'package:nimon/features/profile/profile_navigation_helpers.dart';
 import 'package:nimon/ui/widgets/nimon_circle_nav_button.dart';
 
@@ -27,6 +25,12 @@ class StoryCreatorAddTabScreen extends ConsumerWidget {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
 
+    ref.listen<int>(profileProcessingListRefreshProvider, (previous, next) {
+      unawaited(
+        ref.read(storyCreatorAddTabDraftSummaryProvider.notifier).refresh(),
+      );
+    });
+
     return Scaffold(
       backgroundColor: cs.surface,
       appBar: AppBar(
@@ -35,7 +39,7 @@ class StoryCreatorAddTabScreen extends ConsumerWidget {
         scrolledUnderElevation: 0,
         surfaceTintColor: Colors.transparent,
         leading: NimonBackButton(
-          onPressed: () => context.pop(),
+          onPressed: () => unawaited(handleCreatorBackPressed(context, ref)),
           icon: Icons.close_rounded,
           tooltip: 'Close',
         ),
@@ -48,102 +52,12 @@ class StoryCreatorAddTabScreen extends ConsumerWidget {
         ),
         centerTitle: true,
       ),
-      body: FutureBuilder<_LocalDraftsSnapshot>(
-        future: _LocalDraftsSnapshot.load(ref.read(storyDraftRepositoryProvider)),
-        builder: (context, snap) {
-          final data = snap.data;
-          final loading = snap.connectionState != ConnectionState.done && data == null;
-
-          if (loading) {
-            return const Center(child: CircularProgressIndicator());
-          }
-
-          final drafts = data?.drafts ?? const <_DraftListItemModel>[];
-          final featured = drafts.isEmpty ? null : drafts.first;
-          final rest = drafts.length <= 1 ? const <_DraftListItemModel>[] : drafts.sublist(1);
-
-          final listPadding = EdgeInsets.fromLTRB(
-            20,
-            16,
-            20,
-            24 + MediaQuery.of(context).padding.bottom,
-          );
-
-          return ListView(
-            padding: listPadding,
-            children: [
-              if (featured == null) ...[
-                _EmptyStateCard(
-                  onCreateNew: () => unawaited(_createNewStory(context, ref)),
-                ),
-              ] else ...[
-                _SectionHeader(
-                  title: 'Continue working',
-                ),
-                const SizedBox(height: 12),
-                _FeaturedDraftCard(
-                  item: featured,
-                  onContinue: () => unawaited(
-                    CreatorDraftResumeFlow.resume(context, featured.id),
-                  ),
-                ),
-                const SizedBox(height: 18),
-                if (rest.isNotEmpty) ...[
-                  _SectionHeader(
-                    title: 'Drafts in progress',
-                  ),
-                  const SizedBox(height: 10),
-                  ...rest.take(3).map(
-                        (it) => Padding(
-                          padding: const EdgeInsets.only(bottom: 10),
-                          child: _DraftRowCard(
-                            item: it,
-                            onTap: () => unawaited(
-                              CreatorDraftResumeFlow.resume(context, it.id),
-                            ),
-                          ),
-                        ),
-                      ),
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: TextButton(
-                      onPressed: () =>
-                          ProfileNavigation.openProcessingTab(context),
-                      child: const Text('View all drafts in Processing'),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                ],
-                const SizedBox(height: 10),
-                _SectionHeader(title: 'Start new story'),
-                const SizedBox(height: 12),
-                FilledButton(
-                  onPressed: () => unawaited(_createNewStory(context, ref)),
-                  style: FilledButton.styleFrom(
-                    minimumSize: const Size(0, 52),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                  ),
-                  child: const Text('Create new story'),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  'Create story basics first, then continue with storytelling and optional learn modules.',
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: cs.onSurfaceVariant,
-                    height: 1.35,
-                  ),
-                ),
-              ],
-            ],
-          );
-        },
-      ),
+      body: _StoryCreatorAddTabBody(theme: theme, cs: cs),
     );
   }
 
-  static Future<void> _createNewStory(BuildContext context, WidgetRef ref) async {
+  static Future<void> _createNewStory(
+      BuildContext context, WidgetRef ref) async {
     // Start a brand-new ephemeral session. Persist only after first meaningful edit.
     ref.read(storyCreatorDraftProvider.notifier).reset();
     if (!context.mounted) return;
@@ -151,28 +65,148 @@ class StoryCreatorAddTabScreen extends ConsumerWidget {
   }
 }
 
-class _LocalDraftsSnapshot {
-  final List<_DraftListItemModel> drafts;
+/// Isolated so [build] can register [ref.listen] once cleanly with stable descendants.
+class _StoryCreatorAddTabBody extends ConsumerWidget {
+  const _StoryCreatorAddTabBody({
+    required this.theme,
+    required this.cs,
+  });
 
-  const _LocalDraftsSnapshot({required this.drafts});
+  final ThemeData theme;
+  final ColorScheme cs;
 
-  static Future<_LocalDraftsSnapshot> load(StoryDraftRepository repository) async {
-    final ids = await repository.listDraftIds();
-    final out = <_DraftListItemModel>[];
-    for (final id in ids) {
-      final draft = await repository.loadDraft(id);
-      if (draft == null) continue;
-      if (draft.publishState != StoryPublishState.draft) continue;
-      final meta = await repository.loadResumeMeta(id);
-      out.add(
-        _DraftListItemModel.fromDraft(
-          draft: draft,
-          meta: meta,
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final summary = ref.watch(storyCreatorAddTabDraftSummaryProvider);
+    final drafts = [
+      for (final s in summary.items) _DraftListItemModel.fromSummary(s),
+    ];
+
+    final loading =
+        summary.isInitialLoading && drafts.isEmpty && summary.error == null;
+    if (loading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (summary.error != null && drafts.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'Could not load drafts',
+                style: theme.textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 12),
+              FilledButton(
+                onPressed: () => unawaited(
+                  ref
+                      .read(storyCreatorAddTabDraftSummaryProvider.notifier)
+                      .refresh(),
+                ),
+                child: const Text('Retry'),
+              ),
+            ],
+          ),
         ),
       );
     }
-    out.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
-    return _LocalDraftsSnapshot(drafts: out);
+
+    final featured = drafts.isEmpty ? null : drafts.first;
+    final rest =
+        drafts.length <= 1 ? const <_DraftListItemModel>[] : drafts.sublist(1);
+
+    final listPadding = EdgeInsets.fromLTRB(
+      20,
+      16,
+      20,
+      24 + MediaQuery.of(context).padding.bottom,
+    );
+
+    return ListView(
+      padding: listPadding,
+      children: [
+        if (featured == null) ...[
+          _EmptyStateCard(
+            onCreateNew: () => unawaited(
+              StoryCreatorAddTabScreen._createNewStory(context, ref),
+            ),
+          ),
+        ] else ...[
+          _SectionHeader(
+            title: 'Continue working',
+          ),
+          const SizedBox(height: 12),
+          _FeaturedDraftCard(
+            item: featured,
+            onContinue: () => unawaited(
+              CreatorDraftResumeFlow.resume(
+                context,
+                featured.id,
+                entryChannel: CreatorEntryChannel.add,
+              ),
+            ),
+          ),
+          const SizedBox(height: 18),
+          if (rest.isNotEmpty) ...[
+            _SectionHeader(
+              title: 'Drafts in progress',
+            ),
+            const SizedBox(height: 10),
+            ...rest.take(3).map(
+                  (it) => Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: _DraftRowCard(
+                      item: it,
+                      onTap: () => unawaited(
+                        CreatorDraftResumeFlow.resume(
+                          context,
+                          it.id,
+                          entryChannel: CreatorEntryChannel.add,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton(
+                onPressed: () => ProfileNavigation.openProcessingTab(context),
+                child: const Text('View all drafts in Processing'),
+              ),
+            ),
+            const SizedBox(height: 8),
+          ],
+          const SizedBox(height: 10),
+          _SectionHeader(title: 'Start new story'),
+          const SizedBox(height: 12),
+          FilledButton(
+            onPressed: () => unawaited(
+              StoryCreatorAddTabScreen._createNewStory(context, ref),
+            ),
+            style: FilledButton.styleFrom(
+              minimumSize: const Size(0, 52),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+              ),
+            ),
+            child: const Text('Create new story'),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Create story basics first, then continue with storytelling and optional learn modules.',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: cs.onSurfaceVariant,
+              height: 1.35,
+            ),
+          ),
+        ],
+      ],
+    );
   }
 }
 
@@ -199,57 +233,38 @@ class _DraftListItemModel {
     required this.readinessSummary,
   });
 
-  static _DraftListItemModel fromDraft({
-    required CreatorStoryV1 draft,
-    required CreatorDraftResumeMeta? meta,
-  }) {
-    final basics = draft.basics;
-    final title = basics.title.trim().isEmpty ? 'Untitled draft' : basics.title.trim();
-    final desc = basics.description.trim();
-    final preview = desc.isNotEmpty ? desc : _fallbackPreview(draft);
-
-    final level = basics.level.trim().isEmpty ? '—' : basics.level.trim();
-    final category = basics.category.trim().isEmpty ? '—' : basics.category.trim();
-    final duration = _durationLabel(basics.targetDurationBandKey);
-
-    final readiness = computeProcessingState(draft).displayLabel;
-
-    final step = _stepLabelFromMeta(meta);
+  /// List rows from [DraftListSummaryDto] only — no full-story load (see provider).
+  ///
+  factory _DraftListItemModel.fromSummary(DraftListSummaryDto s) {
+    final title = s.title.trim().isEmpty ? 'Untitled draft' : s.title.trim();
+    final preview = (s.previewText != null && s.previewText!.trim().isNotEmpty)
+        ? s.previewText!.trim()
+        : 'Continue editing your draft';
+    final level = s.level.trim().isEmpty ? '—' : s.level.trim();
+    final category = s.category.trim().isEmpty ? '—' : s.category.trim();
+    var updatedAt = DateTime.tryParse(s.updatedAt ?? '');
+    updatedAt ??= DateTime.fromMillisecondsSinceEpoch(0, isUtc: true);
+    final readiness = CreatorProcessingCopy.draftSummaryReadinessLine(
+      completionPercent: s.completionPercent,
+      sentenceCount: s.sentenceCount,
+    );
+    final step = CreatorProcessingCopy.draftSummaryLastEditingLabel(
+      s.lastEditingStep,
+    );
 
     return _DraftListItemModel(
-      id: draft.id,
+      id: s.draftId.trim(),
       title: title,
       preview: preview,
       jlptLevel: level,
       category: category,
-      duration: duration,
+      duration: CreatorProcessingCopy.draftSummaryDurationChip(
+        s.targetDurationBandKey,
+      ),
       stepLabel: step,
-      updatedAt: basics.updatedAt,
+      updatedAt: updatedAt,
       readinessSummary: readiness,
     );
-  }
-
-  static String _stepLabelFromMeta(CreatorDraftResumeMeta? meta) {
-    final m = meta?.lastActiveModule ?? CreatorLastActiveModule.storytelling;
-    return CreatorLabels.progressLabelForLastActive(m);
-  }
-
-  static String _fallbackPreview(CreatorStoryV1 d) {
-    final firstSentence = d.sentences
-        .where((s) => s.isValidV1)
-        .map((s) => s.japaneseText.trim())
-        .firstWhere((t) => t.isNotEmpty, orElse: () => '');
-    if (firstSentence.isNotEmpty) return firstSentence;
-    return 'Continue editing your draft';
-  }
-
-  static String _durationLabel(String? key) {
-    return switch ((key ?? '').trim()) {
-      '3_5' => '3–5 mins',
-      '5_7' => '5–7 mins',
-      '7_9' => '7–9 mins',
-      _ => '—',
-    };
   }
 }
 
@@ -432,7 +447,8 @@ class _FeaturedDraftCard extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: cs.surface,
                   borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.6)),
+                  border: Border.all(
+                      color: cs.outlineVariant.withValues(alpha: 0.6)),
                 ),
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
@@ -440,7 +456,9 @@ class _FeaturedDraftCard extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       Text(
-                        item.stepLabel,
+                        item.stepLabel.trim().isNotEmpty
+                            ? item.stepLabel
+                            : 'Continue editing',
                         style: theme.textTheme.labelLarge?.copyWith(
                           fontWeight: FontWeight.w800,
                           color: StoryCreatorAddTabScreen._ink,
@@ -508,7 +526,8 @@ class _DraftRowCard extends StatelessWidget {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
 
-    final subtitle = item.stepLabel.isNotEmpty ? item.stepLabel : item.readinessSummary;
+    final subtitle =
+        item.stepLabel.isNotEmpty ? item.stepLabel : item.readinessSummary;
 
     return Card(
       elevation: 0,
@@ -602,4 +621,3 @@ class _MiniChip extends StatelessWidget {
     );
   }
 }
-

@@ -2,20 +2,25 @@ import 'dart:async';
 import 'dart:math' as math;
 import 'dart:ui' show ImageFilter, lerpDouble;
 
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/gestures.dart' show DragStartBehavior;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:just_audio/just_audio.dart';
+import 'package:nimon/features/create/creator_back_policy.dart';
 import 'package:nimon/features/create/creator_drawer_session.dart';
 import 'package:nimon/features/create/creator_navigation_debug.dart';
+import 'package:nimon/features/create/creator_quiz_ui_state.dart';
 import 'package:nimon/features/create/creator_reorder_handle.dart';
 import 'package:nimon/features/create/creator_drawer_publish.dart';
 import 'package:nimon/features/create/creator_learn_mode_sync.dart';
 import 'package:nimon/features/create/creator_progress_drawer.dart';
 import 'package:nimon/features/create/creator_route_sync.dart';
+import 'package:nimon/features/create/creator_route_sync_listener.dart';
 import 'package:nimon/features/create/creator_workspace_module_placeholder.dart';
 import 'package:nimon/features/create/creator_workspace_step.dart';
+import 'package:nimon/features/create/creator_read_only_publish_tracking.dart';
 import 'package:nimon/features/create/story_creator_models.dart';
 import 'package:nimon/features/create/story_creator_provider.dart';
 import 'package:nimon/features/create/story_creator_review_display.dart';
@@ -27,7 +32,7 @@ import 'package:nimon/ui/reading/nimon_japanese_sentence_line.dart';
 import 'package:nimon/ui/widgets/nimon_circle_nav_button.dart';
 
 /// Visible title for the pinned workspace header on `/create/story/sentences`
-/// (driven by `sentencesMainStep` from the creator drawer session).
+/// (driven by the router `?panel=` on that host; see [syncCreatorDrawerSessionForRouter]).
 String _pinnedWorkspaceTitle(CreatorWorkspaceStep step) {
   return switch (step) {
     CreatorWorkspaceStep.storySentences => 'Storytelling',
@@ -51,7 +56,6 @@ class StoryCreatorSentencesScreen extends ConsumerStatefulWidget {
 class _StoryCreatorSentencesScreenState
     extends ConsumerState<StoryCreatorSentencesScreen>
     with SingleTickerProviderStateMixin {
-  String? _loadingDraftId;
   late final AnimationController _progressDrawerController;
   final _drawerPanSession = ValueNotifier<bool>(false);
   late final TextEditingController _body;
@@ -63,6 +67,7 @@ class _StoryCreatorSentencesScreenState
   bool _suspendBodySync = false;
   bool _managingFurigana = false;
   bool _composerActionBusy = false;
+  bool _backNavigationInProgress = false;
   bool _seeded = false;
   Timer? _statsDebounce;
   Timer? _draftSyncDebounce;
@@ -72,6 +77,20 @@ class _StoryCreatorSentencesScreenState
   static const _listBottomPad = 12.0;
   static const _cardGap = 12.0;
   static const _drawerAnimDuration = Duration(milliseconds: 240);
+
+  /// Best-effort query params for the current route.
+  ///
+  /// During fast panel/module transitions, this widget can be in a deactivating
+  /// state where inherited lookups (like `GoRouterState.of(context)`) throw
+  /// "Looking up a deactivated widget's ancestor is unsafe." We prefer treating
+  /// route data as unavailable in that frame over crashing.
+  Map<String, String> _safeRouteQueryParams() {
+    try {
+      return GoRouterState.of(context).uri.queryParameters;
+    } catch (_) {
+      return const <String, String>{};
+    }
+  }
 
   void _dismissKeyboard() {
     // Be aggressive: some menus/dialogs can restore focus after closing.
@@ -90,62 +109,12 @@ class _StoryCreatorSentencesScreenState
     );
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      syncCreatorDrawerSessionFromContext(context, ref);
       if (_seeded) return;
       final d = ref.read(storyCreatorDraftDataProvider);
       _body.text = d.sentencesPlaintextDisplay;
       _seeded = true;
       if (mounted) setState(() {});
     });
-  }
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    syncCreatorDrawerSessionFromContext(context, ref);
-    try {
-      final routeDraftId =
-          GoRouterState.of(context).uri.queryParameters['draftId'];
-      final cleanedRouteId =
-          (routeDraftId == null || routeDraftId.trim().isEmpty)
-              ? null
-              : routeDraftId.trim();
-      if (cleanedRouteId != null) {
-        final current = ref.read(storyCreatorDraftDataProvider);
-        if (current.id != cleanedRouteId && _loadingDraftId != cleanedRouteId) {
-          _loadingDraftId = cleanedRouteId;
-          unawaited(
-            ref
-                .read(storyCreatorDraftProvider.notifier)
-                .loadDraftById(cleanedRouteId),
-          );
-        }
-      }
-    } catch (_) {
-      // No GoRouter in tree — ignore.
-    }
-    try {
-      final qp = GoRouterState.of(context).uri.queryParameters;
-      final step = creatorWorkspaceStepForSentencesPanel(qp['panel']);
-      if (step != null) {
-        // Defer provider mutation until after build (Riverpod safety). The
-        // first rendered frame is still kept in sync by deriving the effective
-        // workspace step from the route `?panel=` in build().
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (!mounted) return;
-          ref
-              .read(creatorDrawerSessionProvider.notifier)
-              .setSentencesMainStep(step);
-          creatorNavDebug(
-            'body_fragment',
-            '[creator_route] didChangeDependencies(postframe) uri=${GoRouterState.of(context).uri} '
-                'panel=${qp['panel']} -> setSentencesMainStep=$step',
-          );
-        });
-      }
-    } catch (_) {
-      // No GoRouter in tree — ignore.
-    }
   }
 
   void _onBodyChanged() {
@@ -444,210 +413,31 @@ class _StoryCreatorSentencesScreenState
     final s = draft.sentences[index];
     if (s.japaneseText != lines[index]) return;
 
-    final sourceCtrl = TextEditingController(text: s.meanings?.my ?? '');
-    final enCtrl = TextEditingController(text: s.meanings?.en ?? '');
+    final result = await showModalBottomSheet<_SupportMeaningsResult?>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      showDragHandle: true,
+      backgroundColor: Theme.of(context).colorScheme.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) {
+        return _SupportMeaningsSheet(
+          sentenceNumber: index + 1,
+          japaneseText: s.japaneseText,
+          furiganaSpans: s.furiganaSpans,
+          initialSourceMeaning: s.meanings?.my ?? '',
+          initialEnglishMeaning: s.meanings?.en ?? '',
+        );
+      },
+    );
 
-    bool? saved;
-    var savedMy = '';
-    var savedEn = '';
-    try {
-      saved = await showModalBottomSheet<bool>(
-        context: context,
-        isScrollControlled: true,
-        useSafeArea: true,
-        showDragHandle: true,
-        backgroundColor: Theme.of(context).colorScheme.surface,
-        shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-        ),
-        builder: (ctx) {
-          final t = Theme.of(ctx);
-          final cs = t.colorScheme;
-          final mq = MediaQuery.of(ctx);
-
-          InputDecoration meaningFieldDeco({String? hint}) => InputDecoration(
-                hintText: hint,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: cs.outlineVariant),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: cs.primary, width: 2),
-                ),
-                filled: true,
-                fillColor: cs.surface,
-                isDense: true,
-                contentPadding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
-              );
-
-          TextStyle labelStyle() =>
-              t.textTheme.labelLarge?.copyWith(
-                color: cs.onSurfaceVariant,
-                fontWeight: FontWeight.w600,
-                letterSpacing: 0.2,
-              ) ??
-              TextStyle(
-                color: cs.onSurfaceVariant,
-                fontWeight: FontWeight.w600,
-                fontSize: 13,
-              );
-
-          return Padding(
-            padding: EdgeInsets.only(bottom: mq.viewInsets.bottom),
-            child: ConstrainedBox(
-              constraints: BoxConstraints(maxHeight: mq.size.height * 0.92),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Support meanings',
-                          style: t.textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          'Sentence ${index + 1}',
-                          style: t.textTheme.bodySmall?.copyWith(
-                            color: cs.onSurfaceVariant,
-                            height: 1.25,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Expanded(
-                    child: SingleChildScrollView(
-                      padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          Text(
-                            'Japanese sentence',
-                            style: labelStyle(),
-                          ),
-                          const SizedBox(height: 6),
-                          DecoratedBox(
-                            decoration: BoxDecoration(
-                              color: cs.surfaceContainerHighest
-                                  .withValues(alpha: 0.35),
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(
-                                color: cs.outlineVariant.withValues(alpha: 0.5),
-                              ),
-                            ),
-                            child: Padding(
-                              padding: const EdgeInsets.fromLTRB(
-                                12,
-                                10,
-                                12,
-                                10,
-                              ),
-                              child: NimonJapaneseSentenceLine(
-                                text: s.japaneseText,
-                                spans: s.furiganaSpans,
-                                theme: t,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 18),
-                          Text(
-                            'Source meaning',
-                            style: labelStyle(),
-                          ),
-                          const SizedBox(height: 6),
-                          TextField(
-                            controller: sourceCtrl,
-                            decoration: meaningFieldDeco(
-                              hint: 'Add a gloss in your source language',
-                            ),
-                            minLines: 2,
-                            maxLines: 5,
-                            textInputAction: TextInputAction.newline,
-                          ),
-                          const SizedBox(height: 16),
-                          Theme(
-                            data: t.copyWith(
-                              dividerColor: Colors.transparent,
-                            ),
-                            child: ExpansionTile(
-                              tilePadding: EdgeInsets.zero,
-                              childrenPadding: EdgeInsets.zero,
-                              title: Text(
-                                'English meaning (optional)',
-                                style: t.textTheme.titleSmall?.copyWith(
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                              initiallyExpanded: false,
-                              children: [
-                                const SizedBox(height: 8),
-                                TextField(
-                                  controller: enCtrl,
-                                  decoration: meaningFieldDeco(
-                                    hint: 'Optional English gloss',
-                                  ),
-                                  minLines: 2,
-                                  maxLines: 5,
-                                  textInputAction: TextInputAction.newline,
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  Padding(
-                    padding: EdgeInsets.fromLTRB(
-                      16,
-                      4,
-                      16,
-                      math.max(12, mq.padding.bottom),
-                    ),
-                    child: Row(
-                      children: [
-                        TextButton(
-                          onPressed: () => Navigator.pop(ctx, false),
-                          child: const Text('Cancel'),
-                        ),
-                        const Spacer(),
-                        FilledButton(
-                          onPressed: () => Navigator.pop(ctx, true),
-                          child: const Text('Save'),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          );
-        },
-      );
-      if (saved == true) {
-        savedMy = sourceCtrl.text;
-        savedEn = enCtrl.text;
-      }
-    } finally {
-      sourceCtrl.dispose();
-      enCtrl.dispose();
-    }
-
-    if (!mounted || saved != true) return;
+    if (!mounted || result == null) return;
 
     final nextMeanings = LocalizedMeanings.layerFromEnMy(
-      enRaw: savedEn,
-      myRaw: savedMy,
+      enRaw: result.englishMeaning,
+      myRaw: result.sourceMeaning,
       preserveExtrasFrom: s.meanings,
     );
     ref.read(storyCreatorDraftProvider.notifier).updateSentenceSupport(
@@ -706,17 +496,6 @@ class _StoryCreatorSentencesScreenState
     }
   }
 
-  Key _sentenceReorderKey(
-    int index,
-    String line,
-    List<StorySentenceItem> sentences,
-  ) {
-    if (index < sentences.length && sentences[index].japaneseText == line) {
-      return ValueKey<String>(sentences[index].id);
-    }
-    return ValueKey<String>('plain:$index:${line.hashCode}:$line');
-  }
-
   @override
   void dispose() {
     _statsDebounce?.cancel();
@@ -738,16 +517,21 @@ class _StoryCreatorSentencesScreenState
   }
 
   Future<void> _saveToDiskAndToast() async {
+    // Capture inherited dependencies synchronously; do not read inherited widgets
+    // (e.g. GoRouterState/ScaffoldMessenger) after an async gap where this element
+    // can become inactive during route transitions.
+    final router = GoRouter.maybeOf(context);
+    final messenger = ScaffoldMessenger.maybeOf(context);
     await ref.read(storyCreatorDraftProvider.notifier).globalSaveDraftNow();
     if (!mounted) return;
     final embed = ref.read(creatorDrawerSessionProvider).sentencesMainStep;
     if (learnModuleIdForWorkspaceLearnStep(embed) != null) {
       try {
-        final st = GoRouterState.of(context);
+        final st = router?.state;
         creatorNavDebug(
           'retain_embed',
-          'drawer_save_draft host uri=${st.uri} matchedLocation=${st.matchedLocation} '
-              'panel=${st.uri.queryParameters['panel']} embed=$embed',
+          'drawer_save_draft host uri=${st?.uri} matchedLocation=${st?.matchedLocation} '
+              'panel=${st?.uri.queryParameters['panel']} embed=$embed',
         );
       } catch (_) {}
       ref
@@ -758,7 +542,7 @@ class _StoryCreatorSentencesScreenState
           );
     }
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
+    messenger?.showSnackBar(
       const SnackBar(
         content: Text('All changes saved locally.'),
         behavior: SnackBarBehavior.floating,
@@ -1324,6 +1108,32 @@ class _StoryCreatorSentencesScreenState
     }
   }
 
+  /// Same query shape as [GoRouter.go] for the sentences host (avoid ad-hoc string concat
+  /// / `https://…` parsing — empty [draftId] and `panel` must round-trip for [reportRoute]).
+  Uri _sentencesHostDrawerUri({required String draftId, String? panel}) {
+    final d = draftId.trim();
+    final q = <String, String>{
+      if (d.isNotEmpty) 'draftId': d,
+      if (panel != null && panel.isNotEmpty) 'panel': panel,
+    };
+    return Uri(path: '/create/story/sentences', queryParameters: q);
+  }
+
+  /// [target] is the same [Uri] passed to [GoRouter.go]; session + sync dedupe follow via
+  /// [syncCreatorDrawerSessionForResolvedLocation] so stale post-frame router sync cannot
+  /// drop `?panel=` mid-navigation.
+  ///
+  /// Applies [syncCreatorDrawerSessionForResolvedLocation] synchronously after [go] so
+  /// session matches the committed `go` target; dedupe keys in [creator_route_sync] are
+  /// canonical so router post-frame sync cannot drop `?panel=` due to URI string mismatch.
+  void _goStorySentencesFromDrawerUri(Uri target) {
+    final router = GoRouter.maybeOf(context);
+    context.go(target.toString());
+    if (router == null) return;
+    if (!mounted) return;
+    syncCreatorDrawerSessionForResolvedLocation(router, ref, target);
+  }
+
   void _openProgressDrawer() {
     _dismissKeyboard();
     _progressDrawerController.animateTo(
@@ -1348,6 +1158,42 @@ class _StoryCreatorSentencesScreenState
       0,
       duration: _drawerAnimDuration,
       curve: Curves.easeInCubic,
+    );
+  }
+
+  /// Centralized back policy (drawer, header, Android) — see [performCreatorBackFromSentencesHost].
+  Future<void> _handleSentencesBackNavigation() async {
+    if (_backNavigationInProgress) return;
+    _backNavigationInProgress = true;
+    try {
+      if (kDebugMode) {
+        var u = '(no_uri)';
+        try {
+          u = GoRouter.maybeOf(context)?.state.uri.toString() ?? u;
+        } catch (_) {}
+        debugPrint(
+          '[NIMON_BACK_TRACE] StoryCreatorSentencesScreen policy back uri=$u '
+          'drawerDismissed=${_progressDrawerController.isDismissed}',
+        );
+      }
+      await handleCreatorBackPressed(
+        context,
+        ref,
+        progressDrawerDismissed: _progressDrawerController.isDismissed,
+        closeProgressDrawer: _closeProgressDrawer,
+      );
+    } finally {
+      if (mounted) {
+        _backNavigationInProgress = false;
+      }
+    }
+  }
+
+  Future<void> _handleSentencesBackWhileLoadingDraft() async {
+    await performCreatorBackFromSentencesDraftLoading(
+      context,
+      progressDrawerDismissed: _progressDrawerController.isDismissed,
+      closeProgressDrawer: _closeProgressDrawer,
     );
   }
 
@@ -1403,19 +1249,43 @@ class _StoryCreatorSentencesScreenState
 
   @override
   Widget build(BuildContext context) {
-    final routeDraftId =
-        GoRouterState.of(context).uri.queryParameters['draftId'];
+    // 1) Never touch [ref] / inherited lookup until we know the global location
+    //    is still under /create/story. Otherwise after go(/mono) the last build
+    //    can run on a deactivating context and triggers inactive-element asserts.
+    // 2) Do not log with [ref] here — that still schedules work before the guard.
+    if (!mounted) return const SizedBox.shrink();
+    try {
+      final r = GoRouter.maybeOf(context);
+      if (r == null || !r.state.uri.path.startsWith('/create/story')) {
+        return const SizedBox.shrink();
+      }
+    } catch (_) {
+      return const SizedBox.shrink();
+    }
+    final qp = _safeRouteQueryParams();
+    final routeDraftId = qp['draftId'];
     final cleanedRouteId = (routeDraftId == null || routeDraftId.trim().isEmpty)
         ? null
         : routeDraftId.trim();
     final loadedDraft = ref.watch(storyCreatorDraftDataProvider);
     if (cleanedRouteId != null && loadedDraft.id != cleanedRouteId) {
-      return Scaffold(
-        appBar: AppBar(
-          title: const Text('Story sentences'),
-          leading: NimonBackButton(onPressed: () => context.pop()),
+      return PopScope(
+        canPop: false,
+        onPopInvokedWithResult: (didPop, result) {
+          if (didPop) return;
+          unawaited(_handleSentencesBackWhileLoadingDraft());
+        },
+        child: Scaffold(
+          appBar: AppBar(
+            title: const Text('Story sentences'),
+            leading: NimonBackButton(
+              onPressed: () {
+                unawaited(_handleSentencesBackWhileLoadingDraft());
+              },
+            ),
+          ),
+          body: const Center(child: CircularProgressIndicator()),
         ),
-        body: const Center(child: CircularProgressIndicator()),
       );
     }
     final theme = Theme.of(context);
@@ -1423,22 +1293,34 @@ class _StoryCreatorSentencesScreenState
     final lines = storyPlaintextNonEmptyLines(_body.text);
     final count = lines.length;
     final draft = loadedDraft;
-    final supportLabels = _supportLabels(lines, draft.sentences);
+    // Same merge [applySentences] uses: stable ids per plaintext line even when
+    // Riverpod has not applied the last body edit yet (reorder/web frame timing).
+    final sentenceRowMergePreview = storySentencesFromPlaintextMerge(
+      storyId: draft.id,
+      plain: _body.text,
+      previous: draft.sentences,
+    );
+    final supportLabels = _supportLabels(lines, sentenceRowMergePreview);
     final isEditing = _editingSentenceIndex != null;
 
     final session = ref.watch(creatorDrawerSessionProvider);
-    CreatorWorkspaceStep? routeStep;
-    try {
-      final qp = GoRouterState.of(context).uri.queryParameters;
-      routeStep = creatorWorkspaceStepForSentencesPanel(qp['panel']);
-    } catch (_) {
-      // No GoRouter in tree — ignore.
-    }
-    // Route `?panel=` is the source-of-truth for the embedded workspace when present.
-    // This prevents a first-frame mismatch (route says vocabulary, provider still storySentences).
-    final effectiveStep = routeStep ?? session.sentencesMainStep;
+    final routePanelStep =
+        creatorWorkspaceStepForSentencesPanel(qp['panel']);
+    // V1: on this host, router `?panel=` (or absence = main storytelling) is canonical
+    // for the embedded module; session is reconciled from the same URI in [syncCreatorDrawerSessionForRouter].
+    final effectiveStep =
+        routePanelStep ?? CreatorWorkspaceStep.storySentences;
     final progress = buildCreatorDrawerProgressModel(draft: draft);
     final publishModel = buildStoryReviewDisplayModel(draft);
+    final draftState = ref.watch(storyCreatorDraftProvider);
+    final roSig = draftState.readOnlyPublishedCoreSig;
+    final roExists =
+        roSig != null || draft.publishState != StoryPublishState.draft;
+    final roDirty = roSig != null &&
+        computeReadOnlyPublishedCoreSignature(draft) != roSig;
+    final flExists =
+        draft.publishState == StoryPublishState.fullLearnPublished;
+    final flDirty = draftState.dirty;
     final showSentencesWorkspace =
         effectiveStep == CreatorWorkspaceStep.storySentences;
     final inVocabularyModule = effectiveStep == CreatorWorkspaceStep.vocabulary;
@@ -1447,16 +1329,11 @@ class _StoryCreatorSentencesScreenState
     final inListeningModule =
         effectiveStep == CreatorWorkspaceStep.listeningPronunciation;
     final pinnedTitle = _pinnedWorkspaceTitle(effectiveStep);
-    try {
-      final qp = GoRouterState.of(context).uri.queryParameters;
-      creatorNavDebug(
-        'body_fragment',
-        '[body_fragment] rendered=$effectiveStep routeStep=$routeStep '
-            'activeModule=${session.activeModule} panel=${qp['panel']}',
-      );
-    } catch (_) {
-      // No GoRouter in tree — ignore.
-    }
+    creatorNavDebug(
+      'body_fragment',
+      '[body_fragment] rendered=$effectiveStep routePanelStep=$routePanelStep '
+          'activeModule=${session.activeModule} panel=${qp['panel']}',
+    );
     // Spacing tune (V1): keep the first content comfortably below the floating
     // glass header cluster (cards should feel like they slide underneath it).
     final listTopPad = (mq.padding.top + 56 + 22).clamp(82, 128).toDouble();
@@ -1543,18 +1420,18 @@ class _StoryCreatorSentencesScreenState
                                       final label = i < supportLabels.length
                                           ? supportLabels[i]
                                           : null;
-                                      final s = i < draft.sentences.length
-                                          ? draft.sentences[i]
+                                      final s = i < sentenceRowMergePreview.length
+                                          ? sentenceRowMergePreview[i]
                                           : null;
                                       final spans = (s != null &&
                                               s.japaneseText == lines[i])
                                           ? s.furiganaSpans
                                           : const <FuriganaSpan>[];
                                       return Padding(
-                                        key: _sentenceReorderKey(
-                                          i,
-                                          lines[i],
-                                          draft.sentences,
+                                        key: ValueKey<String>(
+                                          i < sentenceRowMergePreview.length
+                                              ? sentenceRowMergePreview[i].id
+                                              : 'sentence_row_$i',
                                         ),
                                         padding: EdgeInsets.only(
                                           bottom: i < lines.length - 1
@@ -1681,7 +1558,9 @@ class _StoryCreatorSentencesScreenState
               padding: const EdgeInsets.fromLTRB(12, 10, 12, 0),
               child: _FloatingPillHeader(
                 title: pinnedTitle,
-                onTapBack: () => context.go('/mono'),
+                onTapBack: () {
+                  unawaited(_handleSentencesBackNavigation());
+                },
                 onTapPrimaryAction: inVocabularyModule
                     ? _showVocabReview
                     : (inGrammarModule
@@ -1740,33 +1619,30 @@ class _StoryCreatorSentencesScreenState
       ],
     );
 
-    return PopScope(
-      canPop: _progressDrawerController.isDismissed,
-      onPopInvokedWithResult: (didPop, result) {
-        if (!didPop && !_progressDrawerController.isDismissed) {
-          unawaited(_closeProgressDrawer());
-        }
-      },
-      child: Scaffold(
-        backgroundColor: theme.colorScheme.surface,
-        resizeToAvoidBottomInset: false,
-        body: LayoutBuilder(
-          builder: (context, constraints) {
-            final maxW = constraints.maxWidth;
-            final drawerW = (maxW * 0.78).clamp(280.0, 360.0);
+    return CreatorRouteSyncListener(
+      child: PopScope(
+        canPop: false,
+        onPopInvokedWithResult: (didPop, result) {
+          if (didPop) return;
+          unawaited(_handleSentencesBackNavigation());
+        },
+        child: Scaffold(
+          backgroundColor: theme.colorScheme.surface,
+          resizeToAvoidBottomInset: false,
+          body: LayoutBuilder(
+            builder: (context, constraints) {
+              final maxW = constraints.maxWidth;
+              final drawerW = (maxW * 0.78).clamp(280.0, 360.0);
 
-            return AnimatedBuilder(
-              animation: _progressDrawerController,
-              child: basePage,
-              builder: (context, child) {
+              return AnimatedBuilder(
+                animation: _progressDrawerController,
+                child: basePage,
+                builder: (context, child) {
                 final t = _progressDrawerController.value;
-                final dx = -drawerW * t;
-                final radius = 16.0 * t;
-                final sheetRadius = BorderRadius.horizontal(
-                  right: Radius.circular(radius),
-                );
-
-                final enableDrawerDrag = t > 0.001 || _drawerPanSession.value;
+                final showDrawer = t > 0.001 || _drawerPanSession.value;
+                final enableDrawerDrag = showDrawer;
+                final drawerDx = drawerW * (1.0 - t);
+                final pageDx = -drawerW * t;
 
                 return Stack(
                   fit: StackFit.expand,
@@ -1777,198 +1653,195 @@ class _StoryCreatorSentencesScreenState
                         color: theme.colorScheme.surfaceContainerLow,
                       ),
                     ),
-                    Positioned(
-                      right: 0,
-                      top: 0,
-                      bottom: 0,
-                      width: drawerW,
-                      child: GestureDetector(
-                        behavior: HitTestBehavior.translucent,
-                        // Drawer sits under the translated page; drags on the panel hit here.
-                        // Horizontal drag closes to the right; vertical scroll uses the inner ListView.
-                        onHorizontalDragStart:
-                            t > 0.001 ? (_) => _onDrawerDragStart() : null,
-                        onHorizontalDragUpdate: t > 0.001
-                            ? (d) => _onDrawerDragUpdate(drawerW, d)
-                            : null,
-                        onHorizontalDragEnd: t > 0.001
-                            ? (d) => _snapDrawerAfterDrag(drawerW, d)
-                            : null,
-                        onHorizontalDragCancel: t > 0.001
-                            ? () => _drawerPanSession.value = false
-                            : null,
-                        child: Material(
-                          color: theme.colorScheme.surfaceContainerLow,
-                          child: SafeArea(
-                            bottom: true,
-                            top: true,
-                            left: false,
-                            right: true,
-                            child: CreatorProgressDrawer(
-                              coreItems: progress.coreItems,
-                              learnItems: progress.learnItems,
-                              publishModel: publishModel,
-                              learnModeEnabled: session.learnModeEnabled,
-                              onLearnModeChanged: (v) {
-                                applyCreatorLearnMode(
-                                  context: context,
-                                  ref: ref,
-                                  learnModeEnabled: v,
-                                  closeDrawerOnTurnOff: () =>
-                                      unawaited(_closeProgressDrawer()),
-                                );
-                              },
-                              onOpenStep: (route) {
-                                unawaited(_closeProgressDrawer());
-                                syncCreatorDrawerSessionFromContext(
-                                    context, ref);
-                                final draftId =
-                                    ref.read(storyCreatorDraftDataProvider).id;
-                                final beforeUri = () {
-                                  try {
-                                    return GoRouterState.of(context)
-                                        .uri
-                                        .toString();
-                                  } catch (_) {
-                                    return '(no_go_router)';
-                                  }
-                                }();
-                                final beforeSession =
-                                    ref.read(creatorDrawerSessionProvider);
-                                creatorNavDebug(
-                                  'drawer_module_tap',
-                                  'tap route=$route | beforeUri=$beforeUri | '
-                                      'before activeModule=${beforeSession.activeModule} '
-                                      'before step=${beforeSession.sentencesMainStep}',
-                                );
-                                final step =
-                                    creatorWorkspaceStepForDrawerRoute(route);
-                                if (step == CreatorWorkspaceStep.storyBasics) {
-                                  context.push('$route?draftId=$draftId');
-                                  creatorNavDebug(
-                                    'drawer_module_tap',
-                                    'nav PUSH basics route=$route',
-                                  );
-                                  return;
-                                }
-                                if (step != null) {
-                                  _prepareWorkspaceNavigation();
-                                  ref
-                                      .read(
-                                          creatorDrawerSessionProvider.notifier)
-                                      .setSentencesMainStep(step);
-                                  // Keep URL in sync with the active embedded module so
-                                  // route sync cannot "snap back" to a stale `?panel=`.
-                                  final panel = _panelParamForStep(step);
-                                  if (panel != null) {
-                                    context.go(
-                                      '/create/story/sentences?draftId=$draftId&panel=$panel',
-                                    );
-                                    creatorNavDebug(
-                                      'drawer_module_tap',
-                                      'nav URL_SYNC panel=$panel',
-                                    );
-                                  } else if (step ==
-                                      CreatorWorkspaceStep.storySentences) {
-                                    context.go(
-                                      '/create/story/sentences?draftId=$draftId',
-                                    );
-                                    creatorNavDebug(
-                                      'drawer_module_tap',
-                                      'nav URL_SYNC panel=(none)',
-                                    );
-                                  }
-                                  final afterSession =
-                                      ref.read(creatorDrawerSessionProvider);
-                                  creatorNavDebug(
-                                    'drawer_module_tap',
-                                    'nav EMBED step=$step | after activeModule=${afterSession.activeModule} '
-                                        'after step=${afterSession.sentencesMainStep}',
-                                  );
-                                  return;
-                                }
-                                context.push(route);
-                                creatorNavDebug(
-                                  'drawer_module_tap',
-                                  'nav PUSH fallback route=$route',
-                                );
-                              },
-                              onSaveDraft: () {
-                                unawaited(_closeProgressDrawer());
-                                _saveDraft();
-                              },
-                              onPublish: (mode) async {
-                                unawaited(_closeProgressDrawer());
-                                await performCreatorDrawerPublish(
-                                  ref: ref,
-                                  context: context,
-                                  mode: mode,
-                                );
-                              },
-                            ),
-                          ),
-                        ),
+
+                    // Story page (pushes left while the drawer opens).
+                    Transform.translate(
+                      offset: Offset(pageDx, 0),
+                      child: IgnorePointer(
+                        ignoring: showDrawer,
+                        child: child!,
                       ),
                     ),
-                    Transform.translate(
-                      offset: Offset(dx, 0),
-                      child: GestureDetector(
-                        behavior: HitTestBehavior.translucent,
-                        onHorizontalDragStart: enableDrawerDrag
-                            ? (_) => _onDrawerDragStart()
-                            : null,
-                        onHorizontalDragUpdate: enableDrawerDrag
-                            ? (d) => _onDrawerDragUpdate(drawerW, d)
-                            : null,
-                        onHorizontalDragEnd: enableDrawerDrag
-                            ? (d) => _snapDrawerAfterDrag(drawerW, d)
-                            : null,
-                        onHorizontalDragCancel: enableDrawerDrag
-                            ? () => _drawerPanSession.value = false
-                            : null,
-                        child: DecoratedBox(
-                          decoration: BoxDecoration(
-                            borderRadius: sheetRadius,
-                            boxShadow: t > 0.01
-                                ? [
-                                    BoxShadow(
-                                      color: Colors.black
-                                          .withValues(alpha: 0.14 * t),
-                                      blurRadius: 18 * t,
-                                      offset: Offset(5 * t, 0),
-                                    ),
-                                  ]
+
+                    // Backdrop blocks underlying page while open and supports tap-to-close.
+                    if (showDrawer)
+                      Positioned.fill(
+                        child: GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onTap: () => unawaited(_closeProgressDrawer()),
+                          onHorizontalDragStart:
+                              enableDrawerDrag ? (_) => _onDrawerDragStart() : null,
+                          onHorizontalDragUpdate: enableDrawerDrag
+                              ? (d) => _onDrawerDragUpdate(drawerW, d)
+                              : null,
+                          onHorizontalDragEnd: enableDrawerDrag
+                              ? (d) => _snapDrawerAfterDrag(drawerW, d)
+                              : null,
+                          onHorizontalDragCancel: enableDrawerDrag
+                              ? () => _drawerPanSession.value = false
+                              : null,
+                        ),
+                      ),
+
+                    // Side drawer panel slides over the page.
+                    if (showDrawer)
+                      Positioned(
+                        right: 0,
+                        top: 0,
+                        bottom: 0,
+                        width: drawerW,
+                        child: Transform.translate(
+                          offset: Offset(drawerDx, 0),
+                          child: GestureDetector(
+                            behavior: HitTestBehavior.translucent,
+                            onHorizontalDragStart: enableDrawerDrag
+                                ? (_) => _onDrawerDragStart()
                                 : null,
-                          ),
-                          child: ClipRRect(
-                            borderRadius: sheetRadius,
-                            child: Stack(
-                              fit: StackFit.expand,
-                              children: [
-                                // Ensure the pushed page paints an opaque background.
-                                ColoredBox(
-                                  color: theme.colorScheme.surface,
-                                  child: child!,
-                                ),
-                                if (t > 0.02)
-                                  Positioned.fill(
-                                    child: GestureDetector(
-                                      behavior: HitTestBehavior.translucent,
-                                      onTap: () =>
-                                          unawaited(_closeProgressDrawer()),
+                            onHorizontalDragUpdate: enableDrawerDrag
+                                ? (d) => _onDrawerDragUpdate(drawerW, d)
+                                : null,
+                            onHorizontalDragEnd: enableDrawerDrag
+                                ? (d) => _snapDrawerAfterDrag(drawerW, d)
+                                : null,
+                            onHorizontalDragCancel: enableDrawerDrag
+                                ? () => _drawerPanSession.value = false
+                                : null,
+                            child: Material(
+                              color: theme.colorScheme.surfaceContainerLow,
+                              child: SafeArea(
+                                bottom: true,
+                                top: true,
+                                left: false,
+                                right: true,
+                                child: SizedBox.expand(
+                                  child: CreatorProgressDrawer(
+                                    drawerKeySlot:
+                                        kCreatorProgressDrawerKeySentences,
+                                    coreItems: progress.coreItems,
+                                    learnItems: progress.learnItems,
+                                    publishModel: publishModel,
+                                    readOnlyPublishedExists: roExists,
+                                    readOnlyHasUnpublishedChanges: roDirty,
+                                    fullLearnPublishedExists: flExists,
+                                    fullLearnHasUnpublishedChanges: flDirty,
+                                    learnModeEnabled: session.learnModeEnabled,
+                                    currentStepId:
+                                        creatorEffectiveActiveStep(session),
+                                    onLearnModeChanged: (v) {
+                                      applyCreatorLearnMode(
+                                        context: context,
+                                        ref: ref,
+                                        learnModeEnabled: v,
+                                        closeDrawerOnTurnOff: () =>
+                                            unawaited(_closeProgressDrawer()),
+                                      );
+                                    },
+                                    onOpenStep: (route) {
+                                              final draftId = ref
+                                                  .read(
+                                                      storyCreatorDraftDataProvider)
+                                                  .id;
+                                              final beforeUri = () {
+                                                try {
+                                                  return GoRouterState.of(context)
+                                                      .uri
+                                                      .toString();
+                                                } catch (_) {
+                                                  return '(no_go_router)';
+                                                }
+                                              }();
+                                              final beforeSession = ref.read(
+                                                  creatorDrawerSessionProvider);
+                                              creatorNavDebug(
+                                                'drawer_module_tap',
+                                                'tap route=$route | beforeUri=$beforeUri | '
+                                                'before activeModule=${beforeSession.activeModule} '
+                                                'before step=${beforeSession.sentencesMainStep}',
+                                              );
+                                              final step =
+                                                  creatorWorkspaceStepForDrawerRoute(
+                                                      route);
+                                              if (step ==
+                                                  CreatorWorkspaceStep.storyBasics) {
+                                                context.push('$route?draftId=$draftId');
+                                                creatorNavDebug(
+                                                  'drawer_module_tap',
+                                                  'nav PUSH basics route=$route',
+                                                );
+                                                unawaited(_closeProgressDrawer());
+                                                return;
+                                              }
+                                              if (step != null) {
+                                                _prepareWorkspaceNavigation();
+                                                // Router is canonical; mirror the exact `go` target into session
+                                                // immediately and again post-frame (see [_goStorySentencesFromDrawerUri]).
+                                                final panel =
+                                                    _panelParamForStep(step);
+                                                if (panel != null) {
+                                                  _goStorySentencesFromDrawerUri(
+                                                    _sentencesHostDrawerUri(
+                                                      draftId: draftId,
+                                                      panel: panel,
+                                                    ),
+                                                  );
+                                                  creatorNavDebug(
+                                                    'drawer_module_tap',
+                                                    'nav URL_SYNC panel=$panel',
+                                                  );
+                                                } else if (step ==
+                                                    CreatorWorkspaceStep.storySentences) {
+                                                  _goStorySentencesFromDrawerUri(
+                                                    _sentencesHostDrawerUri(
+                                                      draftId: draftId,
+                                                    ),
+                                                  );
+                                                  creatorNavDebug(
+                                                    'drawer_module_tap',
+                                                    'nav URL_SYNC panel=(none)',
+                                                  );
+                                                }
+                                                final afterSession = ref.read(
+                                                    creatorDrawerSessionProvider);
+                                                creatorNavDebug(
+                                                  'drawer_module_tap',
+                                                  'nav EMBED step=$step | after activeModule=${afterSession.activeModule} '
+                                                  'after step=${afterSession.sentencesMainStep}',
+                                                );
+                                                unawaited(_closeProgressDrawer());
+                                                return;
+                                              }
+                                              context.push(route);
+                                              creatorNavDebug(
+                                                'drawer_module_tap',
+                                                'nav PUSH fallback route=$route',
+                                              );
+                                              unawaited(_closeProgressDrawer());
+                                            },
+                                            onSaveDraft: () {
+                                              unawaited(_closeProgressDrawer());
+                                              _saveDraft();
+                                            },
+                                            onPublish: (mode) async {
+                                              unawaited(_closeProgressDrawer());
+                                              await performCreatorDrawerPublish(
+                                                ref: ref,
+                                                context: context,
+                                                mode: mode,
+                                              );
+                                            },
+                                          ),
+                                        ),
+                                      ),
                                     ),
                                   ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
+                                ),
+                              ),
                   ],
                 );
-              },
-            );
-          },
+                },
+              );
+            },
+          ),
         ),
       ),
     );
@@ -2031,6 +1904,229 @@ class _StoryCreatorSentencesScreenState
         spans: _furiganaSpansForComposer(sid),
         onApplyFurigana: (next) =>
             _commitSentenceTextAndFurigana(sentenceId: sid, spans: next),
+      ),
+    );
+  }
+}
+
+class _SupportMeaningsResult {
+  const _SupportMeaningsResult({
+    required this.sourceMeaning,
+    required this.englishMeaning,
+  });
+
+  final String sourceMeaning;
+  final String englishMeaning;
+}
+
+class _SupportMeaningsSheet extends StatefulWidget {
+  const _SupportMeaningsSheet({
+    required this.sentenceNumber,
+    required this.japaneseText,
+    required this.furiganaSpans,
+    required this.initialSourceMeaning,
+    required this.initialEnglishMeaning,
+  });
+
+  final int sentenceNumber;
+  final String japaneseText;
+  final List<FuriganaSpan> furiganaSpans;
+  final String initialSourceMeaning;
+  final String initialEnglishMeaning;
+
+  @override
+  State<_SupportMeaningsSheet> createState() => _SupportMeaningsSheetState();
+}
+
+class _SupportMeaningsSheetState extends State<_SupportMeaningsSheet> {
+  late final TextEditingController _sourceCtrl;
+  late final TextEditingController _enCtrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _sourceCtrl = TextEditingController(text: widget.initialSourceMeaning);
+    _enCtrl = TextEditingController(text: widget.initialEnglishMeaning);
+  }
+
+  @override
+  void dispose() {
+    _sourceCtrl.dispose();
+    _enCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final t = Theme.of(context);
+    final cs = t.colorScheme;
+    final mq = MediaQuery.of(context);
+
+    InputDecoration meaningFieldDeco({String? hint}) => InputDecoration(
+          hintText: hint,
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide(color: cs.outlineVariant),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide(color: cs.primary, width: 2),
+          ),
+          filled: true,
+          fillColor: cs.surface,
+          isDense: true,
+          contentPadding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+        );
+
+    TextStyle labelStyle() =>
+        t.textTheme.labelLarge?.copyWith(
+          color: cs.onSurfaceVariant,
+          fontWeight: FontWeight.w600,
+          letterSpacing: 0.2,
+        ) ??
+        TextStyle(
+          color: cs.onSurfaceVariant,
+          fontWeight: FontWeight.w600,
+          fontSize: 13,
+        );
+
+    return Padding(
+      padding: EdgeInsets.only(bottom: mq.viewInsets.bottom),
+      child: ConstrainedBox(
+        constraints: BoxConstraints(maxHeight: mq.size.height * 0.92),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Support meanings',
+                    style: t.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    'Sentence ${widget.sentenceNumber}',
+                    style: t.textTheme.bodySmall?.copyWith(
+                      color: cs.onSurfaceVariant,
+                      height: 1.25,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(
+                      'Japanese sentence',
+                      style: labelStyle(),
+                    ),
+                    const SizedBox(height: 6),
+                    DecoratedBox(
+                      decoration: BoxDecoration(
+                        color:
+                            cs.surfaceContainerHighest.withValues(alpha: 0.35),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: cs.outlineVariant.withValues(alpha: 0.5),
+                        ),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+                        child: NimonJapaneseSentenceLine(
+                          text: widget.japaneseText,
+                          spans: widget.furiganaSpans,
+                          theme: t,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 18),
+                    Text(
+                      'Source meaning',
+                      style: labelStyle(),
+                    ),
+                    const SizedBox(height: 6),
+                    TextField(
+                      controller: _sourceCtrl,
+                      decoration: meaningFieldDeco(
+                        hint: 'Add a gloss in your source language',
+                      ),
+                      minLines: 2,
+                      maxLines: 5,
+                      textInputAction: TextInputAction.newline,
+                    ),
+                    const SizedBox(height: 16),
+                    Theme(
+                      data: t.copyWith(dividerColor: Colors.transparent),
+                      child: ExpansionTile(
+                        tilePadding: EdgeInsets.zero,
+                        childrenPadding: EdgeInsets.zero,
+                        title: Text(
+                          'English meaning (optional)',
+                          style: t.textTheme.titleSmall?.copyWith(
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        initiallyExpanded: false,
+                        children: [
+                          const SizedBox(height: 8),
+                          TextField(
+                            controller: _enCtrl,
+                            decoration: meaningFieldDeco(
+                              hint: 'Optional English gloss',
+                            ),
+                            minLines: 2,
+                            maxLines: 5,
+                            textInputAction: TextInputAction.newline,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            Padding(
+              padding: EdgeInsets.fromLTRB(
+                16,
+                4,
+                16,
+                math.max(12, mq.padding.bottom),
+              ),
+              child: Row(
+                children: [
+                  TextButton(
+                    onPressed: () =>
+                        Navigator.pop<_SupportMeaningsResult?>(context, null),
+                    child: const Text('Cancel'),
+                  ),
+                  const Spacer(),
+                  FilledButton(
+                    onPressed: () => Navigator.pop<_SupportMeaningsResult?>(
+                      context,
+                      _SupportMeaningsResult(
+                        sourceMeaning: _sourceCtrl.text,
+                        englishMeaning: _enCtrl.text,
+                      ),
+                    ),
+                    child: const Text('Save'),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -2386,11 +2482,13 @@ class _FloatingPillHeader extends StatelessWidget {
     final cs = theme.colorScheme;
 
     Widget icon({
+      Key? key,
       required IconData icon,
       required String tooltip,
       required VoidCallback onTap,
     }) {
       return IconButton(
+        key: key,
         onPressed: onTap,
         tooltip: tooltip,
         icon: Icon(icon, size: 22, color: cs.onSurface),
@@ -2442,6 +2540,7 @@ class _FloatingPillHeader extends StatelessWidget {
                 onTap: onTapHelp,
               ),
               icon(
+                key: const ValueKey<String>('creator_progress_open_button'),
                 icon: Icons.menu_rounded,
                 tooltip: 'Progress',
                 onTap: onTapMenu,

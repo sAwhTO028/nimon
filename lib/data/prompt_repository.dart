@@ -30,11 +30,14 @@ class PromptRepository {
     required JlptLevel level,
     required String category,
     int limit = 5,
+    int offset = 0,
   }) {
     final base = _mocks
         .where((p) => p.level == level && p.category == category)
+        .skip(offset)
+        .take(limit)
         .toList();
-    return base.take(limit).toList();
+    return base;
   }
 
   static String durationStringFor(JlptLevel level) {
@@ -52,12 +55,14 @@ class PromptRepository {
     }
   }
 
-  static List<Prompt> fallbackFor(JlptLevel level, String category, {int count = 12}) {
+  static List<Prompt> fallbackFor(JlptLevel level, String category,
+      {int count = 12}) {
     return List.generate(count, (i) {
       return Prompt(
         id: 'fallback_${category.toLowerCase()}_${i + 1}',
         title: '${category.toUpperCase()} IDEA #${i + 1}',
-        context: 'A ${describeEnum(level).toUpperCase()} short story about $category, variation ${i + 1}.',
+        context:
+            'A ${describeEnum(level).toUpperCase()} short story about $category, variation ${i + 1}.',
         duration: '5–7 minutes',
         category: category,
         level: level,
@@ -92,14 +97,16 @@ class PromptRepository {
 
   static List<Prompt> _buildMocks() {
     final List<Prompt> all = [];
-    
+
     // Helper to generate prompts
-    void addBatch(JlptLevel level, String category, String duration, int count) {
+    void addBatch(
+        JlptLevel level, String category, String duration, int count) {
       for (int i = 1; i <= count; i++) {
         all.add(Prompt(
           id: '${describeEnum(level)}-${category.toLowerCase()}-$i',
           title: '${category.toUpperCase()} TEST #$i (DEBUG)',
-          context: 'An ${describeEnum(level).toUpperCase()} short story about $category theme, variation $i.',
+          context:
+              'An ${describeEnum(level).toUpperCase()} short story about $category theme, variation $i.',
           duration: duration,
           category: category,
           level: level,

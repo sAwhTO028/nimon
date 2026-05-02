@@ -9,7 +9,7 @@ import 'package:nimon/features/create/creator_workspace_step.dart';
 import 'package:nimon/main.dart';
 
 Finder _creatorDrawerScope() =>
-    find.byKey(kCreatorProgressDrawerKey, skipOffstage: false);
+    find.byKey(kCreatorProgressDrawerKeySentences, skipOffstage: false);
 
 Finder _drawerCardForTitle(String title) {
   final titleInDrawer = find.descendant(
@@ -78,8 +78,8 @@ Future<void> _tapDrawerStep(
   required CreatorStepId step,
   required String actionLabel,
 }) async {
-  final card =
-      find.byKey(ValueKey<String>('creator_progress_${step.name}'), skipOffstage: false);
+  final card = find.byKey(ValueKey<String>('creator_progress_${step.name}'),
+      skipOffstage: false);
   expect(card, findsOneWidget);
   final action = find.descendant(
     of: card,
@@ -108,7 +108,8 @@ void _expectDrawerRowState(
     reason: '$moduleTitle should show chip=$chipLabel',
   );
   expect(
-    find.descendant(of: card, matching: find.widgetWithText(TextButton, actionLabel)),
+    find.descendant(
+        of: card, matching: find.widgetWithText(TextButton, actionLabel)),
     findsOneWidget,
     reason: '$moduleTitle should show action=$actionLabel',
   );
@@ -138,7 +139,8 @@ void main() {
       await tester.pump(const Duration(milliseconds: 300));
     }
 
-    testWidgets('A. From Vocabulary page -> Grammar/Quiz/Listening', (tester) async {
+    testWidgets('A. From Vocabulary page -> Grammar/Quiz/Listening',
+        (tester) async {
       await pumpApp(tester);
 
       await _go(tester, '/create/story/sentences?panel=vocabulary');
@@ -149,14 +151,19 @@ void main() {
       await tester.pump();
       await _openCreatorDrawer(tester);
       await _ensureLearnModeOnInDrawer(tester);
+      // Current learn module row uses "You are here"; others use "Open".
       _expectDrawerRowState(
         tester,
         moduleTitle: 'Vocabulary',
         chipLabel: 'Not started',
-        actionLabel: 'Open',
+        actionLabel: 'You are here',
       );
-      _expectDrawerRowState(tester, moduleTitle: 'Grammar', chipLabel: 'Not started', actionLabel: 'Open');
-      _expectDrawerRowState(tester, moduleTitle: 'Quiz', chipLabel: 'Not started', actionLabel: 'Open');
+      _expectDrawerRowState(tester,
+          moduleTitle: 'Grammar',
+          chipLabel: 'Not started',
+          actionLabel: 'Open');
+      _expectDrawerRowState(tester,
+          moduleTitle: 'Quiz', chipLabel: 'Not started', actionLabel: 'Open');
       _expectDrawerRowState(
         tester,
         moduleTitle: 'Listening / Pronunciation',
@@ -164,30 +171,41 @@ void main() {
         actionLabel: 'Open',
       );
 
-      await _tapDrawerStep(tester, step: CreatorStepId.grammar, actionLabel: 'Open');
+      await _tapDrawerStep(tester,
+          step: CreatorStepId.grammar, actionLabel: 'Open');
       expect(find.text('Grammar'), findsAtLeastNWidgets(1));
       expect(_currentUri(tester).startsWith('/create/story/sentences'), isTrue);
       expect(_session(tester).activeModule, CreatorModule.grammar);
 
       await _openCreatorDrawer(tester);
       await _ensureLearnModeOnInDrawer(tester);
-      _expectDrawerRowState(tester, moduleTitle: 'Grammar', chipLabel: 'Not started', actionLabel: 'Open');
-      await _tapDrawerStep(tester, step: CreatorStepId.quiz, actionLabel: 'Open');
-      expect(find.text('Quiz'), findsAtLeastNWidgets(1));
+      _expectDrawerRowState(tester,
+          moduleTitle: 'Grammar',
+          chipLabel: 'Not started',
+          actionLabel: 'You are here');
+      await _tapDrawerStep(tester,
+          step: CreatorStepId.quiz, actionLabel: 'Open');
+      // Pinned workspace header uses "Quizzes" (see _pinnedWorkspaceTitle); module body hides "Quiz" when embedded.
+      expect(find.text('Quizzes'), findsAtLeastNWidgets(1));
       expect(_currentUri(tester).startsWith('/create/story/sentences'), isTrue);
       expect(_session(tester).activeModule, CreatorModule.quiz);
 
       await _openCreatorDrawer(tester);
       await _ensureLearnModeOnInDrawer(tester);
-      _expectDrawerRowState(tester, moduleTitle: 'Quiz', chipLabel: 'Not started', actionLabel: 'Open');
+      _expectDrawerRowState(tester,
+          moduleTitle: 'Quiz',
+          chipLabel: 'Not started',
+          actionLabel: 'You are here');
       await _tapDrawerStep(
         tester,
         step: CreatorStepId.listening,
         actionLabel: 'Open',
       );
-      expect(find.text('Listening / Pronunciation'), findsAtLeastNWidgets(1));
+      // Pinned header uses short label "Listening" (_pinnedWorkspaceTitle); drawer row still says "Listening / Pronunciation".
+      expect(find.text('Listening'), findsAtLeastNWidgets(1));
       expect(_currentUri(tester).startsWith('/create/story/sentences'), isTrue);
-      expect(_session(tester).activeModule, CreatorModule.listeningPronunciation);
+      expect(
+          _session(tester).activeModule, CreatorModule.listeningPronunciation);
 
       // Ensure we did not bounce back to sentences host.
       expect(_currentUri(tester).startsWith('/create/story/sentences'), isTrue);
@@ -204,16 +222,21 @@ void main() {
 
       await _openCreatorDrawer(tester);
       await _ensureLearnModeOnInDrawer(tester);
-      _expectDrawerRowState(tester, moduleTitle: 'Grammar', chipLabel: 'Not started', actionLabel: 'Open');
+      _expectDrawerRowState(tester,
+          moduleTitle: 'Grammar',
+          chipLabel: 'Not started',
+          actionLabel: 'You are here');
 
-      await _tapDrawerStep(tester, step: CreatorStepId.vocabulary, actionLabel: 'Open');
+      await _tapDrawerStep(tester,
+          step: CreatorStepId.vocabulary, actionLabel: 'Open');
       expect(find.text('Semantics'), findsOneWidget);
       expect(_session(tester).activeModule, CreatorModule.vocabulary);
 
       await _openCreatorDrawer(tester);
       await _ensureLearnModeOnInDrawer(tester);
-      await _tapDrawerStep(tester, step: CreatorStepId.quiz, actionLabel: 'Open');
-      expect(find.text('Quiz'), findsAtLeastNWidgets(1));
+      await _tapDrawerStep(tester,
+          step: CreatorStepId.quiz, actionLabel: 'Open');
+      expect(find.text('Quizzes'), findsAtLeastNWidgets(1));
       expect(_session(tester).activeModule, CreatorModule.quiz);
 
       await _openCreatorDrawer(tester);
@@ -223,8 +246,9 @@ void main() {
         step: CreatorStepId.listening,
         actionLabel: 'Open',
       );
-      expect(find.text('Listening / Pronunciation'), findsAtLeastNWidgets(1));
-      expect(_session(tester).activeModule, CreatorModule.listeningPronunciation);
+      expect(find.text('Listening'), findsAtLeastNWidgets(1));
+      expect(
+          _session(tester).activeModule, CreatorModule.listeningPronunciation);
 
       expect(_currentUri(tester).startsWith('/create/story/sentences'), isTrue);
     });
@@ -240,15 +264,20 @@ void main() {
 
       await _openCreatorDrawer(tester);
       await _ensureLearnModeOnInDrawer(tester);
-      _expectDrawerRowState(tester, moduleTitle: 'Quiz', chipLabel: 'Not started', actionLabel: 'Open');
+      _expectDrawerRowState(tester,
+          moduleTitle: 'Quiz',
+          chipLabel: 'Not started',
+          actionLabel: 'You are here');
 
-      await _tapDrawerStep(tester, step: CreatorStepId.vocabulary, actionLabel: 'Open');
+      await _tapDrawerStep(tester,
+          step: CreatorStepId.vocabulary, actionLabel: 'Open');
       expect(find.text('Semantics'), findsOneWidget);
       expect(_session(tester).activeModule, CreatorModule.vocabulary);
 
       await _openCreatorDrawer(tester);
       await _ensureLearnModeOnInDrawer(tester);
-      await _tapDrawerStep(tester, step: CreatorStepId.grammar, actionLabel: 'Open');
+      await _tapDrawerStep(tester,
+          step: CreatorStepId.grammar, actionLabel: 'Open');
       expect(find.text('Grammar'), findsAtLeastNWidgets(1));
       expect(_session(tester).activeModule, CreatorModule.grammar);
 
@@ -260,7 +289,8 @@ void main() {
         actionLabel: 'Open',
       );
       expect(find.text('Listening'), findsAtLeastNWidgets(1));
-      expect(_session(tester).activeModule, CreatorModule.listeningPronunciation);
+      expect(
+          _session(tester).activeModule, CreatorModule.listeningPronunciation);
 
       expect(_currentUri(tester).startsWith('/create/story/sentences'), isTrue);
     });
@@ -272,7 +302,8 @@ void main() {
       await tester.pump();
 
       expect(find.text('Listening'), findsAtLeastNWidgets(1));
-      expect(_session(tester).activeModule, CreatorModule.listeningPronunciation);
+      expect(
+          _session(tester).activeModule, CreatorModule.listeningPronunciation);
 
       await _openCreatorDrawer(tester);
       await _ensureLearnModeOnInDrawer(tester);
@@ -280,29 +311,33 @@ void main() {
         tester,
         moduleTitle: 'Listening / Pronunciation',
         chipLabel: 'Not started',
-        actionLabel: 'Open',
+        actionLabel: 'You are here',
       );
 
-      await _tapDrawerStep(tester, step: CreatorStepId.vocabulary, actionLabel: 'Open');
+      await _tapDrawerStep(tester,
+          step: CreatorStepId.vocabulary, actionLabel: 'Open');
       expect(find.text('Semantics'), findsOneWidget);
       expect(_session(tester).activeModule, CreatorModule.vocabulary);
 
       await _openCreatorDrawer(tester);
       await _ensureLearnModeOnInDrawer(tester);
-      await _tapDrawerStep(tester, step: CreatorStepId.grammar, actionLabel: 'Open');
+      await _tapDrawerStep(tester,
+          step: CreatorStepId.grammar, actionLabel: 'Open');
       expect(find.text('Grammar'), findsAtLeastNWidgets(1));
       expect(_session(tester).activeModule, CreatorModule.grammar);
 
       await _openCreatorDrawer(tester);
       await _ensureLearnModeOnInDrawer(tester);
-      await _tapDrawerStep(tester, step: CreatorStepId.quiz, actionLabel: 'Open');
-      expect(find.text('Quiz'), findsAtLeastNWidgets(1));
+      await _tapDrawerStep(tester,
+          step: CreatorStepId.quiz, actionLabel: 'Open');
+      expect(find.text('Quizzes'), findsAtLeastNWidgets(1));
       expect(_session(tester).activeModule, CreatorModule.quiz);
 
       expect(_currentUri(tester).startsWith('/create/story/sentences'), isTrue);
     });
 
-    testWidgets('E. Learn mode off exits learn panel to storytelling', (tester) async {
+    testWidgets('E. Learn mode off exits learn panel to storytelling',
+        (tester) async {
       await pumpApp(tester);
       await _go(tester, '/create/story/sentences?panel=quiz');
       _seedLearnModeOn(tester);
@@ -329,7 +364,8 @@ void main() {
       expect(s.sentencesMainStep, CreatorWorkspaceStep.storySentences);
     });
 
-    testWidgets('Local actions do not cross-module navigate (spot checks)', (tester) async {
+    testWidgets('Local actions do not cross-module navigate (spot checks)',
+        (tester) async {
       await pumpApp(tester);
 
       // Vocabulary: "Add entry" opens a sheet; route stays on vocabulary.
@@ -370,4 +406,3 @@ void main() {
     });
   });
 }
-

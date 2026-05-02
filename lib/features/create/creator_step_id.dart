@@ -3,7 +3,6 @@ enum CreatorStepId {
   basics,
   sentences,
   reviewPublish,
-  learnHub,
   vocabulary,
   grammar,
   quiz,
