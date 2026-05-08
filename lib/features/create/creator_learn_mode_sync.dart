@@ -53,7 +53,9 @@ void applyCreatorLearnMode({
   required bool learnModeEnabled,
   VoidCallback? closeDrawerOnTurnOff,
 }) {
-  ref.read(creatorDrawerSessionProvider.notifier).setLearnMode(learnModeEnabled);
+  ref
+      .read(creatorDrawerSessionProvider.notifier)
+      .setLearnMode(learnModeEnabled);
 
   if (learnModeEnabled) return;
 

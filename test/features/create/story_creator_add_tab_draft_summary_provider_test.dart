@@ -95,7 +95,11 @@ class _SpyDraftRepo implements StoryDraftRepository {
       throw StateError('loadDraft');
 
   @override
-  Future<CreatorStoryV1> saveDraft(CreatorStoryV1 draft) =>
+  Future<CreatorStoryV1> saveDraft(
+    CreatorStoryV1 draft, {
+    StoryDraftRemotePublishIntent remotePublishAfterPut =
+        StoryDraftRemotePublishIntent.none,
+  }) =>
       throw StateError('loadDraft');
 
   @override

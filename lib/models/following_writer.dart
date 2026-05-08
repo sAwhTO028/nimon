@@ -16,4 +16,3 @@ class FollowingWriter {
     return name[0].toUpperCase();
   }
 }
-

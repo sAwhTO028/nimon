@@ -1,11 +1,21 @@
+import 'dart:async' show unawaited;
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart'
+    show debugPrint, kDebugMode, visibleForTesting;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:nimon/features/create/creator_resume_draft.dart';
 import 'package:nimon/features/mono/mono_reader_dock.dart';
+import 'package:nimon/core/format_social_count.dart';
 import 'package:nimon/features/mono/mono_reader_menu_origin.dart';
 import 'package:nimon/features/mono/mono_screen.dart';
+import 'package:nimon/features/mono/saved_only_ux_policy.dart';
+import 'package:nimon/features/mono/share_mono_link.dart';
+import 'package:nimon/features/profile/saved_library_copy.dart';
+import 'package:nimon/features/profile/presentation/providers/profile_published_mono_pager.dart';
+import 'package:nimon/features/profile/profile_processing_refresh.dart';
 
 OverlayEntry? _monoStoryOptionsOverlay;
 ScrollController? _monoStoryOptionsScrollController;
@@ -34,7 +44,10 @@ void showMonoStoryOptionsPanel(
   MonoReaderMenuOrigin readerMenuOrigin = MonoReaderMenuOrigin.profileUploaded,
   void Function(String monoFeedItemId)? onUnsavedItemId,
   VoidCallback? popReaderAfterUnsave,
+  @visibleForTesting bool? demoBookmarkFoldersOverrideForTest,
 }) {
+  final showDemoBookmarkFolders =
+      demoBookmarkFoldersOverrideForTest ?? monoDemoBookmarkFoldersEnabled;
   // Toggle behavior: tapping menu again closes the panel.
   if (isMonoStoryOptionsPanelOpen && _monoStoryOptionsStoryId == item.id) {
     hideMonoStoryOptionsPanel();
@@ -70,7 +83,7 @@ void showMonoStoryOptionsPanel(
               behavior: HitTestBehavior.opaque,
               onTap: hideMonoStoryOptionsPanel,
               child: Container(
-                color: Colors.black.withOpacity(0.22),
+                color: Colors.black.withValues(alpha: 0.22),
               ),
             ),
           ),
@@ -84,11 +97,15 @@ void showMonoStoryOptionsPanel(
               onDismiss: hideMonoStoryOptionsPanel,
               child: _MonoStoryOptionsContent(
                 item: item,
+                hostContextForActions: context,
                 controller: scrollController,
                 onClose: hideMonoStoryOptionsPanel,
                 readerMenuOrigin: readerMenuOrigin,
                 onUnsavedItemId: onUnsavedItemId,
                 popReaderAfterUnsave: popReaderAfterUnsave,
+                showDemoBookmarkFolders: showDemoBookmarkFolders,
+                demoBookmarkFoldersOverrideForTest:
+                    demoBookmarkFoldersOverrideForTest,
               ),
             ),
           ),
@@ -124,8 +141,17 @@ class _DismissibleDockPanel extends StatefulWidget {
 
 class _DismissibleDockPanelState extends State<_DismissibleDockPanel>
     with SingleTickerProviderStateMixin {
-  late final AnimationController _settle =
-      AnimationController(vsync: this, duration: const Duration(milliseconds: 160));
+  late final AnimationController _settle;
+
+  @override
+  void initState() {
+    super.initState();
+    _settle = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 160),
+    );
+  }
+
   double _dragDy = 0;
   bool _dragging = false;
 
@@ -218,7 +244,7 @@ class _DismissibleDockPanelState extends State<_DismissibleDockPanel>
                   ),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.10),
+                      color: Colors.black.withValues(alpha: 0.10),
                       blurRadius: 24,
                       offset: const Offset(0, 14),
                     ),
@@ -239,19 +265,27 @@ class _DismissibleDockPanelState extends State<_DismissibleDockPanel>
 
 class _MonoStoryOptionsContent extends StatelessWidget {
   final MonoFeedItem item;
+
+  /// Context below the overlay (e.g. [MonoScreen]) — still mounted after the panel closes.
+  final BuildContext hostContextForActions;
   final ScrollController controller;
   final VoidCallback? onClose;
   final MonoReaderMenuOrigin readerMenuOrigin;
   final void Function(String monoFeedItemId)? onUnsavedItemId;
   final VoidCallback? popReaderAfterUnsave;
+  final bool showDemoBookmarkFolders;
+  final bool? demoBookmarkFoldersOverrideForTest;
 
   const _MonoStoryOptionsContent({
     required this.item,
+    required this.hostContextForActions,
     required this.controller,
     this.onClose,
     required this.readerMenuOrigin,
     this.onUnsavedItemId,
     this.popReaderAfterUnsave,
+    required this.showDemoBookmarkFolders,
+    this.demoBookmarkFoldersOverrideForTest,
   });
 
   @override
@@ -265,8 +299,8 @@ class _MonoStoryOptionsContent extends StatelessWidget {
         ? item.title!.trim()
         : 'Mono Story';
     final subtitle = _subtitleFor(item);
-    final preview = _previewFor(item.bodyText);
-    final likes = _mockLikes(item.id);
+    final basicsDescription = item.storyDescription.trim();
+    final likes = item.likesCount;
     final readTime = _readTimeFor(item.bodyText);
     final category = _categoryFor(item);
 
@@ -299,9 +333,7 @@ class _MonoStoryOptionsContent extends StatelessWidget {
                     title: title,
                     subtitle: subtitle,
                     onShare: () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Share - Coming soon')),
-                      );
+                      unawaited(shareMonoLink(hostContextForActions, item));
                     },
                   ),
                   Divider(
@@ -311,10 +343,11 @@ class _MonoStoryOptionsContent extends StatelessWidget {
                     endIndent: 20,
                     color: colorScheme.outlineVariant,
                   ),
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 10, 20, 8),
-                    child: _DescriptionCard(text: preview),
-                  ),
+                  if (basicsDescription.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 10, 20, 8),
+                      child: _DescriptionCard(text: basicsDescription),
+                    ),
                   Padding(
                     padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
                     child: _MetricsRow(
@@ -338,7 +371,7 @@ class _MonoStoryOptionsContent extends StatelessWidget {
               color: colorScheme.surface,
               boxShadow: [
                 BoxShadow(
-                  color: colorScheme.shadow.withOpacity(0.08),
+                  color: colorScheme.shadow.withValues(alpha: 0.08),
                   blurRadius: 8,
                   offset: const Offset(0, -2),
                 ),
@@ -351,9 +384,51 @@ class _MonoStoryOptionsContent extends StatelessWidget {
               ),
             ),
             child: readerMenuOrigin == MonoReaderMenuOrigin.profileSaved
-                ? Row(
-                    children: [
-                      Expanded(
+                ? showDemoBookmarkFolders
+                    ? Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton(
+                              onPressed: () {
+                                HapticFeedback.selectionClick();
+                                onClose?.call();
+                                onUnsavedItemId?.call(item.id);
+                                popReaderAfterUnsave?.call();
+                              },
+                              style: OutlinedButton.styleFrom(
+                                minimumSize: const Size(0, 42),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                              ),
+                              child: const Text('Unsave'),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: FilledButton(
+                              onPressed: () {
+                                HapticFeedback.selectionClick();
+                                onClose?.call();
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('Move - Coming soon'),
+                                  ),
+                                );
+                              },
+                              style: FilledButton.styleFrom(
+                                minimumSize: const Size(0, 42),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                              ),
+                              child: const Text('Move'),
+                            ),
+                          ),
+                        ],
+                      )
+                    : SizedBox(
+                        width: double.infinity,
                         child: OutlinedButton(
                           onPressed: () {
                             HapticFeedback.selectionClick();
@@ -367,47 +442,114 @@ class _MonoStoryOptionsContent extends StatelessWidget {
                               borderRadius: BorderRadius.circular(12),
                             ),
                           ),
-                          child: const Text('Unsave'),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: FilledButton(
-                          onPressed: () {
-                            HapticFeedback.selectionClick();
-                            onClose?.call();
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('Move - Coming soon'),
-                              ),
-                            );
-                          },
-                          style: FilledButton.styleFrom(
-                            minimumSize: const Size(0, 42),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
+                          child: const Text(
+                            SavedLibraryCopy.removeFromSavedCta,
                           ),
-                          child: const Text('Move'),
                         ),
-                      ),
-                    ],
-                  )
+                      )
                 : Row(
                     children: [
                       Expanded(
                         child: FilledButton.icon(
-                          onPressed: () {
+                          key: const ValueKey('movePublishedMonoToTrash'),
+                          onPressed: () async {
                             HapticFeedback.selectionClick();
+                            final publishedId =
+                                item.monoIdForLearnRoutes.trim();
+                            final host = hostContextForActions;
+                            final hostMessenger = ScaffoldMessenger.of(host);
+                            if (publishedId.isEmpty) {
+                              hostMessenger.showSnackBar(
+                                const SnackBar(
+                                  content: Text(
+                                    'This story cannot be moved to Trash right now.',
+                                  ),
+                                ),
+                              );
+                              return;
+                            }
+
+                            // Close this dock panel before showing a dialog; otherwise
+                            // the dialog can appear behind the overlay.
                             onClose?.call();
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('Delete - Coming soon'),
+                            await Future<void>.delayed(Duration.zero);
+                            if (!host.mounted) return;
+
+                            final go = await showDialog<bool>(
+                              context: host,
+                              useRootNavigator: true,
+                              builder: (ctx) => AlertDialog(
+                                title: const Text('Move to Trash?'),
+                                content: const Text(
+                                  'This story will be hidden from Mono Home and your '
+                                  'Published tab. You can restore it later.',
+                                ),
+                                actions: [
+                                  TextButton(
+                                    onPressed: () =>
+                                        Navigator.of(ctx).pop(false),
+                                    child: const Text('Cancel'),
+                                  ),
+                                  FilledButton(
+                                    key: const ValueKey(
+                                      'confirmMovePublishedMonoToTrash',
+                                    ),
+                                    onPressed: () =>
+                                        Navigator.of(ctx).pop(true),
+                                    child: const Text('Move to Trash'),
+                                  ),
+                                ],
                               ),
                             );
+                            if (!host.mounted) return;
+                            if (go != true) {
+                              // Restore the sheet on cancel.
+                              showMonoStoryOptionsPanel(
+                                host,
+                                item,
+                                readerMenuOrigin: readerMenuOrigin,
+                                onUnsavedItemId: onUnsavedItemId,
+                                popReaderAfterUnsave: popReaderAfterUnsave,
+                                demoBookmarkFoldersOverrideForTest:
+                                    demoBookmarkFoldersOverrideForTest,
+                              );
+                              return;
+                            }
+
+                            final container = ProviderScope.containerOf(
+                              host,
+                              listen: false,
+                            );
+                            final repo = container.read(
+                              remotePublishedMonoRepositoryForProfileProvider,
+                            );
+                            try {
+                              await repo.trashPublishedMono(publishedId);
+                              bumpPublishedMonoTrashSurfacesRefresh(container);
+                              await container
+                                  .read(profilePublishedMonoPagerProvider
+                                      .notifier)
+                                  .refresh();
+                              if (!host.mounted) return;
+                              hostMessenger.showSnackBar(
+                                const SnackBar(
+                                  content: Text('Moved to Trash.'),
+                                ),
+                              );
+                              // If user is in the Profile published reader route,
+                              // return to the list surface after trash.
+                              if (Navigator.of(host).canPop()) {
+                                Navigator.of(host).maybePop();
+                              }
+                            } catch (e) {
+                              if (!host.mounted) return;
+                              hostMessenger.showSnackBar(
+                                SnackBar(content: Text(e.toString())),
+                              );
+                            }
                           },
                           icon: const Icon(Icons.delete_outline, size: 18),
-                          label: const Text('Delete'),
+                          label: const Text('Move to Trash'),
                           style: FilledButton.styleFrom(
                             minimumSize: const Size(0, 42),
                             backgroundColor: const Color(0xFFDF3B3B),
@@ -423,10 +565,21 @@ class _MonoStoryOptionsContent extends StatelessWidget {
                         child: OutlinedButton.icon(
                           onPressed: () async {
                             HapticFeedback.selectionClick();
+                            if (kDebugMode) {
+                              debugPrint(
+                                '[PublishedEdit] dock Edit tap item.id=${item.id} '
+                                'sourceDraftId=${item.sourceDraftId} '
+                                'catalogMonoId=${item.catalogMonoId} '
+                                'hostMounted=${hostContextForActions.mounted}',
+                              );
+                            }
                             onClose?.call();
-                            await CreatorDraftResumeFlow.tryResumeFromPublishedSurface(
-                              context,
+                            if (!hostContextForActions.mounted) return;
+                            await CreatorDraftResumeFlow
+                                .tryResumeFromPublishedSurface(
+                              hostContextForActions,
                               item.id,
+                              sourceDraftId: item.sourceDraftId,
                             );
                           },
                           icon: const Icon(Icons.edit_outlined, size: 18),
@@ -451,18 +604,6 @@ class _MonoStoryOptionsContent extends StatelessWidget {
     final handle = item.writerHandle.trim();
     final who = '${item.writerName}${handle.isNotEmpty ? ' $handle' : ''}';
     return who;
-  }
-
-  static String _previewFor(String body) {
-    final t = body.trim();
-    if (t.isEmpty) return '';
-    final firstParagraph = t.split(RegExp(r'\n\s*\n')).first.trim();
-    return firstParagraph;
-  }
-
-  static int _mockLikes(String stableId) {
-    final h = stableId.hashCode.abs();
-    return 30 + (h % 970);
   }
 
   static String _readTimeFor(String body) {
@@ -616,7 +757,7 @@ class _CoverThumb extends StatelessWidget {
                   color: Colors.grey.shade200,
                   child: Icon(
                     Icons.image_outlined,
-                    color: Colors.black.withOpacity(0.35),
+                    color: Colors.black.withValues(alpha: 0.35),
                   ),
                 ),
               )
@@ -624,7 +765,7 @@ class _CoverThumb extends StatelessWidget {
                 color: Colors.grey.shade200,
                 child: Icon(
                   Icons.image_outlined,
-                  color: Colors.black.withOpacity(0.35),
+                  color: Colors.black.withValues(alpha: 0.35),
                 ),
               ),
       ),
@@ -672,7 +813,7 @@ class _DescriptionCard extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: colorScheme.surfaceVariant.withOpacity(0.5),
+        color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
         borderRadius: BorderRadius.circular(16),
       ),
       child: Row(
@@ -681,7 +822,7 @@ class _DescriptionCard extends StatelessWidget {
           Icon(
             Icons.format_quote,
             size: 20,
-            color: colorScheme.onSurfaceVariant.withOpacity(0.7),
+            color: colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
           ),
           const SizedBox(width: 8),
           Expanded(
@@ -718,7 +859,7 @@ class _MetricsRow extends StatelessWidget {
           Expanded(
             child: _MetricCard(
               icon: Icons.favorite,
-              value: likes.toString(),
+              value: formatSocialCount(likes),
               caption: 'Likes',
             ),
           ),
@@ -796,4 +937,3 @@ class _MetricCard extends StatelessWidget {
     );
   }
 }
-

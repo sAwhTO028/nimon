@@ -4,11 +4,13 @@ class MonoReaderDock extends StatelessWidget {
   const MonoReaderDock({
     super.key,
     required this.onAddMono,
-    required this.onMenu,
+    this.onMenu,
   });
 
   final VoidCallback onAddMono;
-  final VoidCallback onMenu;
+
+  /// Owner profile menu (edit/delete/unsave). When null, dock shows **Add Mono** only.
+  final VoidCallback? onMenu;
 
   static const double _barHeight = 74.0;
 
@@ -47,23 +49,25 @@ class MonoReaderDock extends StatelessWidget {
                   ),
                 ),
               ),
-              const SizedBox(width: 12),
-              SizedBox(
-                height: 54,
-                width: 54,
-                child: Material(
-                  color: Colors.white,
-                  shape: const CircleBorder(),
-                  child: InkWell(
-                    customBorder: const CircleBorder(),
-                    onTap: onMenu,
-                    child: Icon(
-                      Icons.menu_rounded,
-                      color: Colors.black.withOpacity(0.84),
+              if (onMenu != null) ...[
+                const SizedBox(width: 12),
+                SizedBox(
+                  height: 54,
+                  width: 54,
+                  child: Material(
+                    color: Colors.white,
+                    shape: const CircleBorder(),
+                    child: InkWell(
+                      customBorder: const CircleBorder(),
+                      onTap: onMenu,
+                      child: Icon(
+                        Icons.menu_rounded,
+                        color: Colors.black.withValues(alpha: 0.84),
+                      ),
                     ),
                   ),
                 ),
-              ),
+              ],
             ],
           ),
         ),
@@ -71,4 +75,3 @@ class MonoReaderDock extends StatelessWidget {
     );
   }
 }
-

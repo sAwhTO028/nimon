@@ -11,8 +11,10 @@ class StoryDraftProcessingItemDto {
 
   final String draftId;
   final String title;
+
   /// ISO-8601 UTC recommended.
   final String updatedAt;
+
   /// [StoryPublishState.storageKey].
   final String publishState;
   final String? readinessSummary;

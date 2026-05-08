@@ -8,13 +8,13 @@ import 'package:go_router/go_router.dart';
 import 'package:nimon/features/create/creator_back_policy.dart';
 import 'package:nimon/features/create/creator_drawer_session.dart';
 import 'package:nimon/features/create/creator_drawer_publish.dart';
+import 'package:nimon/features/create/creator_drawer_publish_labels.dart';
 import 'package:nimon/features/create/creator_learn_mode_sync.dart';
 import 'package:nimon/features/create/creator_progress_drawer.dart';
 import 'package:nimon/features/create/creator_reorder_handle.dart';
 import 'package:nimon/features/create/creator_route_sync_listener.dart';
 import 'package:nimon/features/create/creator_workspace_step.dart';
 import 'package:nimon/features/create/story_creator_grammar_overlays.dart';
-import 'package:nimon/features/create/creator_read_only_publish_tracking.dart';
 import 'package:nimon/features/create/story_creator_models.dart';
 import 'package:nimon/features/create/story_creator_provider.dart';
 import 'package:nimon/features/create/story_creator_review_display.dart';
@@ -144,7 +144,8 @@ class _GrammarPatternSheetState extends State<_GrammarPatternSheet> {
     _titleCtrl = TextEditingController(text: existing?.headline ?? '');
     _formCtrl = TextEditingController(text: existing?.form ?? '');
 
-    _meaningSourceCtrl = TextEditingController(text: existing?.meanings?.my ?? '');
+    _meaningSourceCtrl =
+        TextEditingController(text: existing?.meanings?.my ?? '');
     _meaningEnCtrl = TextEditingController(text: existing?.meanings?.en ?? '');
 
     _usageSourceCtrl = TextEditingController(text: existing?.usage?.my ?? '');
@@ -153,12 +154,14 @@ class _GrammarPatternSheetState extends State<_GrammarPatternSheet> {
     _wrongCtrl = TextEditingController(text: existing?.mistakeWrong ?? '');
     _correctCtrl = TextEditingController(text: existing?.mistakeCorrect ?? '');
 
-    _noteSourceCtrl = TextEditingController(text: existing?.relatedNote?.my ?? '');
+    _noteSourceCtrl =
+        TextEditingController(text: existing?.relatedNote?.my ?? '');
     _noteEnCtrl = TextEditingController(text: existing?.relatedNote?.en ?? '');
 
     _exampleRows = <_GrammarSheetExampleRow>[
       if (existing?.examples.isNotEmpty ?? false)
-        for (final ex in existing!.examples.take(3)) _GrammarSheetExampleRow.fromData(ex),
+        for (final ex in existing!.examples.take(3))
+          _GrammarSheetExampleRow.fromData(ex),
     ];
 
     _expandMeaningEn = (existing?.meanings?.en?.trim().isNotEmpty ?? false);
@@ -187,7 +190,8 @@ class _GrammarPatternSheetState extends State<_GrammarPatternSheet> {
   List<GrammarExample> _buildExamplesFromRows() {
     final existingList = widget.existing?.examples;
     final built = <GrammarExample>[
-      for (var i = 0; i < _exampleRows.length; i++) _exampleRows[i].toExample(i, existingList),
+      for (var i = 0; i < _exampleRows.length; i++)
+        _exampleRows[i].toExample(i, existingList),
     ];
     return built.where((e) => !e.isEmptyV1).toList();
   }
@@ -376,7 +380,8 @@ class _GrammarPatternSheetState extends State<_GrammarPatternSheet> {
               closedLabel: 'Add Common English meaning (optional)',
               controller: _meaningEnCtrl,
               expanded: _expandMeaningEn,
-              onToggle: () => setState(() => _expandMeaningEn = !_expandMeaningEn),
+              onToggle: () =>
+                  setState(() => _expandMeaningEn = !_expandMeaningEn),
             ),
             const SizedBox(height: 16),
             Text(
@@ -491,7 +496,8 @@ class _GrammarPatternSheetState extends State<_GrammarPatternSheet> {
                       ),
                       const SizedBox(height: 10),
                       commonEnglishAccordion(
-                        closedLabel: 'Add Common English example meaning (optional)',
+                        closedLabel:
+                            'Add Common English example meaning (optional)',
                         controller: entry.value.enMeaning,
                         expanded: entry.value.expandEn,
                         onToggle: () => setState(
@@ -587,7 +593,8 @@ class _GrammarPatternSheetState extends State<_GrammarPatternSheet> {
             ),
             const SizedBox(height: 10),
             OutlinedButton(
-              onPressed: () => Navigator.pop<_GrammarUpsertResult?>(context, null),
+              onPressed: () =>
+                  Navigator.pop<_GrammarUpsertResult?>(context, null),
               child: const Text('Cancel'),
             ),
           ],
@@ -616,13 +623,26 @@ class StoryCreatorGrammarEditorScreen extends ConsumerWidget {
     final publishModel = buildStoryReviewDisplayModel(draft);
     final draftState = ref.watch(storyCreatorDraftProvider);
     final roSig = draftState.readOnlyPublishedCoreSig;
-    final roExists =
-        roSig != null || draft.publishState != StoryPublishState.draft;
-    final roDirty = roSig != null &&
-        computeReadOnlyPublishedCoreSignature(draft) != roSig;
-    final flExists =
-        draft.publishState == StoryPublishState.fullLearnPublished;
-    final flDirty = draftState.dirty;
+    final roBaseline = draftState.publishedEditReadOnlyBaselineSig;
+    final flBaseline = draftState.publishedEditFullLearnBaselineSig;
+    final roExists = computeReadOnlyPublishedExists(
+      draft: draft,
+      readOnlyPublishedCoreSig: roSig,
+    );
+    final roDirty = computeReadOnlyHasUnpublishedChanges(
+      draft: draft,
+      readOnlyPublishedCoreSig: roSig,
+      dirty: draftState.dirty,
+      publishedEditReadOnlyBaselineSig: roBaseline,
+    );
+    final flExists = draft.publishState == StoryPublishState.fullLearnPublished;
+    final flDirty = computeFullLearnHasUnpublishedChanges(
+      draft: draft,
+      readOnlyPublishedCoreSig: roSig,
+      dirty: draftState.dirty,
+      publishedEditReadOnlyBaselineSig: roBaseline,
+      publishedEditFullLearnBaselineSig: flBaseline,
+    );
 
     return CreatorRouteSyncListener(
       child: PopScope(
@@ -665,6 +685,11 @@ class StoryCreatorGrammarEditorScreen extends ConsumerWidget {
             coreItems: progress.coreItems,
             learnItems: progress.learnItems,
             publishModel: publishModel,
+            creatorDraft: draft,
+            localDraftDirty: draftState.dirty,
+            readOnlyPublishedCoreSig: roSig,
+            publishedEditReadOnlyBaselineSig: roBaseline,
+            publishedEditFullLearnBaselineSig: flBaseline,
             readOnlyPublishedExists: roExists,
             readOnlyHasUnpublishedChanges: roDirty,
             fullLearnPublishedExists: flExists,
@@ -806,6 +831,7 @@ class StoryCreatorGrammarModuleBody extends ConsumerWidget {
   final bool showBottomActions;
   final bool showLearnExitButton;
   final bool useCompactModuleHeader;
+
   /// When true, omits the large module title so the sentences host pinned header is the only title.
   final bool hideWorkspaceModuleTitle;
   final VoidCallback? onExit;
@@ -828,8 +854,7 @@ class StoryCreatorGrammarModuleBody extends ConsumerWidget {
         EdgeInsets.fromLTRB(padding.left, padding.top, padding.right, 0);
     final listHorizontal =
         EdgeInsets.fromLTRB(padding.left, 0, padding.right, 0);
-    final listBottomPad =
-        showBottomActions ? 16 + bottomInset : padding.bottom;
+    final listBottomPad = showBottomActions ? 16 + bottomInset : padding.bottom;
 
     final header = Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -906,8 +931,7 @@ class StoryCreatorGrammarModuleBody extends ConsumerWidget {
                         return Material(
                           color: Colors.transparent,
                           elevation: lerpDouble(0, 8, t) ?? 0,
-                          shadowColor:
-                              Colors.black.withValues(alpha: 0.18 * t),
+                          shadowColor: Colors.black.withValues(alpha: 0.18 * t),
                           borderRadius: BorderRadius.circular(14),
                           child: child,
                         );
@@ -931,14 +955,15 @@ class StoryCreatorGrammarModuleBody extends ConsumerWidget {
                         onMoreOpened: () =>
                             FocusManager.instance.primaryFocus?.unfocus(),
                         onMoreCanceled: () {},
-                        onEdit: () => StoryCreatorGrammarEditorScreen._showUpsertSheet(
-                              context,
-                              ref,
-                              existing: e,
-                            ),
+                        onEdit: () =>
+                            StoryCreatorGrammarEditorScreen._showUpsertSheet(
+                          context,
+                          ref,
+                          existing: e,
+                        ),
                         onDelete: () async {
-                          final ok =
-                              await StoryCreatorGrammarEditorScreen._confirmDelete(
+                          final ok = await StoryCreatorGrammarEditorScreen
+                              ._confirmDelete(
                             context,
                             e.headline,
                           );
@@ -1287,4 +1312,3 @@ class _GrammarCard extends StatelessWidget {
     );
   }
 }
-

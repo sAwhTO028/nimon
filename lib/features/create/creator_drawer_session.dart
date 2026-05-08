@@ -65,7 +65,8 @@ class CreatorDrawerSessionState {
   }
 }
 
-class CreatorDrawerSessionNotifier extends StateNotifier<CreatorDrawerSessionState> {
+class CreatorDrawerSessionNotifier
+    extends StateNotifier<CreatorDrawerSessionState> {
   CreatorDrawerSessionNotifier() : super(const CreatorDrawerSessionState());
 
   static final _setEq = const SetEquality<LearnModuleId>();
@@ -86,7 +87,8 @@ class CreatorDrawerSessionNotifier extends StateNotifier<CreatorDrawerSessionSta
 
   /// Prefer the real navigation [Uri.path]; [matchedPath] alone can be a
   /// subtree location while the user is still on `/create/story/sentences`.
-  static String _canonicalCreateStoryPath(String matchedPath, Uri? locationUri) {
+  static String _canonicalCreateStoryPath(
+      String matchedPath, Uri? locationUri) {
     final fromUri = locationUri?.path;
     if (fromUri != null && fromUri.isNotEmpty && fromUri.startsWith('/')) {
       return fromUri;
@@ -100,7 +102,8 @@ class CreatorDrawerSessionNotifier extends StateNotifier<CreatorDrawerSessionSta
     return withSlash;
   }
 
-  static CreatorModule _moduleFromSentencesWorkspaceStep(CreatorWorkspaceStep step) {
+  static CreatorModule _moduleFromSentencesWorkspaceStep(
+      CreatorWorkspaceStep step) {
     return switch (step) {
       CreatorWorkspaceStep.vocabulary => CreatorModule.vocabulary,
       CreatorWorkspaceStep.grammar => CreatorModule.grammar,
@@ -170,16 +173,19 @@ class CreatorDrawerSessionNotifier extends StateNotifier<CreatorDrawerSessionSta
       opened = LearnModuleId.audio;
     }
 
-    final nextVisited =
-        opened == null ? state.learnModulesVisited : {...state.learnModulesVisited, opened};
+    final nextVisited = opened == null
+        ? state.learnModulesVisited
+        : {...state.learnModulesVisited, opened};
 
     final onSentencesHost = isStorySentencesCreatorPath(path);
-    final fromPanel =
-        onSentencesHost ? creatorWorkspaceStepForSentencesPanel(query['panel']) : null;
+    final fromPanel = onSentencesHost
+        ? creatorWorkspaceStepForSentencesPanel(query['panel'])
+        : null;
 
     final beforeStep = state.sentencesMainStep;
     final beforeMod = state.activeModule;
-    final beforeSentenceVisible = beforeStep == CreatorWorkspaceStep.storySentences;
+    final beforeSentenceVisible =
+        beforeStep == CreatorWorkspaceStep.storySentences;
 
     final CreatorWorkspaceStep nextSentencesMainStep;
     if (onSentencesHost) {
@@ -192,16 +198,19 @@ class CreatorDrawerSessionNotifier extends StateNotifier<CreatorDrawerSessionSta
       nextSentencesMainStep = CreatorWorkspaceStep.storySentences;
     }
 
-    final nextActiveModule = _activeModuleForPath(path, query, nextSentencesMainStep);
-    final afterSentenceVisible = nextSentencesMainStep == CreatorWorkspaceStep.storySentences;
-    final sentenceVisibleChanged = beforeSentenceVisible != afterSentenceVisible;
+    final nextActiveModule =
+        _activeModuleForPath(path, query, nextSentencesMainStep);
+    final afterSentenceVisible =
+        nextSentencesMainStep == CreatorWorkspaceStep.storySentences;
+    final sentenceVisibleChanged =
+        beforeSentenceVisible != afterSentenceVisible;
 
     creatorNavDebug(
       'reportRoute',
       'COMPUTE preserve=${_preserveSentencesWorkspaceStep(path)} onSentencesHost=$onSentencesHost '
-      'fromPanel=$fromPanel | before step=$beforeStep mod=$beforeMod sentenceListVisible=$beforeSentenceVisible '
-      '| next step=$nextSentencesMainStep mod=$nextActiveModule sentenceListVisible=$afterSentenceVisible '
-      '| visibleSentenceWorkspaceChanged=$sentenceVisibleChanged',
+          'fromPanel=$fromPanel | before step=$beforeStep mod=$beforeMod sentenceListVisible=$beforeSentenceVisible '
+          '| next step=$nextSentencesMainStep mod=$nextActiveModule sentenceListVisible=$afterSentenceVisible '
+          '| visibleSentenceWorkspaceChanged=$sentenceVisibleChanged',
     );
 
     if (state.matchedPath == path &&
@@ -258,7 +267,7 @@ class CreatorDrawerSessionNotifier extends StateNotifier<CreatorDrawerSessionSta
     creatorNavDebug(
       'setSentencesMainStep',
       'APPLY $beforeStep->$next mod $beforeMod->$nextModule '
-      'sentenceListVisible $beforeVis->$afterVis matchedPath=$path',
+          'sentenceListVisible $beforeVis->$afterVis matchedPath=$path',
     );
 
     state = state.copyWith(
@@ -295,9 +304,9 @@ class CreatorDrawerSessionNotifier extends StateNotifier<CreatorDrawerSessionSta
       creatorNavDebug(
         'retain_embed',
         '[vocab_page_persist] $phase action=$debugAction | '
-        'matchedPath=${s.matchedPath} | sentencesMainStep=${s.sentencesMainStep} | '
-        'activeModule=${s.activeModule} | '
-        'sentenceListVisible=${s.sentencesMainStep == CreatorWorkspaceStep.storySentences}',
+            'matchedPath=${s.matchedPath} | sentencesMainStep=${s.sentencesMainStep} | '
+            'activeModule=${s.activeModule} | '
+            'sentenceListVisible=${s.sentencesMainStep == CreatorWorkspaceStep.storySentences}',
       );
     }
 
@@ -305,9 +314,9 @@ class CreatorDrawerSessionNotifier extends StateNotifier<CreatorDrawerSessionSta
       creatorNavDebug(
         'retain_embed',
         '[vocab_page_persist] BEFORE action=$debugAction | '
-        'matchedPath=${state.matchedPath} | sentencesMainStep=${state.sentencesMainStep} | '
-        'activeModule=${state.activeModule} | '
-        'sentenceListVisible=${state.sentencesMainStep == CreatorWorkspaceStep.storySentences}',
+            'matchedPath=${state.matchedPath} | sentencesMainStep=${state.sentencesMainStep} | '
+            'activeModule=${state.activeModule} | '
+            'sentenceListVisible=${state.sentencesMainStep == CreatorWorkspaceStep.storySentences}',
       );
     }
 
@@ -328,7 +337,7 @@ class CreatorDrawerSessionNotifier extends StateNotifier<CreatorDrawerSessionSta
   }
 }
 
-final creatorDrawerSessionProvider =
-    StateNotifierProvider<CreatorDrawerSessionNotifier, CreatorDrawerSessionState>(
+final creatorDrawerSessionProvider = StateNotifierProvider<
+    CreatorDrawerSessionNotifier, CreatorDrawerSessionState>(
   (ref) => CreatorDrawerSessionNotifier(),
 );

@@ -5,14 +5,15 @@ import '../models/episode_meta.dart';
 /// Utility class for sharing episode content
 class ShareUtils {
   /// Shares an episode with platform-specific share sheet
-  /// 
+  ///
   /// Creates a deeplink URL and episode description for sharing
   /// Falls back to clipboard copy if platform sharing is not available
-  static Future<void> shareEpisode(BuildContext context, EpisodeMeta episode) async {
+  static Future<void> shareEpisode(
+      BuildContext context, EpisodeMeta episode) async {
     try {
       // Generate episode deeplink (this would be your actual app's deep link format)
       final deeplink = 'https://nimon.app/episode/${episode.id}';
-      
+
       // Create share text with episode details
       final shareText = '''
 Check out this episode on Nimon! 📚
@@ -27,7 +28,7 @@ ${episode.preview.isNotEmpty ? '${episode.preview}\n\n' : ''}$deeplink
       // For now, we'll copy to clipboard and show a snackbar
       // In a real app, you would use share_plus package or platform channels
       await Clipboard.setData(ClipboardData(text: shareText));
-      
+
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -80,7 +81,7 @@ ${episode.preview.isNotEmpty ? '${episode.preview}\n\n' : ''}$deeplink
   /// Creates formatted share text for an episode
   static String createShareText(EpisodeMeta episode) {
     final deeplink = createEpisodeDeeplink(episode.id);
-    
+
     return '''
 Check out this episode on Nimon! 📚
 

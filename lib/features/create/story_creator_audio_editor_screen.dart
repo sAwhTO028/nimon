@@ -1,35 +1,64 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:go_router/go_router.dart';
+import 'package:nimon/features/auth/auth_providers.dart';
+import 'package:nimon/features/create/creator_audio_upload_sheet.dart';
 import 'package:nimon/features/create/creator_back_policy.dart';
+import 'package:nimon/features/create/creator_drawer_publish.dart';
+import 'package:nimon/features/create/creator_drawer_publish_labels.dart';
+import 'package:nimon/features/create/creator_drawer_session.dart';
+import 'package:nimon/features/create/creator_learn_mode_sync.dart';
+import 'package:nimon/features/create/creator_progress_drawer.dart';
 import 'package:nimon/features/create/creator_route_sync_listener.dart';
+import 'package:nimon/features/create/creator_workspace_step.dart';
+import 'package:nimon/features/create/data/media_upload_repository.dart';
+import 'package:nimon/features/create/data/media_upload_repository_provider.dart';
 import 'package:nimon/features/create/story_creator_models.dart';
 import 'package:nimon/features/create/story_creator_provider.dart';
+import 'package:nimon/features/create/story_creator_review_display.dart';
 import 'package:nimon/ui/widgets/nimon_circle_nav_button.dart';
 
-/// V1 creator editor for one story-level audio asset (upload-first).
+/// V1 creator editor for one story-level audio asset (public **http(s) URL** first for remote sync).
 class StoryCreatorAudioEditorScreen extends ConsumerWidget {
   const StoryCreatorAudioEditorScreen({super.key});
 
   static const _ink = Color(0xFF1A1917);
   static const _muted = Color(0xFF5C5A55);
 
-  static const _allowedAudioExts = {'mp3', 'm4a', 'wav'};
-
-  static String? _validatePickedAudioExt(PlatformFile f) {
-    final ext = (f.extension ?? '').trim().toLowerCase();
-    if (ext.isEmpty || !_allowedAudioExts.contains(ext)) {
-      return 'Unsupported audio type. Use mp3, m4a, or wav.';
-    }
-    return null;
-  }
-
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    void handleCreatorBack() => unawaited(handleCreatorBackPressed(context, ref));
+    void handleCreatorBack() =>
+        unawaited(handleCreatorBackPressed(context, ref));
+
+    final draft = ref.watch(storyCreatorDraftDataProvider);
+    final session = ref.watch(creatorDrawerSessionProvider);
+    final progress = buildCreatorDrawerProgressModel(draft: draft);
+    final publishModel = buildStoryReviewDisplayModel(draft);
+    final draftState = ref.watch(storyCreatorDraftProvider);
+    final roSig = draftState.readOnlyPublishedCoreSig;
+    final roBaseline = draftState.publishedEditReadOnlyBaselineSig;
+    final flBaseline = draftState.publishedEditFullLearnBaselineSig;
+    final roExists = computeReadOnlyPublishedExists(
+      draft: draft,
+      readOnlyPublishedCoreSig: roSig,
+    );
+    final roDirty = computeReadOnlyHasUnpublishedChanges(
+      draft: draft,
+      readOnlyPublishedCoreSig: roSig,
+      dirty: draftState.dirty,
+      publishedEditReadOnlyBaselineSig: roBaseline,
+    );
+    final flExists = draft.publishState == StoryPublishState.fullLearnPublished;
+    final flDirty = computeFullLearnHasUnpublishedChanges(
+      draft: draft,
+      readOnlyPublishedCoreSig: roSig,
+      dirty: draftState.dirty,
+      publishedEditReadOnlyBaselineSig: roBaseline,
+      publishedEditFullLearnBaselineSig: flBaseline,
+    );
 
     return CreatorRouteSyncListener(
       child: PopScope(
@@ -44,6 +73,68 @@ class StoryCreatorAudioEditorScreen extends ConsumerWidget {
             leading: NimonBackButton(
               onPressed: handleCreatorBack,
             ),
+            actions: [
+              Builder(
+                builder: (ctx) {
+                  return IconButton(
+                    tooltip: 'Creator progress',
+                    icon: const Icon(Icons.menu_rounded),
+                    onPressed: () => Scaffold.of(ctx).openEndDrawer(),
+                  );
+                },
+              ),
+            ],
+          ),
+          endDrawer: CreatorProgressDrawer(
+            drawerKeySlot: kCreatorProgressDrawerKeyListening,
+            coreItems: progress.coreItems,
+            learnItems: progress.learnItems,
+            publishModel: publishModel,
+            creatorDraft: draft,
+            localDraftDirty: draftState.dirty,
+            readOnlyPublishedCoreSig: roSig,
+            publishedEditReadOnlyBaselineSig: roBaseline,
+            publishedEditFullLearnBaselineSig: flBaseline,
+            readOnlyPublishedExists: roExists,
+            readOnlyHasUnpublishedChanges: roDirty,
+            fullLearnPublishedExists: flExists,
+            fullLearnHasUnpublishedChanges: flDirty,
+            learnModeEnabled: session.learnModeEnabled,
+            currentStepId: creatorEffectiveActiveStep(session),
+            onLearnModeChanged: (v) {
+              applyCreatorLearnMode(
+                context: context,
+                ref: ref,
+                learnModeEnabled: v,
+                closeDrawerOnTurnOff: () => Navigator.of(context).maybePop(),
+              );
+            },
+            onOpenStep: (route) {
+              Navigator.of(context).maybePop();
+              final id = ref.read(storyCreatorDraftDataProvider).id;
+              context.push(createStoryProgressRouteWithDraftId(route, id));
+            },
+            onSaveDraft: () async {
+              Navigator.of(context).maybePop();
+              await ref
+                  .read(storyCreatorDraftProvider.notifier)
+                  .globalSaveDraftNow();
+              if (!context.mounted) return;
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('All changes saved locally.'),
+                  behavior: SnackBarBehavior.floating,
+                ),
+              );
+            },
+            onPublish: (mode) async {
+              Navigator.of(context).maybePop();
+              await performCreatorDrawerPublish(
+                ref: ref,
+                context: context,
+                mode: mode,
+              );
+            },
           ),
           body: StoryCreatorListeningModuleBody(
             padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
@@ -83,7 +174,14 @@ class StoryCreatorAudioEditorScreen extends ConsumerWidget {
     StoryAudioAsset? existing,
   }) async {
     final n = ref.read(storyCreatorDraftProvider.notifier);
-    final result = await showModalBottomSheet<_AudioUpsertResult?>(
+    final initialUrl = (existing != null && existing.hasUploadedSourceUrl)
+        ? (existing.sourceUrl ?? '').trim()
+        : '';
+    final tok = await ref.read(authTokenStoreProvider).readTokens();
+    if (!context.mounted) return;
+    final canUpload = tok != null && tok.accessToken.trim().isNotEmpty;
+
+    final result = await showModalBottomSheet<AudioUpsertResult?>(
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
@@ -93,246 +191,62 @@ class StoryCreatorAudioEditorScreen extends ConsumerWidget {
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (ctx) {
-        return _AudioUpsertSheet(
-          title: existing == null ? 'Add audio' : 'Replace audio',
-          submitLabel: existing == null ? 'Add audio' : 'Save replacement',
-          existingFileLabel: (existing?.localFileName ?? '').trim(),
+        Future<MediaUploadResponse?> uploadAudio(PlatformFile file) async {
+          final t = await ref.read(authTokenStoreProvider).readTokens();
+          if (t == null || t.accessToken.trim().isEmpty) {
+            if (ctx.mounted) {
+              ScaffoldMessenger.of(ctx).showSnackBar(
+                const SnackBar(content: Text('Sign in to upload media.')),
+              );
+            }
+            return null;
+          }
+          try {
+            return await ref
+                .read(mediaUploadRepositoryProvider)
+                .uploadAudioPlatformFile(
+                  filename: file.name,
+                  path: file.path,
+                  bytes: file.bytes,
+                );
+          } on MediaUploadException catch (e) {
+            if (ctx.mounted) {
+              ScaffoldMessenger.of(ctx).showSnackBar(
+                SnackBar(content: Text(e.userMessage)),
+              );
+            }
+            return null;
+          }
+        }
+
+        return CreatorAudioUploadSheet(
+          sheetTitle: existing == null ? 'Upload story audio' : 'Replace audio',
+          canUpload: canUpload,
+          initialPublicSourceUrl: initialUrl,
           initialDisplayName: existing?.displayName ?? '',
           initialDurationSeconds: existing?.durationSeconds,
+          existingFileLabel: (existing?.localFileName ?? '').trim(),
+          uploadAudio: uploadAudio,
         );
       },
     );
     if (!context.mounted || result == null) return;
-    n.setStoryAudioFromPickedFile(
-      pickedFileName: result.pickedFile.name,
-      pickedPath: result.pickedFile.path,
-      pickedSizeBytes: result.pickedFile.size,
-      displayNameRaw: result.displayNameRaw,
-      durationSeconds: result.durationSeconds,
-    );
-  }
-}
-
-class _AudioUpsertResult {
-  const _AudioUpsertResult({
-    required this.pickedFile,
-    required this.displayNameRaw,
-    required this.durationSeconds,
-  });
-
-  final PlatformFile pickedFile;
-  final String displayNameRaw;
-  final int? durationSeconds;
-}
-
-class _AudioUpsertSheet extends StatefulWidget {
-  const _AudioUpsertSheet({
-    required this.title,
-    required this.submitLabel,
-    required this.existingFileLabel,
-    required this.initialDisplayName,
-    required this.initialDurationSeconds,
-  });
-
-  final String title;
-  final String submitLabel;
-  final String existingFileLabel;
-  final String initialDisplayName;
-  final int? initialDurationSeconds;
-
-  @override
-  State<_AudioUpsertSheet> createState() => _AudioUpsertSheetState();
-}
-
-class _AudioUpsertSheetState extends State<_AudioUpsertSheet> {
-  late final TextEditingController _nameCtrl;
-  late final TextEditingController _durCtrl;
-
-  String? _error;
-  PlatformFile? _picked;
-
-  @override
-  void initState() {
-    super.initState();
-    _nameCtrl = TextEditingController(text: widget.initialDisplayName);
-    _durCtrl = TextEditingController(
-      text: widget.initialDurationSeconds?.toString() ?? '',
-    );
-  }
-
-  @override
-  void dispose() {
-    _nameCtrl.dispose();
-    _durCtrl.dispose();
-    super.dispose();
-  }
-
-  Future<void> _pickFile() async {
-    if (!mounted) return;
-    setState(() => _error = null);
-    final result = await FilePicker.platform.pickFiles(
-      allowMultiple: false,
-      type: FileType.custom,
-      allowedExtensions: const ['mp3', 'm4a', 'wav'],
-      withData: kIsWeb,
-    );
-    if (!mounted) return;
-    if (result == null || result.files.isEmpty) return;
-    final f = result.files.single;
-    final err = StoryCreatorAudioEditorScreen._validatePickedAudioExt(f);
-    if (err != null) {
-      setState(() => _error = err);
-      return;
+    if (result.sourceUrl != null) {
+      n.setStoryAudio(
+        sourceUrlRaw: result.sourceUrl!,
+        displayNameRaw: result.displayNameRaw,
+        durationSeconds: result.durationSeconds,
+      );
+    } else if (result.pickedFile != null) {
+      final f = result.pickedFile!;
+      n.setStoryAudioFromPickedFile(
+        pickedFileName: f.name,
+        pickedPath: f.path,
+        pickedSizeBytes: f.size,
+        displayNameRaw: result.displayNameRaw,
+        durationSeconds: result.durationSeconds,
+      );
     }
-    setState(() => _picked = f);
-  }
-
-  void _submit() {
-    final f = _picked;
-    if (f == null) {
-      setState(() => _error = 'Please choose an audio file.');
-      return;
-    }
-    final rawDur = _durCtrl.text.trim();
-    int? seconds;
-    if (rawDur.isNotEmpty) {
-      seconds = int.tryParse(rawDur);
-      if (seconds == null || seconds <= 0) {
-        setState(
-          () =>
-              _error = 'Duration must be a positive number (seconds).',
-        );
-        return;
-      }
-    }
-    Navigator.pop<_AudioUpsertResult?>(
-      context,
-      _AudioUpsertResult(
-        pickedFile: f,
-        displayNameRaw: _nameCtrl.text,
-        durationSeconds: seconds,
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
-    final existingLabel = widget.existingFileLabel;
-
-    return Padding(
-      padding: EdgeInsets.fromLTRB(20, 8, 20, 16 + bottomInset),
-      child: SingleChildScrollView(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(
-              widget.title,
-              style: theme.textTheme.titleLarge?.copyWith(
-                color: StoryCreatorAudioEditorScreen._ink,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Attach one full-story audio file for listening practice. '
-              'You can replace or remove it later.',
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: StoryCreatorAudioEditorScreen._muted,
-                height: 1.35,
-              ),
-            ),
-            const SizedBox(height: 16),
-            DecoratedBox(
-              decoration: BoxDecoration(
-                color: theme.colorScheme.surface,
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(
-                  color: Colors.black.withValues(alpha: 0.08),
-                ),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Text(
-                      'Audio file',
-                      style: theme.textTheme.labelLarge?.copyWith(
-                        color: StoryCreatorAudioEditorScreen._ink,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    OutlinedButton.icon(
-                      onPressed: _pickFile,
-                      icon: const Icon(Icons.upload_file_rounded),
-                      label: Text(
-                        _picked == null ? 'Choose file' : 'Change file',
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    Text(
-                      _picked?.name ??
-                          (existingLabel.isNotEmpty
-                              ? existingLabel
-                              : 'No file selected'),
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: StoryCreatorAudioEditorScreen._muted,
-                        height: 1.35,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    if (_error != null) ...[
-                      const SizedBox(height: 10),
-                      Text(
-                        _error!,
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.colorScheme.error,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _nameCtrl,
-              decoration: InputDecoration(
-                labelText: 'Display name (optional)',
-                hintText: 'e.g. Full story narration',
-                border: const OutlineInputBorder(),
-                filled: true,
-                fillColor: theme.colorScheme.surface,
-              ),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _durCtrl,
-              decoration: const InputDecoration(
-                labelText: 'Duration (seconds, optional)',
-                hintText: 'e.g. 95',
-                border: OutlineInputBorder(),
-              ),
-              keyboardType: TextInputType.number,
-            ),
-            const SizedBox(height: 18),
-            FilledButton(
-              onPressed: _submit,
-              child: Text(widget.submitLabel),
-            ),
-            const SizedBox(height: 10),
-            OutlinedButton(
-              onPressed: () => Navigator.pop<_AudioUpsertResult?>(context, null),
-              child: const Text('Cancel'),
-            ),
-          ],
-        ),
-      ),
-    );
   }
 }
 
@@ -354,6 +268,7 @@ class StoryCreatorListeningModuleBody extends ConsumerWidget {
   final bool showBottomActions;
   final bool showLearnExitButton;
   final bool useCompactModuleHeader;
+
   /// When true, omits the large module title so the sentences host pinned header is the only title.
   final bool hideWorkspaceModuleTitle;
   final VoidCallback? onExit;
@@ -384,9 +299,8 @@ class StoryCreatorListeningModuleBody extends ConsumerWidget {
           const SizedBox(height: 8),
         ],
         Text(
-          'Attach one full-story audio source for listening practice. '
-          'You can replace or remove it later. '
-          'Audio is optional for Reading Only, but required for Full Learn completion.',
+          'Upload story audio for Full Learn, or leave empty for reading-only. '
+          'Supported: mp3, m4a, wav',
           style: theme.textTheme.bodyMedium?.copyWith(
             color: StoryCreatorAudioEditorScreen._muted,
             height: 1.45,
@@ -409,9 +323,10 @@ class StoryCreatorListeningModuleBody extends ConsumerWidget {
           _EmptyState(theme: theme),
           const SizedBox(height: 14),
           FilledButton.icon(
-            onPressed: () => StoryCreatorAudioEditorScreen._showUpsertSheet(context, ref),
-            icon: const Icon(Icons.add_rounded),
-            label: const Text('Upload audio'),
+            onPressed: () =>
+                StoryCreatorAudioEditorScreen._showUpsertSheet(context, ref),
+            icon: const Icon(Icons.audio_file_rounded),
+            label: const Text('Choose audio file'),
           ),
         ] else ...[
           _AudioSummaryCard(asset: a!, theme: theme),
@@ -420,13 +335,14 @@ class StoryCreatorListeningModuleBody extends ConsumerWidget {
             children: [
               Expanded(
                 child: FilledButton.icon(
-                  onPressed: () => StoryCreatorAudioEditorScreen._showUpsertSheet(
+                  onPressed: () =>
+                      StoryCreatorAudioEditorScreen._showUpsertSheet(
                     context,
                     ref,
                     existing: a,
                   ),
                   icon: const Icon(Icons.swap_horiz_rounded),
-                  label: const Text('Replace'),
+                  label: const Text('Replace audio'),
                 ),
               ),
               const SizedBox(width: 10),
@@ -434,12 +350,13 @@ class StoryCreatorListeningModuleBody extends ConsumerWidget {
                 child: OutlinedButton.icon(
                   onPressed: () async {
                     final ok =
-                        await StoryCreatorAudioEditorScreen._confirmRemove(context);
+                        await StoryCreatorAudioEditorScreen._confirmRemove(
+                            context);
                     if (ok != true) return;
                     n.clearStoryAudio();
                   },
                   icon: const Icon(Icons.delete_outline_rounded),
-                  label: const Text('Remove'),
+                  label: const Text('Remove audio'),
                 ),
               ),
             ],
@@ -501,7 +418,7 @@ class _EmptyState extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Text(
-              'No audio attached yet',
+              'No story audio yet',
               style: theme.textTheme.titleSmall?.copyWith(
                 height: 1.2,
                 fontWeight: FontWeight.w800,
@@ -510,7 +427,8 @@ class _EmptyState extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             Text(
-              'Attach one full-story audio file for listening practice.',
+              'Choose an audio file for this story. '
+              'Supported: mp3, m4a, wav',
               style: theme.textTheme.bodyMedium?.copyWith(
                 height: 1.45,
                 color: const Color(0xFF5C5A55),
@@ -536,13 +454,25 @@ class _AudioSummaryCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final name = (asset.displayName ?? '').trim();
     final fileName = (asset.localFileName ?? '').trim();
+    final url = (asset.sourceUrl ?? '').trim();
     final dur = asset.durationSeconds;
-    final status = asset.hasUploadedSourceUrl ? 'Uploaded' : 'Attached';
+    final status =
+        asset.hasUploadedSourceUrl ? 'Saved online' : 'Draft on device';
 
     String durLabel(int s) {
       final m = s ~/ 60;
       final r = s % 60;
       return '${m}m ${r.toString().padLeft(2, '0')}s';
+    }
+
+    String subtitleLine() {
+      if (fileName.isNotEmpty) return fileName;
+      if (asset.hasUploadedSourceUrl && url.isNotEmpty) {
+        if (url.length <= 56) return url;
+        return '${url.substring(0, 53)}…';
+      }
+      if (url.isNotEmpty) return url;
+      return 'Audio attached';
     }
 
     return DecoratedBox(
@@ -575,7 +505,7 @@ class _AudioSummaryCard extends StatelessWidget {
               const SizedBox(height: 6),
             ],
             Text(
-              fileName.isNotEmpty ? fileName : 'Audio file attached',
+              subtitleLine(),
               style: theme.textTheme.bodySmall?.copyWith(
                 color: _muted,
                 height: 1.4,
@@ -599,7 +529,8 @@ class _AudioSummaryCard extends StatelessWidget {
                     fontWeight: FontWeight.w800,
                   ),
                 ),
-                if (asset.localSizeBytes != null && asset.localSizeBytes! > 0) ...[
+                if (asset.localSizeBytes != null &&
+                    asset.localSizeBytes! > 0) ...[
                   const SizedBox(width: 10),
                   Text(
                     '• ${_formatBytes(asset.localSizeBytes!)}',
@@ -634,11 +565,10 @@ class _AudioSummaryCard extends StatelessWidget {
   }
 
   static String _formatBytes(int bytes) {
-    if (bytes < 1024) return '${bytes} B';
+    if (bytes < 1024) return '$bytes B';
     final kb = bytes / 1024;
     if (kb < 1024) return '${kb.toStringAsFixed(1)} KB';
     final mb = kb / 1024;
     return '${mb.toStringAsFixed(1)} MB';
   }
 }
-

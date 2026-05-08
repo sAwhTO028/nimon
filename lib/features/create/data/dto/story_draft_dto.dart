@@ -13,6 +13,7 @@ class PublishResponseDto {
   });
 
   final String draftId;
+
   /// Same string keys as [StoryPublishState.storageKey].
   final String publishState;
   final String? publishedMonoId;
@@ -32,6 +33,7 @@ class StoryDraftDto {
     this.publishedMonoId,
     this.readingOnlyPublishedAt,
     this.fullLearnPublishedAt,
+    this.hasUnpublishedCoreChanges,
     this.etag,
     required this.basics,
     required this.sentences,
@@ -56,6 +58,9 @@ class StoryDraftDto {
   final String? publishedMonoId;
   final String? readingOnlyPublishedAt;
   final String? fullLearnPublishedAt;
+
+  /// Server-side “staging” flag when linked to a published mono (`null` if omitted).
+  final bool? hasUnpublishedCoreChanges;
 
   /// Optional HTTP ETag mirror for concurrency.
   final String? etag;
@@ -187,6 +192,7 @@ class VocabularyKanjiEntryDto {
 
   final String id;
   final String termJapanese;
+
   /// [VocabularyKanjiEntryType.storageKey].
   final String type;
   final String? reading;
@@ -258,6 +264,7 @@ class QuizEntryDto {
   });
 
   final String id;
+
   /// [CreatorQuizCategory.storageKey].
   final String category;
   final String prompt;

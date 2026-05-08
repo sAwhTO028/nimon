@@ -15,7 +15,8 @@ void main() {
       await StoryCreatorDraftStorage.clear();
     });
 
-    test('strict mode: remote delete failure does not cleanup locally', () async {
+    test('strict mode: remote delete failure does not cleanup locally',
+        () async {
       if (!RemoteBackendConfig.strictRemoteDrafts) {
         // This test is only meaningful when compiled with:
         // --dart-define=NIMON_STRICT_REMOTE_DRAFTS=true
@@ -36,10 +37,12 @@ void main() {
 
       // Strict mode must stay honest: local is untouched on remote failure.
       expect(await local.hasDraft(created.id), isTrue);
-      expect(await StoryCreatorDraftResumeStorage.loadMeta(created.id), isNotNull);
+      expect(
+          await StoryCreatorDraftResumeStorage.loadMeta(created.id), isNotNull);
     });
 
-    test('non-strict mode: remote delete failure falls back to local cleanup', () async {
+    test('non-strict mode: remote delete failure falls back to local cleanup',
+        () async {
       if (RemoteBackendConfig.strictRemoteDrafts) {
         // Compile/run this test with strict mode OFF.
         return;
@@ -48,7 +51,8 @@ void main() {
       final local = const LocalStoryDraftRepository();
       final created = await local.createNewDraft();
       expect(await local.hasDraft(created.id), isTrue);
-      expect(await StoryCreatorDraftResumeStorage.loadMeta(created.id), isNotNull);
+      expect(
+          await StoryCreatorDraftResumeStorage.loadMeta(created.id), isNotNull);
 
       final remote = RemoteStoryDraftRepository(
         apiBaseUrl: 'http://localhost:3999', // intentionally wrong / offline
@@ -62,4 +66,3 @@ void main() {
     });
   });
 }
-

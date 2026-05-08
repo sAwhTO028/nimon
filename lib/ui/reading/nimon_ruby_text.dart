@@ -389,4 +389,3 @@ class _RenderInlineRubyToken extends RenderBox {
     canvas.restore();
   }
 }
-

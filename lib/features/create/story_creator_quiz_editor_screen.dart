@@ -2,12 +2,20 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:nimon/features/create/creator_back_policy.dart';
+import 'package:nimon/features/create/creator_drawer_publish.dart';
+import 'package:nimon/features/create/creator_drawer_publish_labels.dart';
+import 'package:nimon/features/create/creator_drawer_session.dart';
+import 'package:nimon/features/create/creator_learn_mode_sync.dart';
+import 'package:nimon/features/create/creator_progress_drawer.dart';
 import 'package:nimon/features/create/creator_quiz_ui_state.dart';
 import 'package:nimon/features/create/creator_route_sync_listener.dart';
 import 'package:nimon/features/create/creator_reorder_handle.dart';
+import 'package:nimon/features/create/creator_workspace_step.dart';
 import 'package:nimon/features/create/story_creator_models.dart';
 import 'package:nimon/features/create/story_creator_provider.dart';
+import 'package:nimon/features/create/story_creator_review_display.dart';
 import 'package:nimon/ui/widgets/nimon_circle_nav_button.dart';
 
 export 'package:nimon/features/create/creator_quiz_ui_state.dart'
@@ -16,7 +24,8 @@ export 'package:nimon/features/create/creator_quiz_ui_state.dart'
 /// Quiz editor tabs: Semantics (vocab + kanji), Grammar, Sentence.
 const int kQuizEditorTabCount = 3;
 
-const List<CreatorQuizCategory> kSemanticsNewItemCategories = <CreatorQuizCategory>[
+const List<CreatorQuizCategory> kSemanticsNewItemCategories =
+    <CreatorQuizCategory>[
   CreatorQuizCategory.vocabulary,
   CreatorQuizCategory.kanji,
 ];
@@ -78,7 +87,35 @@ class StoryCreatorQuizEditorScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    void handleCreatorBack() => unawaited(handleCreatorBackPressed(context, ref));
+    void handleCreatorBack() =>
+        unawaited(handleCreatorBackPressed(context, ref));
+
+    final draft = ref.watch(storyCreatorDraftDataProvider);
+    final session = ref.watch(creatorDrawerSessionProvider);
+    final progress = buildCreatorDrawerProgressModel(draft: draft);
+    final publishModel = buildStoryReviewDisplayModel(draft);
+    final draftState = ref.watch(storyCreatorDraftProvider);
+    final roSig = draftState.readOnlyPublishedCoreSig;
+    final roBaseline = draftState.publishedEditReadOnlyBaselineSig;
+    final flBaseline = draftState.publishedEditFullLearnBaselineSig;
+    final roExists = computeReadOnlyPublishedExists(
+      draft: draft,
+      readOnlyPublishedCoreSig: roSig,
+    );
+    final roDirty = computeReadOnlyHasUnpublishedChanges(
+      draft: draft,
+      readOnlyPublishedCoreSig: roSig,
+      dirty: draftState.dirty,
+      publishedEditReadOnlyBaselineSig: roBaseline,
+    );
+    final flExists = draft.publishState == StoryPublishState.fullLearnPublished;
+    final flDirty = computeFullLearnHasUnpublishedChanges(
+      draft: draft,
+      readOnlyPublishedCoreSig: roSig,
+      dirty: draftState.dirty,
+      publishedEditReadOnlyBaselineSig: roBaseline,
+      publishedEditFullLearnBaselineSig: flBaseline,
+    );
 
     return CreatorRouteSyncListener(
       child: PopScope(
@@ -93,6 +130,68 @@ class StoryCreatorQuizEditorScreen extends ConsumerWidget {
             leading: NimonBackButton(
               onPressed: handleCreatorBack,
             ),
+            actions: [
+              Builder(
+                builder: (ctx) {
+                  return IconButton(
+                    tooltip: 'Creator progress',
+                    icon: const Icon(Icons.menu_rounded),
+                    onPressed: () => Scaffold.of(ctx).openEndDrawer(),
+                  );
+                },
+              ),
+            ],
+          ),
+          endDrawer: CreatorProgressDrawer(
+            drawerKeySlot: kCreatorProgressDrawerKeyQuiz,
+            coreItems: progress.coreItems,
+            learnItems: progress.learnItems,
+            publishModel: publishModel,
+            creatorDraft: draft,
+            localDraftDirty: draftState.dirty,
+            readOnlyPublishedCoreSig: roSig,
+            publishedEditReadOnlyBaselineSig: roBaseline,
+            publishedEditFullLearnBaselineSig: flBaseline,
+            readOnlyPublishedExists: roExists,
+            readOnlyHasUnpublishedChanges: roDirty,
+            fullLearnPublishedExists: flExists,
+            fullLearnHasUnpublishedChanges: flDirty,
+            learnModeEnabled: session.learnModeEnabled,
+            currentStepId: creatorEffectiveActiveStep(session),
+            onLearnModeChanged: (v) {
+              applyCreatorLearnMode(
+                context: context,
+                ref: ref,
+                learnModeEnabled: v,
+                closeDrawerOnTurnOff: () => Navigator.of(context).maybePop(),
+              );
+            },
+            onOpenStep: (route) {
+              Navigator.of(context).maybePop();
+              final id = ref.read(storyCreatorDraftDataProvider).id;
+              context.push(createStoryProgressRouteWithDraftId(route, id));
+            },
+            onSaveDraft: () async {
+              Navigator.of(context).maybePop();
+              await ref
+                  .read(storyCreatorDraftProvider.notifier)
+                  .globalSaveDraftNow();
+              if (!context.mounted) return;
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('All changes saved locally.'),
+                  behavior: SnackBarBehavior.floating,
+                ),
+              );
+            },
+            onPublish: (mode) async {
+              Navigator.of(context).maybePop();
+              await performCreatorDrawerPublish(
+                ref: ref,
+                context: context,
+                mode: mode,
+              );
+            },
           ),
           body: StoryCreatorQuizModuleBody(
             padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
@@ -108,7 +207,9 @@ class StoryCreatorQuizEditorScreen extends ConsumerWidget {
 
   static Future<bool?> _confirmDelete(BuildContext context, String prompt) {
     final p = prompt.trim();
-    final label = p.isEmpty ? 'this quiz item' : '“${p.substring(0, p.length.clamp(0, 60))}”';
+    final label = p.isEmpty
+        ? 'this quiz item'
+        : '“${p.substring(0, p.length.clamp(0, 60))}”';
     return showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -142,13 +243,19 @@ class StoryCreatorQuizEditorScreen extends ConsumerWidget {
     final defaultCat = defaultCategory ?? CreatorQuizCategory.vocabulary;
     var category = existing?.category ?? defaultCat;
     final promptCtrl = TextEditingController(text: existing?.prompt ?? '');
-    final aCtrl = TextEditingController(text: existing?.options.elementAtOrNull(0) ?? '');
-    final bCtrl = TextEditingController(text: existing?.options.elementAtOrNull(1) ?? '');
-    final cCtrl = TextEditingController(text: existing?.options.elementAtOrNull(2) ?? '');
-    final dCtrl = TextEditingController(text: existing?.options.elementAtOrNull(3) ?? '');
+    final aCtrl =
+        TextEditingController(text: existing?.options.elementAtOrNull(0) ?? '');
+    final bCtrl =
+        TextEditingController(text: existing?.options.elementAtOrNull(1) ?? '');
+    final cCtrl =
+        TextEditingController(text: existing?.options.elementAtOrNull(2) ?? '');
+    final dCtrl =
+        TextEditingController(text: existing?.options.elementAtOrNull(3) ?? '');
     var correctIndex = existing?.correctIndex ?? 0;
-    final exSourceCtrl = TextEditingController(text: existing?.explanations?.my ?? '');
-    final exEnCtrl = TextEditingController(text: existing?.explanations?.en ?? '');
+    final exSourceCtrl =
+        TextEditingController(text: existing?.explanations?.my ?? '');
+    final exEnCtrl =
+        TextEditingController(text: existing?.explanations?.en ?? '');
     var englishExpanded = (existing?.explanations?.en ?? '').trim().isNotEmpty;
 
     String? error;
@@ -179,7 +286,8 @@ class StoryCreatorQuizEditorScreen extends ConsumerWidget {
                 return;
               }
               if (opts.any((o) => o.isEmpty)) {
-                setSheetState(() => error = 'All 4 answer options are required.');
+                setSheetState(
+                    () => error = 'All 4 answer options are required.');
                 return;
               }
               if (correctIndex < 0 || correctIndex > 3) {
@@ -257,9 +365,10 @@ class StoryCreatorQuizEditorScreen extends ConsumerWidget {
                         newItemCategoryChoices != null &&
                         newItemCategoryChoices.isNotEmpty) ...[
                       DropdownMenu<CreatorQuizCategory>(
-                        initialSelection: newItemCategoryChoices.contains(category)
-                            ? category
-                            : newItemCategoryChoices.first,
+                        initialSelection:
+                            newItemCategoryChoices.contains(category)
+                                ? category
+                                : newItemCategoryChoices.first,
                         expandedInsets: EdgeInsets.zero,
                         label: const Text('Category'),
                         onSelected: (v) {
@@ -444,7 +553,8 @@ class StoryCreatorQuizEditorScreen extends ConsumerWidget {
                     const SizedBox(height: 18),
                     FilledButton(
                       onPressed: save,
-                      child: Text(existing == null ? 'Add quiz item' : 'Save changes'),
+                      child: Text(
+                          existing == null ? 'Add quiz item' : 'Save changes'),
                     ),
                     const SizedBox(height: 10),
                     OutlinedButton(
@@ -495,6 +605,7 @@ class StoryCreatorQuizModuleBody extends ConsumerWidget {
   final bool showBottomActions;
   final bool showLearnExitButton;
   final bool useCompactModuleHeader;
+
   /// When true, omits the large module title so the sentences host pinned header is the only title.
   final bool hideWorkspaceModuleTitle;
   final VoidCallback? onExit;
@@ -530,7 +641,8 @@ class _QuizModuleBodyInner extends ConsumerStatefulWidget {
   final VoidCallback? onExit;
 
   @override
-  ConsumerState<_QuizModuleBodyInner> createState() => _QuizModuleBodyInnerState();
+  ConsumerState<_QuizModuleBodyInner> createState() =>
+      _QuizModuleBodyInnerState();
 }
 
 class _QuizModuleBodyInnerState extends ConsumerState<_QuizModuleBodyInner>
@@ -595,7 +707,9 @@ class _QuizModuleBodyInnerState extends ConsumerState<_QuizModuleBodyInner>
         children: [
           if (!widget.hideWorkspaceModuleTitle) ...[
             Text(
-              widget.useCompactModuleHeader ? 'Quiz' : 'Manual quiz items (MCQ)',
+              widget.useCompactModuleHeader
+                  ? 'Quiz'
+                  : 'Manual quiz items (MCQ)',
               style: theme.textTheme.titleLarge?.copyWith(
                 color: StoryCreatorQuizEditorScreen._ink,
                 fontWeight: FontWeight.w800,
@@ -722,8 +836,8 @@ class _QuizModuleBodyInnerState extends ConsumerState<_QuizModuleBodyInner>
                 existing: q,
               ),
               onDelete: () async {
-                final ok =
-                    await StoryCreatorQuizEditorScreen._confirmDelete(context, q.prompt);
+                final ok = await StoryCreatorQuizEditorScreen._confirmDelete(
+                    context, q.prompt);
                 if (ok != true) return;
                 n.deleteQuizEntry(q.id);
               },
@@ -944,4 +1058,3 @@ class _QuizCard extends StatelessWidget {
 extension on List<String> {
   String? elementAtOrNull(int i) => (i >= 0 && i < length) ? this[i] : null;
 }
-

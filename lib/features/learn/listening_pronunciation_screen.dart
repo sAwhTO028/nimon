@@ -4,15 +4,37 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:just_audio/just_audio.dart';
+import 'package:nimon/features/create/data/dto/story_draft_dto.dart';
+import 'package:nimon/features/learn/learn_catalog_content_gate.dart';
 import 'package:nimon/features/learn/learn_explanation_language.dart';
 import 'package:nimon/features/learn/learn_explanation_language_provider.dart';
+import 'package:nimon/features/learn/learn_published_snapshot_mappers.dart';
+import 'package:nimon/features/learn/learn_published_snapshot_providers.dart';
+import 'package:nimon/features/profile/data/published_mono_catalog_visibility_exception.dart';
 import 'package:nimon/features/learn/learn_support_text.dart';
 import 'package:nimon/features/learn/listening_transcript_models.dart';
+import 'package:nimon/features/mono/mono_line_explanation_display.dart';
+import 'package:nimon/features/learn/listening_transcript_from_published.dart';
 import 'package:nimon/features/settings/settings_providers.dart';
+import 'package:nimon/ui/reading/nimon_furigana_preview_style.dart';
+import 'package:nimon/ui/reading/nimon_ruby_text.dart';
+import 'package:nimon/ui/reading/nimon_translation_text.dart';
 import 'package:nimon/ui/widgets/nimon_circle_nav_button.dart';
 
+/// Returns [StoryAudioDto.sourceUrl] only when it is `http://` or `https://`.
+String? publishedStoryAudioHttpUrl(StoryAudioDto? audio) {
+  if (audio == null) return null;
+  final u = (audio.sourceUrl ?? '').trim();
+  if (u.isEmpty) return null;
+  final lower = u.toLowerCase();
+  if (!lower.startsWith('http://') && !lower.startsWith('https://')) {
+    return null;
+  }
+  return u;
+}
+
 /// V1: full-page transcript + one fixed bottom audio player (no sync / scoring).
-class ListeningPronunciationScreen extends ConsumerStatefulWidget {
+class ListeningPronunciationScreen extends ConsumerWidget {
   const ListeningPronunciationScreen({
     super.key,
     required this.contentId,
@@ -35,12 +57,287 @@ class ListeningPronunciationScreen extends ConsumerStatefulWidget {
   static const _inkMuted = Color(0xFF5C5A55);
 
   @override
-  ConsumerState<ListeningPronunciationScreen> createState() =>
-      _ListeningPronunciationScreenState();
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    final LearnExplanationLanguage lang = explanationLanguageOverride != null
+        ? explanationLanguageOverride!
+        : ref.watch(learnExplanationLanguageProvider);
+    final showTranslation = ref.watch(monoReaderTranslationEnabledProvider);
+
+    if (learnDemoMocksAllowed(contentId)) {
+      final demoAudio = (audioUrl ?? '').trim().isNotEmpty
+          ? audioUrl!.trim()
+          : ListeningSampleData.defaultAudioUrl;
+      final demoLines = lines ?? ListeningSampleData.mockLines;
+      final sub = (storyTitle ?? '').trim();
+      return _ListeningPlaybackView(
+        key: ValueKey('demo:$demoAudio'),
+        storySubtitle: sub,
+        audioUrl: demoAudio,
+        transcriptLines: demoLines,
+        explanationLanguage: lang,
+        showTranslation: showTranslation,
+        audioUnavailableMessage: null,
+        transcriptEmptyMessage: null,
+      );
+    }
+
+    final detailAsync =
+        ref.watch(catalogPublishedMonoDetailProvider(contentId));
+    final snapAsync = ref.watch(learnPublishedSnapshotProvider(contentId));
+
+    Widget wrapScaffold(Widget body) {
+      return Scaffold(
+        backgroundColor: _bg,
+        appBar: AppBar(
+          backgroundColor: _bg,
+          surfaceTintColor: Colors.transparent,
+          elevation: 0,
+          leading: NimonBackButton(onPressed: () => context.pop()),
+          titleSpacing: 0,
+          title: Text(
+            'Listening / Pronunciation',
+            style: theme.textTheme.titleMedium?.copyWith(
+              color: _ink,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ),
+        body: body,
+      );
+    }
+
+    return detailAsync.when(
+      loading: () => wrapScaffold(
+        const Center(child: CircularProgressIndicator()),
+      ),
+      error: (err, _) => wrapScaffold(
+        _ListeningErrorBody(
+          message: publishedMonoCatalogDetailErrorTitle(err),
+          detail: publishedMonoCatalogDetailErrorBody(err),
+          onRetry: () =>
+              ref.invalidate(catalogPublishedMonoDetailProvider(contentId)),
+        ),
+      ),
+      data: (detail) {
+        return snapAsync.when(
+          loading: () => wrapScaffold(
+            const Center(child: CircularProgressIndicator()),
+          ),
+          error: (err, _) => wrapScaffold(
+            _ListeningErrorBody(
+              message: 'Could not load learning content.',
+              detail: err.toString(),
+              onRetry: () => ref.invalidate(
+                catalogPublishedMonoDetailProvider(contentId),
+              ),
+            ),
+          ),
+          data: (snap) {
+            final useLearn =
+                shouldUsePublishedLearnSnapshot(detail.publishKind, snap);
+            final dto = snap?.storyAudio;
+            final httpUrl = useLearn ? publishedStoryAudioHttpUrl(dto) : null;
+
+            var subtitle = (storyTitle ?? '').trim();
+            if (subtitle.isEmpty) {
+              subtitle = (dto?.displayName ?? '').trim();
+            }
+            final durSec = dto?.durationSeconds;
+            if (durSec != null && durSec > 0) {
+              final d = Duration(seconds: durSec);
+              final m = d.inMinutes;
+              final s = d.inSeconds.remainder(60);
+              final durLabel = '$m:${s.toString().padLeft(2, '0')}';
+              subtitle = subtitle.isEmpty ? durLabel : '$subtitle · $durLabel';
+            }
+
+            if (!useLearn) {
+              return wrapScaffold(
+                const _ListeningLockedBody(),
+              );
+            }
+
+            if (httpUrl == null) {
+              return wrapScaffold(
+                const _ListeningAudioUnavailableBody(),
+              );
+            }
+
+            final explicit = lines;
+            final fromCore =
+                listeningTranscriptLinesFromPublishedCore(detail.content);
+            final catalogLines =
+                (explicit != null && explicit.isNotEmpty) ? explicit : fromCore;
+            final transcriptEmpty = catalogLines.isEmpty;
+
+            return _ListeningPlaybackView(
+              key: ValueKey('catalog:$httpUrl'),
+              storySubtitle: subtitle,
+              audioUrl: httpUrl,
+              transcriptLines: catalogLines,
+              explanationLanguage: lang,
+              showTranslation: showTranslation,
+              audioUnavailableMessage: null,
+              transcriptEmptyMessage: transcriptEmpty
+                  ? 'No transcript is published for this story yet.'
+                  : null,
+            );
+          },
+        );
+      },
+    );
+  }
 }
 
-class _ListeningPronunciationScreenState
-    extends ConsumerState<ListeningPronunciationScreen> {
+class _ListeningLockedBody extends StatelessWidget {
+  const _ListeningLockedBody();
+
+  static const _ink = ListeningPronunciationScreen._ink;
+  static const _inkMuted = ListeningPronunciationScreen._inkMuted;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final bottomInset = MediaQuery.paddingOf(context).bottom;
+    return Padding(
+      padding: EdgeInsets.fromLTRB(24, 24, 24, bottomInset + 24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Published listening practice isn’t available for this story yet. '
+            'Stories published as read-only don’t include learning modules '
+            'until you publish full learn.',
+            style: theme.textTheme.bodyLarge?.copyWith(
+              color: _ink,
+              height: 1.45,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            'Publish Full Learn from the creator workspace to sync story audio to readers.',
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: _inkMuted,
+              height: 1.4,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ListeningAudioUnavailableBody extends StatelessWidget {
+  const _ListeningAudioUnavailableBody();
+
+  static const _ink = ListeningPronunciationScreen._ink;
+  static const _inkMuted = ListeningPronunciationScreen._inkMuted;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final bottomInset = MediaQuery.paddingOf(context).bottom;
+    return Padding(
+      padding: EdgeInsets.fromLTRB(24, 24, 24, bottomInset + 24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Audio is not available for this story yet.',
+            style: theme.textTheme.bodyLarge?.copyWith(
+              color: _ink,
+              height: 1.45,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            'Only streamed audio (http/https) can be played here. '
+            'Local-only or missing URLs cannot be loaded in the catalog reader.',
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: _inkMuted,
+              height: 1.4,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ListeningErrorBody extends StatelessWidget {
+  const _ListeningErrorBody({
+    required this.message,
+    required this.detail,
+    required this.onRetry,
+  });
+
+  final String message;
+  final String detail;
+  final VoidCallback onRetry;
+
+  static const _ink = ListeningPronunciationScreen._ink;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final bottomInset = MediaQuery.paddingOf(context).bottom;
+    return Padding(
+      padding: EdgeInsets.fromLTRB(24, 24, 24, bottomInset + 24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            message,
+            style: theme.textTheme.titleMedium?.copyWith(
+              color: _ink,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            detail,
+            style: theme.textTheme.bodySmall?.copyWith(color: _ink),
+          ),
+          const SizedBox(height: 16),
+          TextButton(onPressed: onRetry, child: const Text('Retry')),
+        ],
+      ),
+    );
+  }
+}
+
+/// Transcript + player; [audioUrl] null uses [audioUnavailableMessage] in the player card.
+class _ListeningPlaybackView extends StatefulWidget {
+  const _ListeningPlaybackView({
+    super.key,
+    required this.storySubtitle,
+    required this.audioUrl,
+    required this.transcriptLines,
+    required this.explanationLanguage,
+    required this.showTranslation,
+    this.audioUnavailableMessage,
+    this.transcriptEmptyMessage,
+  });
+
+  final String storySubtitle;
+  final String? audioUrl;
+  final List<ListeningTranscriptLine> transcriptLines;
+  final LearnExplanationLanguage explanationLanguage;
+  final bool showTranslation;
+
+  final String? audioUnavailableMessage;
+  final String? transcriptEmptyMessage;
+
+  static const _bg = Color(0xFFF6F3EA);
+  static const _ink = Color(0xFF1A1917);
+  static const _inkMuted = Color(0xFF5C5A55);
+
+  @override
+  State<_ListeningPlaybackView> createState() => _ListeningPlaybackViewState();
+}
+
+class _ListeningPlaybackViewState extends State<_ListeningPlaybackView> {
   late final AudioPlayer _player;
   bool _audioReady = false;
   String? _loadError;
@@ -49,28 +346,21 @@ class _ListeningPronunciationScreenState
 
   double get _speed => _speedSteps[_speedIndex];
 
-  LearnExplanationLanguage get _explanationLanguage =>
-      widget.explanationLanguageOverride ??
-      ref.watch(learnExplanationLanguageProvider);
-
-  List<ListeningTranscriptLine> get _lines =>
-      widget.lines ?? ListeningSampleData.mockLines;
-
-  String get _audioSource =>
-      (widget.audioUrl ?? '').trim().isNotEmpty
-          ? widget.audioUrl!.trim()
-          : ListeningSampleData.defaultAudioUrl;
+  bool get _hasPlayableUrl => (widget.audioUrl ?? '').trim().isNotEmpty;
 
   @override
   void initState() {
     super.initState();
     _player = AudioPlayer();
-    unawaited(_initAudio());
+    if (_hasPlayableUrl) {
+      unawaited(_initAudio());
+    }
   }
 
   Future<void> _initAudio() async {
+    final url = widget.audioUrl!.trim();
     try {
-      await _player.setUrl(_audioSource);
+      await _player.setUrl(url);
       await _player.setSpeed(_speed);
       if (mounted) setState(() => _audioReady = true);
     } catch (_) {
@@ -111,16 +401,17 @@ class _ListeningPronunciationScreenState
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final subtitle = (widget.storyTitle ?? '').trim();
+    final subtitle = widget.storySubtitle.trim();
     final bottomInset = MediaQuery.paddingOf(context).bottom;
-    final showExplanation = ref.watch(monoExplanationEnabledSettingProvider);
-    /// Space for floating card + margin so last transcript lines stay visible.
     const cardReserve = 160.0;
+    final lines = widget.transcriptLines;
+    final showTranscriptEmpty = lines.isEmpty &&
+        (widget.transcriptEmptyMessage ?? '').trim().isNotEmpty;
 
     return Scaffold(
-      backgroundColor: ListeningPronunciationScreen._bg,
+      backgroundColor: _ListeningPlaybackView._bg,
       appBar: AppBar(
-        backgroundColor: ListeningPronunciationScreen._bg,
+        backgroundColor: _ListeningPlaybackView._bg,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
         leading: NimonBackButton(onPressed: () => context.pop()),
@@ -132,7 +423,7 @@ class _ListeningPronunciationScreenState
             Text(
               'Listening / Pronunciation',
               style: theme.textTheme.titleMedium?.copyWith(
-                color: ListeningPronunciationScreen._ink,
+                color: _ListeningPlaybackView._ink,
                 fontWeight: FontWeight.w800,
               ),
             ),
@@ -140,10 +431,10 @@ class _ListeningPronunciationScreenState
               const SizedBox(height: 2),
               Text(
                 subtitle,
-                maxLines: 1,
+                maxLines: 2,
                 overflow: TextOverflow.ellipsis,
                 style: theme.textTheme.bodySmall?.copyWith(
-                  color: ListeningPronunciationScreen._inkMuted,
+                  color: _ListeningPlaybackView._inkMuted,
                   fontWeight: FontWeight.w600,
                 ),
               ),
@@ -155,25 +446,44 @@ class _ListeningPronunciationScreenState
         alignment: Alignment.bottomCenter,
         children: [
           Positioned.fill(
-            child: ListView.builder(
-              padding: EdgeInsets.fromLTRB(
-                20,
-                8,
-                20,
-                bottomInset + 16 + cardReserve,
-              ),
-              itemCount: _lines.length,
-              itemBuilder: (context, index) {
-                return Padding(
-                  padding: EdgeInsets.only(bottom: index == _lines.length - 1 ? 0 : 22),
-                  child: ListeningTranscriptSentenceBlock(
-                    line: _lines[index],
-                    explanationLanguage: _explanationLanguage,
-                    showExplanation: showExplanation,
+            child: showTranscriptEmpty
+                ? ListView(
+                    padding: EdgeInsets.fromLTRB(
+                      20,
+                      8,
+                      20,
+                      bottomInset + 16 + cardReserve,
+                    ),
+                    children: [
+                      Text(
+                        widget.transcriptEmptyMessage!.trim(),
+                        style: theme.textTheme.bodyLarge?.copyWith(
+                          color: _ListeningPlaybackView._inkMuted,
+                          height: 1.45,
+                        ),
+                      ),
+                    ],
+                  )
+                : ListView.builder(
+                    padding: EdgeInsets.fromLTRB(
+                      20,
+                      8,
+                      20,
+                      bottomInset + 16 + cardReserve,
+                    ),
+                    itemCount: lines.length,
+                    itemBuilder: (context, index) {
+                      return Padding(
+                        padding: EdgeInsets.only(
+                            bottom: index == lines.length - 1 ? 0 : 22),
+                        child: ListeningTranscriptSentenceBlock(
+                          line: lines[index],
+                          explanationLanguage: widget.explanationLanguage,
+                          showTranslation: widget.showTranslation,
+                        ),
+                      );
+                    },
                   ),
-                );
-              },
-            ),
           ),
           Positioned(
             left: 16,
@@ -181,13 +491,19 @@ class _ListeningPronunciationScreenState
             bottom: bottomInset + 12,
             child: _ListeningFloatingPlayerCard(
               player: _player,
-              ready: _audioReady,
-              loadError: _loadError,
+              ready: _hasPlayableUrl ? _audioReady : true,
+              loadError: _hasPlayableUrl
+                  ? _loadError
+                  : (widget.audioUnavailableMessage?.trim().isNotEmpty == true
+                      ? widget.audioUnavailableMessage
+                      : 'Audio is not available for this story yet.'),
               speed: _speed,
               repeatOne: _repeatOne,
-              onCycleSpeed: _cycleSpeed,
-              onToggleRepeat: _toggleRepeat,
+              onCycleSpeed: _hasPlayableUrl ? _cycleSpeed : () {},
+              onToggleRepeat: _hasPlayableUrl ? _toggleRepeat : () {},
               formatDuration: _fmt,
+              controlsEnabled:
+                  _hasPlayableUrl && _audioReady && _loadError == null,
             ),
           ),
         ],
@@ -202,12 +518,12 @@ class ListeningTranscriptSentenceBlock extends StatelessWidget {
     super.key,
     required this.line,
     required this.explanationLanguage,
-    required this.showExplanation,
+    required this.showTranslation,
   });
 
   final ListeningTranscriptLine line;
   final LearnExplanationLanguage explanationLanguage;
-  final bool showExplanation;
+  final bool showTranslation;
 
   static const _ink = Color(0xFF1A1917);
   static const _muted = Color(0xFF5C5A55);
@@ -216,44 +532,111 @@ class ListeningTranscriptSentenceBlock extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final r = (line.reading ?? '').trim();
-    final meaning = showExplanation
-        ? pickSupportText(
-            explanationLanguage,
-            en: line.meaningEn,
-            my: line.meaningMy,
-          )
+    final rubies = line.rubyTokens;
+    final lineStyle = resolveNimonFuriganaLineStyle(
+      context,
+      theme,
+      NimonFuriganaPreviewContext.reading,
+    );
+
+    final Widget japaneseBlock;
+    if (rubies != null && rubies.isNotEmpty) {
+      japaneseBlock = NimonRubyText(
+        tokens: [
+          for (final t in rubies)
+            NimonRubyToken(text: t.text, reading: t.reading),
+        ],
+        baseStyle: lineStyle.baseStyle.copyWith(
+          color: _ink,
+          fontWeight: FontWeight.w700,
+          height: 1.45,
+        ),
+        rubyStyle: lineStyle.rubyStyle,
+      );
+    } else {
+      japaneseBlock = Text(
+        line.japanese.trim(),
+        style: theme.textTheme.titleMedium?.copyWith(
+          color: _ink,
+          fontWeight: FontWeight.w700,
+          height: 1.45,
+        ),
+      );
+    }
+
+    final legacyMeaning = pickSupportText(
+      explanationLanguage,
+      en: line.meaningEn,
+      my: line.meaningMy,
+    );
+    final pubDisplay = line.publishedExplanation != null
+        ? monoLineExplanationDisplay(line.publishedExplanation)
         : null;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text(
-          line.japanese.trim(),
-          style: theme.textTheme.titleMedium?.copyWith(
-            color: _ink,
-            fontWeight: FontWeight.w700,
-            height: 1.45,
-          ),
-        ),
-        if (r.isNotEmpty) ...[
-          const SizedBox(height: 6),
-          Text(
-            r,
-            style: theme.textTheme.bodyMedium?.copyWith(
-              color: _muted,
-              fontWeight: FontWeight.w500,
-              height: 1.4,
+        japaneseBlock,
+        if (rubies == null || rubies.isEmpty)
+          if (r.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Text(
+              r,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: _muted,
+                fontWeight: FontWeight.w500,
+                height: 1.4,
+              ),
             ),
-          ),
+          ],
+        if (showTranslation) ...[
+          if (pubDisplay != null && !pubDisplay.isEmpty) ...[
+            const SizedBox(height: 10),
+            _ListeningExplanationLines(display: pubDisplay),
+          ] else if (legacyMeaning != null) ...[
+            const SizedBox(height: 10),
+            Text(
+              legacyMeaning,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: _muted,
+                fontWeight: FontWeight.w500,
+                height: 1.45,
+              ),
+            ),
+          ],
         ],
-        if (meaning != null) ...[
-          const SizedBox(height: 10),
-          Text(
-            meaning,
-            style: theme.textTheme.bodyMedium?.copyWith(
-              color: _muted,
-              fontWeight: FontWeight.w500,
-              height: 1.45,
+      ],
+    );
+  }
+}
+
+class _ListeningExplanationLines extends StatelessWidget {
+  const _ListeningExplanationLines({
+    required this.display,
+  });
+
+  final MonoLineExplanationDisplay display;
+
+  static const _muted = Color(0xFF5C5A55);
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final sec = display.secondary;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        NimonTranslationText(text: display.primary),
+        if (sec != null && sec.trim().isNotEmpty) ...[
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Text(
+              sec.trim(),
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: _muted,
+                fontWeight: FontWeight.w500,
+                height: 1.4,
+              ),
             ),
           ),
         ],
@@ -272,6 +655,7 @@ class _ListeningFloatingPlayerCard extends StatelessWidget {
     required this.onCycleSpeed,
     required this.onToggleRepeat,
     required this.formatDuration,
+    this.controlsEnabled = true,
   });
 
   final AudioPlayer player;
@@ -282,6 +666,7 @@ class _ListeningFloatingPlayerCard extends StatelessWidget {
   final VoidCallback onCycleSpeed;
   final VoidCallback onToggleRepeat;
   final String Function(Duration) formatDuration;
+  final bool controlsEnabled;
 
   static const _ink = Color(0xFF1A1917);
   static const _muted = Color(0xFF5C5A55);
@@ -305,177 +690,176 @@ class _ListeningFloatingPlayerCard extends StatelessWidget {
         ],
       ),
       padding: const EdgeInsets.fromLTRB(14, 12, 14, 10),
-      child: loadError != null
-            ? Text(
-                loadError!,
-                style: theme.textTheme.bodySmall?.copyWith(color: _muted),
-              )
-            : !ready
-                ? Row(
-                    children: [
-                      SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: _ink.withValues(alpha: 0.5),
-                        ),
+      child: loadError != null && loadError!.trim().isNotEmpty
+          ? Text(
+              loadError!,
+              style: theme.textTheme.bodySmall?.copyWith(color: _muted),
+            )
+          : !ready
+              ? Row(
+                  children: [
+                    SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: _ink.withValues(alpha: 0.5),
                       ),
-                      const SizedBox(width: 12),
-                      Text(
-                        'Loading audio…',
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: _muted,
-                        ),
+                    ),
+                    const SizedBox(width: 12),
+                    Text(
+                      'Loading audio…',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: _muted,
                       ),
-                    ],
-                  )
-                : StreamBuilder<PlayerState>(
-                    stream: player.playerStateStream,
-                    builder: (context, snap) {
-                      final playing = snap.data?.playing ?? false;
-                      return Column(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          StreamBuilder<Duration?>(
-                            stream: player.durationStream,
-                            builder: (context, durSnap) {
-                              final duration = durSnap.data ?? Duration.zero;
-                              return StreamBuilder<Duration>(
-                                stream: player.positionStream,
-                                builder: (context, posSnap) {
-                                  final position =
-                                      posSnap.data ?? Duration.zero;
-                                  final totalMs = duration.inMilliseconds;
-                                  final posMs = position.inMilliseconds
-                                      .clamp(0, totalMs > 0 ? totalMs : 0);
-                                  final maxVal =
-                                      totalMs > 0 ? totalMs.toDouble() : 1.0;
-                                  return Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.stretch,
-                                    children: [
-                                      Row(
-                                        mainAxisAlignment:
-                                            MainAxisAlignment.spaceBetween,
-                                        children: [
-                                          Text(
-                                            formatDuration(position),
-                                            style: theme.textTheme.labelMedium
-                                                ?.copyWith(
-                                              color: _muted,
-                                              fontWeight: FontWeight.w600,
-                                              fontFeatures: const [
-                                                FontFeature.tabularFigures(),
-                                              ],
-                                            ),
+                    ),
+                  ],
+                )
+              : StreamBuilder<PlayerState>(
+                  stream: player.playerStateStream,
+                  builder: (context, snap) {
+                    final playing = snap.data?.playing ?? false;
+                    return Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        StreamBuilder<Duration?>(
+                          stream: player.durationStream,
+                          builder: (context, durSnap) {
+                            final duration = durSnap.data ?? Duration.zero;
+                            return StreamBuilder<Duration>(
+                              stream: player.positionStream,
+                              builder: (context, posSnap) {
+                                final position = posSnap.data ?? Duration.zero;
+                                final totalMs = duration.inMilliseconds;
+                                final posMs = position.inMilliseconds
+                                    .clamp(0, totalMs > 0 ? totalMs : 0);
+                                final maxVal =
+                                    totalMs > 0 ? totalMs.toDouble() : 1.0;
+                                return Column(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.stretch,
+                                  children: [
+                                    Row(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        Text(
+                                          formatDuration(position),
+                                          style: theme.textTheme.labelMedium
+                                              ?.copyWith(
+                                            color: _muted,
+                                            fontWeight: FontWeight.w600,
+                                            fontFeatures: const [
+                                              FontFeature.tabularFigures(),
+                                            ],
                                           ),
-                                          Text(
-                                            formatDuration(duration),
-                                            style: theme.textTheme.labelMedium
-                                                ?.copyWith(
-                                              color: _muted,
-                                              fontWeight: FontWeight.w600,
-                                              fontFeatures: const [
-                                                FontFeature.tabularFigures(),
-                                              ],
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                      SliderTheme(
-                                        data: SliderTheme.of(context).copyWith(
-                                          trackHeight: 3,
-                                          thumbShape:
-                                              const RoundSliderThumbShape(
-                                            enabledThumbRadius: 6,
-                                          ),
-                                          overlayShape:
-                                              SliderComponentShape.noOverlay,
                                         ),
-                                        child: Slider(
-                                          value: posMs.toDouble().clamp(
-                                                0,
-                                                maxVal,
-                                              ),
-                                          max: maxVal,
-                                          onChanged: totalMs > 0
-                                              ? (v) {
-                                                  unawaited(
-                                                    player.seek(
-                                                      Duration(
-                                                        milliseconds: v.round(),
-                                                      ),
+                                        Text(
+                                          formatDuration(duration),
+                                          style: theme.textTheme.labelMedium
+                                              ?.copyWith(
+                                            color: _muted,
+                                            fontWeight: FontWeight.w600,
+                                            fontFeatures: const [
+                                              FontFeature.tabularFigures(),
+                                            ],
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    SliderTheme(
+                                      data: SliderTheme.of(context).copyWith(
+                                        trackHeight: 3,
+                                        thumbShape: const RoundSliderThumbShape(
+                                          enabledThumbRadius: 6,
+                                        ),
+                                        overlayShape:
+                                            SliderComponentShape.noOverlay,
+                                      ),
+                                      child: Slider(
+                                        value: posMs.toDouble().clamp(
+                                              0,
+                                              maxVal,
+                                            ),
+                                        max: maxVal,
+                                        onChanged: controlsEnabled &&
+                                                totalMs > 0
+                                            ? (v) {
+                                                unawaited(
+                                                  player.seek(
+                                                    Duration(
+                                                      milliseconds: v.round(),
                                                     ),
-                                                  );
-                                                }
-                                              : null,
-                                        ),
+                                                  ),
+                                                );
+                                              }
+                                            : null,
                                       ),
-                                    ],
-                                  );
-                                },
-                              );
-                            },
-                          ),
-                          const SizedBox(height: 2),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              IconButton(
-                                style: IconButton.styleFrom(
-                                  backgroundColor:
-                                      _ink.withValues(alpha: 0.08),
-                                  foregroundColor: _ink,
-                                ),
-                                onPressed: () {
-                                  if (playing) {
-                                    unawaited(player.pause());
-                                  } else {
-                                    unawaited(player.play());
-                                  }
-                                },
-                                icon: Icon(
-                                  playing
-                                      ? Icons.pause_rounded
-                                      : Icons.play_arrow_rounded,
-                                  size: 28,
+                                    ),
+                                  ],
+                                );
+                              },
+                            );
+                          },
+                        ),
+                        const SizedBox(height: 2),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            IconButton(
+                              style: IconButton.styleFrom(
+                                backgroundColor: _ink.withValues(alpha: 0.08),
+                                foregroundColor: _ink,
+                              ),
+                              onPressed: controlsEnabled
+                                  ? () {
+                                      if (playing) {
+                                        unawaited(player.pause());
+                                      } else {
+                                        unawaited(player.play());
+                                      }
+                                    }
+                                  : null,
+                              icon: Icon(
+                                playing
+                                    ? Icons.pause_rounded
+                                    : Icons.play_arrow_rounded,
+                                size: 28,
+                              ),
+                            ),
+                            const SizedBox(width: 4),
+                            TextButton(
+                              onPressed: controlsEnabled ? onCycleSpeed : null,
+                              child: Text(
+                                '${speed}x',
+                                style: theme.textTheme.labelLarge?.copyWith(
+                                  color: _ink,
+                                  fontWeight: FontWeight.w700,
                                 ),
                               ),
-                              const SizedBox(width: 4),
-                              TextButton(
-                                onPressed: onCycleSpeed,
-                                child: Text(
-                                  '${speed}x',
-                                  style: theme.textTheme.labelLarge?.copyWith(
-                                    color: _ink,
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                                ),
+                            ),
+                            IconButton(
+                              tooltip: 'Repeat one',
+                              style: IconButton.styleFrom(
+                                foregroundColor: repeatOne ? _ink : _muted,
+                                backgroundColor: repeatOne
+                                    ? _ink.withValues(alpha: 0.08)
+                                    : null,
                               ),
-                              IconButton(
-                                tooltip: 'Repeat one',
-                                style: IconButton.styleFrom(
-                                  foregroundColor: repeatOne
-                                      ? _ink
-                                      : _muted,
-                                  backgroundColor: repeatOne
-                                      ? _ink.withValues(alpha: 0.08)
-                                      : null,
-                                ),
-                                onPressed: onToggleRepeat,
-                                icon: Icon(
-                                  Icons.repeat_one_rounded,
-                                  size: 24,
-                                ),
+                              onPressed:
+                                  controlsEnabled ? onToggleRepeat : null,
+                              icon: const Icon(
+                                Icons.repeat_one_rounded,
+                                size: 24,
                               ),
-                            ],
-                          ),
-                        ],
-                      );
-                    },
-                  ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    );
+                  },
+                ),
     );
   }
 }

@@ -49,4 +49,3 @@ Future<void> clearReadOnlyPublishedCoreSignature(String draftId) async {
   final p = await SharedPreferences.getInstance();
   await p.remove(_kRoSigKey(id));
 }
-

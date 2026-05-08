@@ -106,7 +106,8 @@ class _LearnContent {
   final String title;
   final String? subtitle;
   final List<LearnBlock> blocks;
-  const _LearnContent({required this.title, this.subtitle, required this.blocks});
+  const _LearnContent(
+      {required this.title, this.subtitle, required this.blocks});
 }
 
 _LearnContent _mockLearnContent(String id) {
@@ -155,14 +156,14 @@ _LearnContent _mockLearnContent(String id) {
   if (variant == 1) {
     return const _LearnContent(
       title: 'Reading: Short Paragraph',
-      subtitle: 'Textbook-style paragraph + notes. Designed for comfortable reading.',
+      subtitle:
+          'Textbook-style paragraph + notes. Designed for comfortable reading.',
       blocks: [
         LearnSectionTitle('Paragraph'),
         LearnParagraph(
           jp: '彼は「大丈夫」と言った。でも、その声は震えていた。\n私は何も聞かなかった。',
           en: 'He said “I’m fine.” But his voice was shaking.\nI didn’t ask anything.',
-          my:
-              'သူက “မင်းပဲ” လို့ ပြောတယ်။ ဒါပေမယ့် အသံက တုန်နေတယ်။\nငါဘာမှ မေးမနေခဲ့ဘူး။',
+          my: 'သူက “မင်းပဲ” လို့ ပြောတယ်။ ဒါပေမယ့် အသံက တုန်နေတယ်။\nငါဘာမှ မေးမနေခဲ့ဘူး။',
         ),
         LearnSectionTitle('Notes'),
         LearnNote(
@@ -204,8 +205,7 @@ _LearnContent _mockLearnContent(String id) {
       ),
       LearnNote(
         title: 'Tip',
-        body:
-            '「まだ〜ない」 is a very common pattern: “not yet …”.',
+        body: '「まだ〜ない」 is a very common pattern: “not yet …”.',
       ),
     ],
   );
@@ -373,4 +373,3 @@ class _Note extends StatelessWidget {
     );
   }
 }
-

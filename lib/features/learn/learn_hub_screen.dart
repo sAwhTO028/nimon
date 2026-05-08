@@ -338,15 +338,15 @@ class _LearnHubScreenState extends ConsumerState<LearnHubScreen> {
 
     final title = (widget.storyTitle ?? '').trim();
     final showTitle = title.isNotEmpty ? title : 'Mono Story';
-    final vLevel = (widget.level ?? '').trim().isNotEmpty
-        ? widget.level!.trim()
-        : '—';
+    final vLevel =
+        (widget.level ?? '').trim().isNotEmpty ? widget.level!.trim() : '—';
     final vCategory = (widget.category ?? '').trim().isNotEmpty
         ? widget.category!.trim()
         : '—';
     final vUnlock =
         (widget.unlock ?? '').trim().isNotEmpty ? widget.unlock!.trim() : '—';
     final vDesc = (widget.description ?? '').trim();
+    final showDescriptionSection = vDesc.isNotEmpty;
 
     return Scaffold(
       backgroundColor: _bg,
@@ -385,8 +385,8 @@ class _LearnHubScreenState extends ConsumerState<LearnHubScreen> {
                           onSelected: (v) {
                             unawaited(
                               ref
-                                  .read(learnExplanationLanguageProvider
-                                      .notifier)
+                                  .read(
+                                      learnExplanationLanguageProvider.notifier)
                                   .setLanguage(v),
                             );
                           },
@@ -422,10 +422,12 @@ class _LearnHubScreenState extends ConsumerState<LearnHubScreen> {
                     category: vCategory,
                     unlock: vUnlock,
                   ),
-                  const SizedBox(height: 18),
-                  _sectionTitle(context, "What's inside"),
-                  const SizedBox(height: 10),
-                  _InsideCard(text: vDesc),
+                  if (showDescriptionSection) ...[
+                    const SizedBox(height: 18),
+                    _sectionTitle(context, 'Description'),
+                    const SizedBox(height: 10),
+                    _InsideCard(text: vDesc),
+                  ],
                   const SizedBox(height: 18),
                   _sectionTitle(context, 'Learning'),
                   const SizedBox(height: 12),

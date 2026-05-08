@@ -10,11 +10,11 @@ import 'package:nimon/features/create/creator_drawer_session.dart';
 import 'package:nimon/features/create/creator_navigation_debug.dart';
 import 'package:nimon/features/create/creator_reorder_handle.dart';
 import 'package:nimon/features/create/creator_drawer_publish.dart';
+import 'package:nimon/features/create/creator_drawer_publish_labels.dart';
 import 'package:nimon/features/create/creator_learn_mode_sync.dart';
 import 'package:nimon/features/create/creator_progress_drawer.dart';
 import 'package:nimon/features/create/creator_route_sync_listener.dart';
 import 'package:nimon/features/create/creator_workspace_step.dart';
-import 'package:nimon/features/create/creator_read_only_publish_tracking.dart';
 import 'package:nimon/features/create/story_creator_furigana_tokens.dart';
 import 'package:nimon/features/create/story_creator_models.dart';
 import 'package:nimon/features/create/story_creator_provider.dart';
@@ -39,13 +39,16 @@ void _retainEmbeddedVocabularyPanel(
       creatorNavDebug(
         'retain_embed',
         'invoke action=$debugAction | uri=${st.uri} | matchedLocation=${st.matchedLocation} | '
-        'panel=${st.uri.queryParameters['panel']}',
+            'panel=${st.uri.queryParameters['panel']}',
       );
     } catch (_) {
-      creatorNavDebug('retain_embed', 'invoke action=$debugAction | (no GoRouterState)');
+      creatorNavDebug(
+          'retain_embed', 'invoke action=$debugAction | (no GoRouterState)');
     }
   }
-  ref.read(creatorDrawerSessionProvider.notifier).retainSentencesHostEmbeddedStep(
+  ref
+      .read(creatorDrawerSessionProvider.notifier)
+      .retainSentencesHostEmbeddedStep(
         CreatorWorkspaceStep.vocabulary,
         debugAction: debugAction,
       );
@@ -64,7 +67,8 @@ class StoryCreatorVocabKanjiEditorScreen extends ConsumerWidget {
     return t;
   }
 
-  static String _normTermForComparison(String raw) => _normalizeSelectedTerm(raw);
+  static String _normTermForComparison(String raw) =>
+      _normalizeSelectedTerm(raw);
 
   /// V1: max length for a phrase picked as one vocab item.
   static const int _maxVocabPickLength = 48;
@@ -105,13 +109,26 @@ class StoryCreatorVocabKanjiEditorScreen extends ConsumerWidget {
     final publishModel = buildStoryReviewDisplayModel(draft);
     final draftState = ref.watch(storyCreatorDraftProvider);
     final roSig = draftState.readOnlyPublishedCoreSig;
-    final roExists =
-        roSig != null || draft.publishState != StoryPublishState.draft;
-    final roDirty = roSig != null &&
-        computeReadOnlyPublishedCoreSignature(draft) != roSig;
-    final flExists =
-        draft.publishState == StoryPublishState.fullLearnPublished;
-    final flDirty = draftState.dirty;
+    final roBaseline = draftState.publishedEditReadOnlyBaselineSig;
+    final flBaseline = draftState.publishedEditFullLearnBaselineSig;
+    final roExists = computeReadOnlyPublishedExists(
+      draft: draft,
+      readOnlyPublishedCoreSig: roSig,
+    );
+    final roDirty = computeReadOnlyHasUnpublishedChanges(
+      draft: draft,
+      readOnlyPublishedCoreSig: roSig,
+      dirty: draftState.dirty,
+      publishedEditReadOnlyBaselineSig: roBaseline,
+    );
+    final flExists = draft.publishState == StoryPublishState.fullLearnPublished;
+    final flDirty = computeFullLearnHasUnpublishedChanges(
+      draft: draft,
+      readOnlyPublishedCoreSig: roSig,
+      dirty: draftState.dirty,
+      publishedEditReadOnlyBaselineSig: roBaseline,
+      publishedEditFullLearnBaselineSig: flBaseline,
+    );
 
     return CreatorRouteSyncListener(
       child: PopScope(
@@ -158,6 +175,11 @@ class StoryCreatorVocabKanjiEditorScreen extends ConsumerWidget {
             coreItems: progress.coreItems,
             learnItems: progress.learnItems,
             publishModel: publishModel,
+            creatorDraft: draft,
+            localDraftDirty: draftState.dirty,
+            readOnlyPublishedCoreSig: roSig,
+            publishedEditReadOnlyBaselineSig: roBaseline,
+            publishedEditFullLearnBaselineSig: flBaseline,
             readOnlyPublishedExists: roExists,
             readOnlyHasUnpublishedChanges: roDirty,
             fullLearnPublishedExists: flExists,
@@ -451,7 +473,8 @@ class StoryCreatorVocabKanjiEditorScreen extends ConsumerWidget {
                           ),
                           const SizedBox(height: 6),
                           Text(
-                            StoryCreatorVocabKanjiEditorScreen.glossStatusLine(e),
+                            StoryCreatorVocabKanjiEditorScreen.glossStatusLine(
+                                e),
                             style: theme.textTheme.bodySmall?.copyWith(
                               color: cs.onSurfaceVariant,
                               height: 1.25,
@@ -513,7 +536,8 @@ class _VocabTermEditBottomSheet extends ConsumerStatefulWidget {
       _VocabTermEditBottomSheetState();
 }
 
-class _VocabTermEditBottomSheetState extends ConsumerState<_VocabTermEditBottomSheet> {
+class _VocabTermEditBottomSheetState
+    extends ConsumerState<_VocabTermEditBottomSheet> {
   static const _ink = Color(0xFF1A1917);
   static const _muted = Color(0xFF5C5A55);
 
@@ -563,7 +587,8 @@ class _VocabTermEditBottomSheetState extends ConsumerState<_VocabTermEditBottomS
           meanings: widget.existing.glosses,
           examplePairs: widget.existing.examplePairs,
         );
-    _retainEmbeddedVocabularyPanel(ref, 'vocab_edit_save', routerContext: context);
+    _retainEmbeddedVocabularyPanel(ref, 'vocab_edit_save',
+        routerContext: context);
     _popSheet();
   }
 
@@ -724,7 +749,8 @@ Widget _vocabExampleJapanesePreview({
       final raw = sourceCtrl.text;
       if (raw.trim().isEmpty) return const SizedBox.shrink();
 
-      final match = storySentenceMatchingTrimmedExampleLine(raw, storySentences);
+      final match =
+          storySentenceMatchingTrimmedExampleLine(raw, storySentences);
       final displayText = match?.japaneseText ?? raw;
       final spans = match?.furiganaSpans ?? <FuriganaSpan>[];
 
@@ -839,7 +865,8 @@ class _VocabDetailsBottomSheet extends ConsumerStatefulWidget {
       _VocabDetailsBottomSheetState();
 }
 
-class _VocabDetailsBottomSheetState extends ConsumerState<_VocabDetailsBottomSheet> {
+class _VocabDetailsBottomSheetState
+    extends ConsumerState<_VocabDetailsBottomSheet> {
   static const _ink = Color(0xFF1A1917);
   static const _muted = Color(0xFF5C5A55);
 
@@ -940,7 +967,8 @@ class _VocabDetailsBottomSheetState extends ConsumerState<_VocabDetailsBottomShe
       final src = b.sourceCtrl.text.trim();
       final en = b.englishCtrl.text.trim();
       if (src.isEmpty && en.isEmpty) continue;
-      if (src.isEmpty && en.isNotEmpty) continue; // (guard; should have returned)
+      if (src.isEmpty && en.isNotEmpty)
+        continue; // (guard; should have returned)
       pairs.add(
         VocabularyExamplePair(
           sourceExample: b.sourceCtrl.text,
@@ -956,7 +984,8 @@ class _VocabDetailsBottomSheetState extends ConsumerState<_VocabDetailsBottomShe
       meanings: gloss,
       examplePairs: pairs,
     );
-    _retainEmbeddedVocabularyPanel(ref, 'vocab_details_save', routerContext: sheetContext);
+    _retainEmbeddedVocabularyPanel(ref, 'vocab_details_save',
+        routerContext: sheetContext);
     Navigator.of(sheetContext, rootNavigator: true).pop();
   }
 
@@ -1088,7 +1117,8 @@ class _VocabDetailsBottomSheetState extends ConsumerState<_VocabDetailsBottomShe
                           child: Text(
                             'No source meaning yet',
                             style: theme.textTheme.bodySmall?.copyWith(
-                              color: cs.onSurfaceVariant.withValues(alpha: 0.72),
+                              color:
+                                  cs.onSurfaceVariant.withValues(alpha: 0.72),
                               height: 1.35,
                             ),
                           ),
@@ -1135,9 +1165,9 @@ class _VocabDetailsBottomSheetState extends ConsumerState<_VocabDetailsBottomShe
                             alignLabelWithHint: true,
                             filled: true,
                             fillColor: englishFill,
-                            labelStyle:
-                                theme.textTheme.labelMedium?.copyWith(
-                              color: cs.onSurfaceVariant.withValues(alpha: 0.78),
+                            labelStyle: theme.textTheme.labelMedium?.copyWith(
+                              color:
+                                  cs.onSurfaceVariant.withValues(alpha: 0.78),
                               fontWeight: FontWeight.w600,
                             ),
                           ),
@@ -1193,7 +1223,8 @@ class _VocabDetailsBottomSheetState extends ConsumerState<_VocabDetailsBottomShe
                 fields: e.value,
                 theme: theme,
                 colorScheme: cs,
-                storySentences: ref.watch(storyCreatorDraftDataProvider).sentences,
+                storySentences:
+                    ref.watch(storyCreatorDraftDataProvider).sentences,
                 englishExpanded: e.value.englishExpanded,
                 onToggleEnglish: () => setState(() {
                   e.value.englishExpanded = !e.value.englishExpanded;
@@ -1446,6 +1477,7 @@ class StoryCreatorVocabKanjiModuleBody extends ConsumerWidget {
   final bool showBottomActions;
   final bool showLearnExitButton;
   final bool useCompactModuleHeader;
+
   /// When true, omits the large module title so the sentences host pinned header is the only title.
   final bool hideWorkspaceModuleTitle;
   final VoidCallback? onExit;
@@ -1465,8 +1497,10 @@ class StoryCreatorVocabKanjiModuleBody extends ConsumerWidget {
     final bottomInset = MediaQuery.paddingOf(context).bottom;
     final items = draft.vocabularyKanji.entries;
 
-    final headerPadding = EdgeInsets.fromLTRB(padding.left, padding.top, padding.right, 0);
-    final listHorizontal = EdgeInsets.fromLTRB(padding.left, 0, padding.right, 0);
+    final headerPadding =
+        EdgeInsets.fromLTRB(padding.left, padding.top, padding.right, 0);
+    final listHorizontal =
+        EdgeInsets.fromLTRB(padding.left, 0, padding.right, 0);
 
     final column = Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1530,12 +1564,13 @@ class StoryCreatorVocabKanjiModuleBody extends ConsumerWidget {
                     onPressed: () async {
                       final existingTerms = <String>{
                         for (final e in draft.vocabularyKanji.entries)
-                          StoryCreatorVocabKanjiEditorScreen._normTermForComparison(
+                          StoryCreatorVocabKanjiEditorScreen
+                              ._normTermForComparison(
                             e.termJapanese,
                           ),
                       };
-                      final selected =
-                          await StoryCreatorVocabKanjiEditorScreen._showPickFromStorySheet(
+                      final selected = await StoryCreatorVocabKanjiEditorScreen
+                          ._showPickFromStorySheet(
                         context,
                         storyText: _pickerStoryPlaintext(draft),
                         existingTerms: existingTerms,
@@ -1600,13 +1635,15 @@ class StoryCreatorVocabKanjiModuleBody extends ConsumerWidget {
                   itemCount: items.length,
                   onReorder: (oldIndex, newIndex) {
                     n.reorderVocabKanjiEntries(oldIndex, newIndex);
-                    _retainEmbeddedVocabularyPanel(ref, 'vocab_reorder', routerContext: context);
+                    _retainEmbeddedVocabularyPanel(ref, 'vocab_reorder',
+                        routerContext: context);
                   },
                   itemBuilder: (context, i) {
                     final e = items[i];
                     return Padding(
                       key: ValueKey(e.id),
-                      padding: EdgeInsets.only(bottom: i < items.length - 1 ? 10 : 0),
+                      padding: EdgeInsets.only(
+                          bottom: i < items.length - 1 ? 10 : 0),
                       child: _VocabKanjiEntryCard(
                         index: i,
                         entry: e,
@@ -1615,8 +1652,8 @@ class StoryCreatorVocabKanjiModuleBody extends ConsumerWidget {
                             FocusManager.instance.primaryFocus?.unfocus(),
                         onMoreCanceled: () {},
                         onDelete: () async {
-                          final ok =
-                              await StoryCreatorVocabKanjiEditorScreen._confirmDelete(
+                          final ok = await StoryCreatorVocabKanjiEditorScreen
+                              ._confirmDelete(
                             context,
                             e.termJapanese,
                           );
@@ -1628,13 +1665,13 @@ class StoryCreatorVocabKanjiModuleBody extends ConsumerWidget {
                             routerContext: context,
                           );
                         },
-                        onEditTerm: () =>
-                            StoryCreatorVocabKanjiEditorScreen._showVocabTermEditSheet(
+                        onEditTerm: () => StoryCreatorVocabKanjiEditorScreen
+                            ._showVocabTermEditSheet(
                           context,
                           existing: e,
                         ),
-                        onDetails: () =>
-                            StoryCreatorVocabKanjiEditorScreen._showVocabDetailsSheet(
+                        onDetails: () => StoryCreatorVocabKanjiEditorScreen
+                            ._showVocabDetailsSheet(
                           context,
                           existing: e,
                         ),
@@ -1746,7 +1783,8 @@ class _PickVocabularyFromStorySheetState
   }
 
   bool get _canAdd =>
-      StoryCreatorVocabKanjiEditorScreen._isValidVocabPick(_picked) && !_duplicate;
+      StoryCreatorVocabKanjiEditorScreen._isValidVocabPick(_picked) &&
+      !_duplicate;
 
   Color _statusColor(ColorScheme cs) {
     if (!_hasStory) return StoryCreatorVocabKanjiEditorScreen._muted;
@@ -1768,11 +1806,13 @@ class _PickVocabularyFromStorySheetState
       return 'No selection yet.';
     }
     if (_duplicate) return 'Already added.';
-    if (_picked!.length > StoryCreatorVocabKanjiEditorScreen._maxVocabPickLength) {
+    if (_picked!.length >
+        StoryCreatorVocabKanjiEditorScreen._maxVocabPickLength) {
       return 'Selection is too long (max '
           '${StoryCreatorVocabKanjiEditorScreen._maxVocabPickLength} characters).';
     }
-    if (!StoryCreatorVocabKanjiEditorScreen._selectionHasLexicalContent(_picked!)) {
+    if (!StoryCreatorVocabKanjiEditorScreen._selectionHasLexicalContent(
+        _picked!)) {
       return 'Selection is only punctuation or symbols.';
     }
     return 'Selected: ${_picked!}';
@@ -1930,7 +1970,8 @@ class _PickVocabularyFromStorySheetState
                   children: [
                     TextButton(
                       onPressed: () =>
-                          Navigator.of(context, rootNavigator: true).pop<void>(),
+                          Navigator.of(context, rootNavigator: true)
+                              .pop<void>(),
                       child: const Text('Cancel'),
                     ),
                     const Spacer(),
@@ -2118,8 +2159,8 @@ class _VocabKanjiEntryCard extends StatelessWidget {
                               child: Icon(
                                 Icons.more_horiz_rounded,
                                 size: 22,
-                                color: cs.onSurfaceVariant
-                                    .withValues(alpha: 0.88),
+                                color:
+                                    cs.onSurfaceVariant.withValues(alpha: 0.88),
                               ),
                             ),
                           ),
@@ -2192,4 +2233,3 @@ class _VocabKanjiEntryCard extends StatelessWidget {
     );
   }
 }
-

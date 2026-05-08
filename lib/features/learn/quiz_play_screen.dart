@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:nimon/features/learn/learn_catalog_content_gate.dart';
 import 'package:nimon/features/learn/learn_explanation_language_provider.dart';
 import 'package:nimon/features/learn/quiz_flow_theme.dart';
 import 'package:nimon/features/learn/quiz_mcq.dart';
@@ -39,9 +40,19 @@ class _QuizPlayScreenState extends ConsumerState<QuizPlayScreen> {
   void initState() {
     super.initState();
     final a = widget.args;
-    _questions = a == null
-        ? <QuizMcqItem>[]
-        : QuizMockBank.pickQuestions(a.category, a.questionCount);
+    if (a == null) {
+      _questions = [];
+    } else if (a.publishedQuizPool != null && a.publishedQuizPool!.isNotEmpty) {
+      _questions = pickPublishedQuizQuestionsForSession(
+        category: a.category,
+        questionCount: a.questionCount,
+        pool: a.publishedQuizPool!,
+      );
+    } else if (learnDemoMocksAllowed(widget.contentId)) {
+      _questions = QuizMockBank.pickQuestions(a.category, a.questionCount);
+    } else {
+      _questions = [];
+    }
   }
 
   QuizMcqItem? get _current =>
@@ -99,10 +110,13 @@ class _QuizPlayScreenState extends ConsumerState<QuizPlayScreen> {
     final q = _current;
     final bottomInset = MediaQuery.paddingOf(context).bottom;
     final explanationLang = ref.watch(learnExplanationLanguageProvider);
-    final explanationLine =
-        q?.explanationForLearner(explanationLang)?.trim();
+    final explanationLine = q?.explanationForLearner(explanationLang)?.trim();
 
     if (a == null) {
+      final missingMsg = catalogMonoIdLooksLikeUuid(widget.contentId)
+          ? 'Missing quiz session. Use Start Quiz from the quiz setup screen '
+              'for this story.'
+          : 'Missing quiz session. Go back and tap Start Quiz again.';
       return Scaffold(
         backgroundColor: QuizPlayScreen._bg,
         appBar: AppBar(
@@ -112,7 +126,7 @@ class _QuizPlayScreenState extends ConsumerState<QuizPlayScreen> {
         body: Padding(
           padding: const EdgeInsets.all(20),
           child: Text(
-            'Missing quiz session. Go back and tap Start Quiz again.',
+            missingMsg,
             style: theme.textTheme.bodyLarge?.copyWith(
               color: QuizPlayScreen._inkMuted,
             ),
@@ -122,6 +136,12 @@ class _QuizPlayScreenState extends ConsumerState<QuizPlayScreen> {
     }
 
     if (_questions.isEmpty) {
+      final emptyMsg = catalogMonoIdLooksLikeUuid(widget.contentId) &&
+              !learnDemoMocksAllowed(widget.contentId)
+          ? 'No quiz questions available for this setup. '
+              'Go back and choose another category or check that this story '
+              'includes quiz items.'
+          : 'No questions for this category.';
       return Scaffold(
         backgroundColor: QuizPlayScreen._bg,
         appBar: AppBar(
@@ -131,7 +151,7 @@ class _QuizPlayScreenState extends ConsumerState<QuizPlayScreen> {
         body: Padding(
           padding: const EdgeInsets.all(20),
           child: Text(
-            'No questions for this category.',
+            emptyMsg,
             style: theme.textTheme.bodyLarge?.copyWith(
               color: QuizPlayScreen._inkMuted,
             ),
@@ -206,7 +226,8 @@ class _QuizPlayScreenState extends ConsumerState<QuizPlayScreen> {
                             color: Colors.white.withValues(alpha: 0.75),
                             borderRadius: BorderRadius.circular(12),
                             border: Border.all(
-                              color: QuizPlayScreen._ink.withValues(alpha: 0.08),
+                              color:
+                                  QuizPlayScreen._ink.withValues(alpha: 0.08),
                             ),
                           ),
                           child: Text(
@@ -273,6 +294,7 @@ class _QuizQuestionPanel extends StatelessWidget {
 
   static const _ink = QuizFlowTheme.ink;
   static const _inkSoft = QuizFlowTheme.inkMuted;
+
   /// Matches option cards (`_OptionTile`) for one aligned column.
   static const _cardRadius = _QuizPlayScreenState._radius;
 
@@ -300,7 +322,8 @@ class _QuizQuestionPanel extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 decoration: BoxDecoration(
                   color: const Color(0xFFF5F2EC),
                   borderRadius: BorderRadius.circular(999),
@@ -378,8 +401,7 @@ class _FeedbackBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final accent =
-        isCorrect ? QuizFlowTheme.success : QuizFlowTheme.error;
+    final accent = isCorrect ? QuizFlowTheme.success : QuizFlowTheme.error;
     final fill = isCorrect ? QuizFlowTheme.successBg : QuizFlowTheme.errorBg;
     final border =
         isCorrect ? QuizFlowTheme.successBorder : QuizFlowTheme.errorBorder;

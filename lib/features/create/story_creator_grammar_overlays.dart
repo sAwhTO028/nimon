@@ -170,7 +170,8 @@ abstract final class StoryCreatorGrammarOverlays {
                               maxLines: 2,
                               overflow: TextOverflow.ellipsis,
                               style: theme.textTheme.bodySmall?.copyWith(
-                                color: cs.onSurfaceVariant.withValues(alpha: 0.9),
+                                color:
+                                    cs.onSurfaceVariant.withValues(alpha: 0.9),
                                 height: 1.25,
                                 fontWeight: FontWeight.w600,
                               ),
@@ -258,4 +259,3 @@ class _HelpSection extends StatelessWidget {
     );
   }
 }
-

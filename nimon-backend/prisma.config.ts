@@ -2,6 +2,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { join } from "node:path";
+import "dotenv/config";
 import { defineConfig } from "prisma/config";
 
 function loadEnvFallback(envPath: string): void {

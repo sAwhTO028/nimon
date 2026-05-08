@@ -83,7 +83,7 @@ class _EpisodeReaderScreenState extends State<EpisodeReaderScreen> {
   // Reading preferences
   FontSize _fontSize = FontSize.medium;
   ReadingTheme _theme = ReadingTheme.light;
-  
+
   // Layout constraints for pagination
   double _contentWidth = 0;
   double _contentHeight = 0;
@@ -144,7 +144,8 @@ class _EpisodeReaderScreenState extends State<EpisodeReaderScreen> {
     final prefs = await SharedPreferences.getInstance();
     final savedFontSize = prefs.getString('reader_font_size');
     final savedTheme = prefs.getString('reader_theme');
-    final savedPageIndex = prefs.getInt('reader_page_${widget.episode.id}') ?? 0;
+    final savedPageIndex =
+        prefs.getInt('reader_page_${widget.episode.id}') ?? 0;
 
     if (mounted) {
       setState(() {
@@ -243,14 +244,14 @@ class _EpisodeReaderScreenState extends State<EpisodeReaderScreen> {
         (sum, block) => sum + block.text.length,
       );
       debugPrint('EP${_displayEpisode.index} length = $contentLength');
-      
+
       final newPages = _paginateEpisodeText(
         episode: _displayEpisode,
         style: _getTextStyle(),
         maxWidth: _contentWidth,
         maxHeight: _contentHeight,
       );
-      
+
       if (mounted) {
         setState(() {
           final oldPageIndex = _currentPageIndex;
@@ -273,18 +274,22 @@ class _EpisodeReaderScreenState extends State<EpisodeReaderScreen> {
   }
 
   void _onDimensionsReady(double width, double height) {
-    if (!_dimensionsReady || _contentWidth != width || _contentHeight != height) {
+    if (!_dimensionsReady ||
+        _contentWidth != width ||
+        _contentHeight != height) {
       setState(() {
         _contentWidth = width;
         _contentHeight = height;
         _dimensionsReady = true;
       });
       _recalculatePages();
-      
+
       // Restore saved page position after pages are calculated
       if (_currentPageIndex > 0) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted && _pageController.hasClients && _currentPageIndex < _pages.length) {
+          if (mounted &&
+              _pageController.hasClients &&
+              _currentPageIndex < _pages.length) {
             _pageController.jumpToPage(_currentPageIndex);
           }
         });
@@ -360,14 +365,15 @@ class _EpisodeReaderScreenState extends State<EpisodeReaderScreen> {
                         onTheme: _showThemeDialog,
                         onShare: () {
                           ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Share feature coming soon')),
+                            const SnackBar(
+                                content: Text('Share feature coming soon')),
                           );
                         },
                         textColor: textColor,
                       )
                     : const SizedBox.shrink(),
               ),
-              
+
               // Content area with pagination
               Expanded(
                 child: LayoutBuilder(
@@ -376,14 +382,16 @@ class _EpisodeReaderScreenState extends State<EpisodeReaderScreen> {
                     final headerHeight = _isHeaderVisible ? 56.0 : 0.0;
                     final progressBarHeight = 60.0;
                     final actionBarHeight = 80.0;
-                    final availableHeight = constraints.maxHeight - 
-                        headerHeight - progressBarHeight - actionBarHeight;
-                    
-                    final contentWidth = constraints.maxWidth - 
+                    final availableHeight = constraints.maxHeight -
+                        headerHeight -
+                        progressBarHeight -
+                        actionBarHeight;
+
+                    final contentWidth = constraints.maxWidth -
                         (_ReadingConstants.horizontalPadding * 2);
-                    final contentHeight = availableHeight - 
+                    final contentHeight = availableHeight -
                         (_ReadingConstants.verticalPadding * 2);
-                    
+
                     // Notify when dimensions are ready
                     if (contentWidth > 0 && contentHeight > 0) {
                       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -406,7 +414,8 @@ class _EpisodeReaderScreenState extends State<EpisodeReaderScreen> {
               if (_usingMockData)
                 Container(
                   padding: const EdgeInsets.all(12),
-                  margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  margin:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                   decoration: BoxDecoration(
                     color: Colors.orange.shade50,
                     borderRadius: BorderRadius.circular(8),
@@ -414,7 +423,8 @@ class _EpisodeReaderScreenState extends State<EpisodeReaderScreen> {
                   ),
                   child: Row(
                     children: [
-                      Icon(Icons.info_outline, size: 20, color: Colors.orange.shade700),
+                      Icon(Icons.info_outline,
+                          size: 20, color: Colors.orange.shade700),
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
@@ -440,12 +450,14 @@ class _EpisodeReaderScreenState extends State<EpisodeReaderScreen> {
               _BottomActionBar(
                 onLearnNow: () {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Learn Now feature coming soon')),
+                    const SnackBar(
+                        content: Text('Learn Now feature coming soon')),
                   );
                 },
                 onNextEpisode: () {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Next Episode feature coming soon')),
+                    const SnackBar(
+                        content: Text('Next Episode feature coming soon')),
                   );
                 },
                 backgroundColor: backgroundColor,
@@ -500,7 +512,9 @@ class _EpisodeReaderScreenState extends State<EpisodeReaderScreen> {
   String _getFullEpisodeText() {
     final StringBuffer fullText = StringBuffer();
     for (final block in _displayEpisode.blocks) {
-      if (block.type == BlockType.dialog && block.speaker != null && block.speaker!.isNotEmpty) {
+      if (block.type == BlockType.dialog &&
+          block.speaker != null &&
+          block.speaker!.isNotEmpty) {
         fullText.write('${block.speaker!}: ');
       }
       fullText.write(block.text);
@@ -527,7 +541,9 @@ class _EpisodeReaderScreenState extends State<EpisodeReaderScreen> {
     // Combine all episode blocks into a single text string
     final StringBuffer fullText = StringBuffer();
     for (final block in episode.blocks) {
-      if (block.type == BlockType.dialog && block.speaker != null && block.speaker!.isNotEmpty) {
+      if (block.type == BlockType.dialog &&
+          block.speaker != null &&
+          block.speaker!.isNotEmpty) {
         fullText.write('${block.speaker!}: ');
       }
       fullText.write(block.text);
@@ -549,13 +565,15 @@ class _EpisodeReaderScreenState extends State<EpisodeReaderScreen> {
         // Find next word boundary
         int nextBreak = text.indexOf(' ', pageEnd);
         int nextNewline = text.indexOf('\n', pageEnd);
-        
-        int nextBoundary = nextBreak == -1 
+
+        int nextBoundary = nextBreak == -1
             ? (nextNewline == -1 ? textLength : nextNewline)
-            : (nextNewline == -1 ? nextBreak : (nextBreak < nextNewline ? nextBreak : nextNewline));
-        
+            : (nextNewline == -1
+                ? nextBreak
+                : (nextBreak < nextNewline ? nextBreak : nextNewline));
+
         if (nextBoundary == -1) nextBoundary = textLength;
-        
+
         // Test if this chunk fits - use safe substring to prevent RangeError
         final safeEnd = (nextBoundary + 1).clamp(0, textLength);
         final testText = text.substring(currentIndex, safeEnd);
@@ -578,13 +596,14 @@ class _EpisodeReaderScreenState extends State<EpisodeReaderScreen> {
           final testText = text.substring(currentIndex, safeEnd);
           textPainter.text = TextSpan(text: testText, style: style);
           textPainter.layout(maxWidth: maxWidth);
-          
+
           if (textPainter.size.height > maxHeight) {
             break;
           }
           charCount++;
         }
-        final safeBreak = (currentIndex + (charCount > 1 ? charCount - 1 : 1)).clamp(0, textLength);
+        final safeBreak = (currentIndex + (charCount > 1 ? charCount - 1 : 1))
+            .clamp(0, textLength);
         lastGoodBreak = safeBreak;
       }
 
@@ -596,10 +615,10 @@ class _EpisodeReaderScreenState extends State<EpisodeReaderScreen> {
       }
 
       currentIndex = lastGoodBreak;
-      
+
       // Skip whitespace
-      while (currentIndex < textLength && 
-             (text[currentIndex] == ' ' || text[currentIndex] == '\n')) {
+      while (currentIndex < textLength &&
+          (text[currentIndex] == ' ' || text[currentIndex] == '\n')) {
         currentIndex++;
       }
     }
@@ -784,7 +803,7 @@ class _BottomActionBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final primaryColor = Theme.of(context).colorScheme.primary;
-    
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -883,7 +902,8 @@ class _FontSizeSelector extends StatelessWidget {
               return GestureDetector(
                 onTap: () => onSelected(size),
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
                   decoration: BoxDecoration(
                     color: isSelected
                         ? Theme.of(context).colorScheme.primary.withOpacity(0.1)
@@ -900,7 +920,8 @@ class _FontSizeSelector extends StatelessWidget {
                     size.label,
                     style: TextStyle(
                       fontSize: size.fontSize,
-                      fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                      fontWeight:
+                          isSelected ? FontWeight.w600 : FontWeight.normal,
                       color: isSelected
                           ? Theme.of(context).colorScheme.primary
                           : Colors.black87,

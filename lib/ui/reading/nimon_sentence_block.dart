@@ -65,4 +65,3 @@ class NimonSentenceBlock extends StatelessWidget {
     );
   }
 }
-

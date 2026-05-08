@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:nimon/features/create/creator_publish_status_provider.dart';
 import 'package:nimon/features/create/creator_route_sync.dart';
 import 'package:nimon/features/create/creator_drawer_session.dart';
 import 'package:nimon/features/create/creator_quiz_ui_state.dart';
@@ -58,7 +59,8 @@ final creatorPublishInProgressProvider = StateProvider<bool>((ref) => false);
 ///
 /// V1 note: the audio UI currently attaches local metadata only; this flag is a
 /// forward-compatible hook for the locked back policy.
-final creatorAudioUploadInProgressProvider = StateProvider<bool>((ref) => false);
+final creatorAudioUploadInProgressProvider =
+    StateProvider<bool>((ref) => false);
 
 /// True while a creator back operation is executing.
 ///
@@ -100,7 +102,8 @@ bool creatorRouteShowsLearnModulePanel(Uri uri) {
 @visibleForTesting
 bool creatorUriIsStorySentencesHostPath(Uri uri) {
   final p = uri.path.startsWith('/') ? uri.path : '/${uri.path}';
-  return p == '/create/story/sentences' || p.startsWith('/create/story/sentences/');
+  return p == '/create/story/sentences' ||
+      p.startsWith('/create/story/sentences/');
 }
 
 /// Story sentences **host** with no learn surface (`?panel=` / legacy learn path).
@@ -262,6 +265,7 @@ Future<void> _resetEphemeralUiForBack(
   ref.read(creatorDrawerSessionProvider.notifier).resetEphemeralUiState();
   ref.read(quizTabIndexProvider.notifier).state = 0;
   ref.read(creatorPublishInProgressProvider.notifier).state = false;
+  ref.read(creatorPublishStatusTextProvider.notifier).state = null;
   ref.read(creatorAudioUploadInProgressProvider.notifier).state = false;
 }
 
@@ -409,47 +413,214 @@ Future<void> handleCreatorBackPressed(
     final router = GoRouter.maybeOf(context);
     final uri = router?.state.uri;
 
-  // 0) Detect explicit blocking work (locked rule).
-  if (ref.read(creatorPublishInProgressProvider)) {
-    // V1: block exit until publish completes.
-    return;
-  }
-  if (ref.read(creatorAudioUploadInProgressProvider)) {
-    final action = await _showLockedAudioUploadBlockingDialog(context);
-    if (!context.mounted) {
+    // 0) Detect explicit blocking work (locked rule).
+    if (ref.read(creatorPublishInProgressProvider)) {
+      // V1: block exit until publish completes.
       return;
     }
-    if (action == null || action == 'stay') {
-      return;
-    }
-    if (action == 'cancel_leave') {
-      if (cancelAudioUpload != null) {
-        try {
-          await cancelAudioUpload();
-        } catch (_) {
-          // Cancel failure should not crash back; leaving is still allowed by policy.
-        }
+    if (ref.read(creatorAudioUploadInProgressProvider)) {
+      final action = await _showLockedAudioUploadBlockingDialog(context);
+      if (!context.mounted) {
+        return;
       }
+      if (action == null || action == 'stay') {
+        return;
+      }
+      if (action == 'cancel_leave') {
+        if (cancelAudioUpload != null) {
+          try {
+            await cancelAudioUpload();
+          } catch (_) {
+            // Cancel failure should not crash back; leaving is still allowed by policy.
+          }
+        }
+        await _resetEphemeralUiForBack(
+          context,
+          ref: ref,
+          progressDrawerDismissed: progressDrawerDismissed,
+          closeProgressDrawer: closeProgressDrawer,
+        );
+        if (router != null) {
+          _goToParentForEntryChannel(ref, router);
+        }
+        return;
+      }
+    }
+
+    if (router == null || uri == null) {
+      performPopCreateSubrouteIfPossible(context);
+      return;
+    }
+
+    // Create root: exit by entry context.
+    if (uri.path == '/create' || uri.path == '/create/') {
       await _resetEphemeralUiForBack(
         context,
         ref: ref,
         progressDrawerDismissed: progressDrawerDismissed,
         closeProgressDrawer: closeProgressDrawer,
       );
-      if (router != null) {
+      if (!context.mounted) {
+        return;
+      }
+      performExitFromCreateRoot(context, ref);
+      return;
+    }
+
+    // Story basics: in-stack pop, but flush meaningful state first.
+    if (uri.path.startsWith('/create/story/basics')) {
+      await _handleBackFromStoryBasics(
+        context,
+        ref,
+        hasMeaningfulEdits: storyBasicsHasMeaningfulEdits,
+      );
+      return;
+    }
+
+    // Any learn panel under create/story: normalize to sentences main (no exit yet).
+    if (uri.path.startsWith('/create/story') &&
+        creatorRouteShowsLearnModulePanel(uri)) {
+      final id = ref.read(storyCreatorDraftDataProvider).id;
+      normalizeLearnModuleToStorySentencesMain(
+        ref,
+        router: router,
+        draftId: id,
+      );
+      // Do not continue in this invocation: normalization schedules route changes and
+      // may deactivate the current element; the next back press handles exit/flush.
+      return;
+    }
+
+    // Sentences main: flush meaningful state then exit by entry context.
+    if (creatorUriIsStorySentencesMainSurface(uri)) {
+      final ok = await _flushMeaningfulDraftStateForExit(
+        context,
+        ref,
+        reason: 'exit_story_sentences',
+        locationUri: uri,
+      );
+      if (!ok) {
+        if (!context.mounted) return;
+        final draftId = ref.read(storyCreatorDraftDataProvider).id.trim();
+        final hasPersisted = draftId.isNotEmpty
+            ? await ref.read(storyDraftRepositoryProvider).hasDraft(draftId)
+            : false;
+        if (!context.mounted) {
+          return;
+        }
+        final action = await _showLockedSaveFailureDialog(
+          context,
+          allowDiscardLeave: hasPersisted,
+        );
+        if (!context.mounted) {
+          return;
+        }
+        if (action == null || action == 'stay') {
+          return;
+        }
+        if (action == 'retry') {
+          final ok2 = await _flushMeaningfulDraftStateForExit(
+            context,
+            ref,
+            reason: 'exit_story_sentences_retry_flush',
+            locationUri: uri,
+          );
+          if (!context.mounted) {
+            return;
+          }
+          if (!ok2) {
+            return;
+          }
+        } else if (action == 'discard_leave' && hasPersisted) {
+          ref.read(storyCreatorDraftProvider.notifier).reset();
+        } else {
+          return;
+        }
+      }
+
+      if (context.mounted) {
+        await _resetEphemeralUiForBack(
+          context,
+          ref: ref,
+          progressDrawerDismissed: progressDrawerDismissed,
+          closeProgressDrawer: closeProgressDrawer,
+        );
+      }
+      _goToParentForEntryChannel(ref, router);
+      return;
+    }
+
+    // Any other create/story surface: pop once if possible; otherwise exit.
+    if (uri.path.startsWith('/create/story')) {
+      final ok = await _flushMeaningfulDraftStateForExit(
+        context,
+        ref,
+        reason: 'back_create_story_surface',
+        locationUri: uri,
+      );
+      if (!context.mounted) {
+        return;
+      }
+      if (!ok) {
+        final draftId = ref.read(storyCreatorDraftDataProvider).id.trim();
+        final hasPersisted = draftId.isNotEmpty
+            ? await ref.read(storyDraftRepositoryProvider).hasDraft(draftId)
+            : false;
+        if (!context.mounted) {
+          return;
+        }
+        final action = await _showLockedSaveFailureDialog(
+          context,
+          allowDiscardLeave: hasPersisted,
+        );
+        if (!context.mounted) {
+          return;
+        }
+        if (action == null || action == 'stay') {
+          return;
+        }
+        if (action == 'retry') {
+          final ok2 = await _flushMeaningfulDraftStateForExit(
+            context,
+            ref,
+            reason: 'back_create_story_surface_retry_flush',
+            locationUri: uri,
+          );
+          if (!context.mounted) {
+            return;
+          }
+          if (!ok2) {
+            return;
+          }
+        } else if (action == 'discard_leave' && hasPersisted) {
+          ref.read(storyCreatorDraftProvider.notifier).reset();
+        } else {
+          return;
+        }
+      }
+
+      await _resetEphemeralUiForBack(
+        context,
+        ref: ref,
+        progressDrawerDismissed: progressDrawerDismissed,
+        closeProgressDrawer: closeProgressDrawer,
+      );
+      if (!context.mounted) {
+        return;
+      }
+
+      final couldPopBefore = context.canPop();
+      performPopCreateSubrouteIfPossible(context);
+      if (!context.mounted) {
+        return;
+      }
+      if (!couldPopBefore) {
         _goToParentForEntryChannel(ref, router);
       }
       return;
     }
-  }
 
-  if (router == null || uri == null) {
-    performPopCreateSubrouteIfPossible(context);
-    return;
-  }
-
-  // Create root: exit by entry context.
-  if (uri.path == '/create' || uri.path == '/create/') {
+    // Fallback: exit by entry context.
     await _resetEphemeralUiForBack(
       context,
       ref: ref,
@@ -458,174 +629,8 @@ Future<void> handleCreatorBackPressed(
     );
     if (!context.mounted) {
       return;
-    }
-    performExitFromCreateRoot(context, ref);
-    return;
-  }
-
-  // Story basics: in-stack pop, but flush meaningful state first.
-  if (uri.path.startsWith('/create/story/basics')) {
-    await _handleBackFromStoryBasics(
-      context,
-      ref,
-      hasMeaningfulEdits: storyBasicsHasMeaningfulEdits,
-    );
-    return;
-  }
-
-  // Any learn panel under create/story: normalize to sentences main (no exit yet).
-  if (uri.path.startsWith('/create/story') && creatorRouteShowsLearnModulePanel(uri)) {
-    final id = ref.read(storyCreatorDraftDataProvider).id;
-    normalizeLearnModuleToStorySentencesMain(
-      ref,
-      router: router,
-      draftId: id,
-    );
-    // Do not continue in this invocation: normalization schedules route changes and
-    // may deactivate the current element; the next back press handles exit/flush.
-    return;
-  }
-
-  // Sentences main: flush meaningful state then exit by entry context.
-  if (creatorUriIsStorySentencesMainSurface(uri)) {
-    final ok = await _flushMeaningfulDraftStateForExit(
-      context,
-      ref,
-      reason: 'exit_story_sentences',
-      locationUri: uri,
-    );
-    if (!ok) {
-      if (!context.mounted) return;
-      final draftId = ref.read(storyCreatorDraftDataProvider).id.trim();
-      final hasPersisted = draftId.isNotEmpty
-          ? await ref.read(storyDraftRepositoryProvider).hasDraft(draftId)
-          : false;
-      if (!context.mounted) {
-        return;
-      }
-      final action = await _showLockedSaveFailureDialog(
-        context,
-        allowDiscardLeave: hasPersisted,
-      );
-      if (!context.mounted) {
-        return;
-      }
-      if (action == null || action == 'stay') {
-        return;
-      }
-      if (action == 'retry') {
-        final ok2 = await _flushMeaningfulDraftStateForExit(
-          context,
-          ref,
-          reason: 'exit_story_sentences_retry_flush',
-          locationUri: uri,
-        );
-        if (!context.mounted) {
-          return;
-        }
-        if (!ok2) {
-          return;
-        }
-      } else if (action == 'discard_leave' && hasPersisted) {
-        ref.read(storyCreatorDraftProvider.notifier).reset();
-      } else {
-        return;
-      }
-    }
-
-    if (context.mounted) {
-      await _resetEphemeralUiForBack(
-        context,
-        ref: ref,
-        progressDrawerDismissed: progressDrawerDismissed,
-        closeProgressDrawer: closeProgressDrawer,
-      );
     }
     _goToParentForEntryChannel(ref, router);
-    return;
-  }
-
-  // Any other create/story surface: pop once if possible; otherwise exit.
-  if (uri.path.startsWith('/create/story')) {
-    final ok = await _flushMeaningfulDraftStateForExit(
-      context,
-      ref,
-      reason: 'back_create_story_surface',
-      locationUri: uri,
-    );
-    if (!context.mounted) {
-      return;
-    }
-    if (!ok) {
-      final draftId = ref.read(storyCreatorDraftDataProvider).id.trim();
-      final hasPersisted = draftId.isNotEmpty
-          ? await ref.read(storyDraftRepositoryProvider).hasDraft(draftId)
-          : false;
-      if (!context.mounted) {
-        return;
-      }
-      final action = await _showLockedSaveFailureDialog(
-        context,
-        allowDiscardLeave: hasPersisted,
-      );
-      if (!context.mounted) {
-        return;
-      }
-      if (action == null || action == 'stay') {
-        return;
-      }
-      if (action == 'retry') {
-        final ok2 = await _flushMeaningfulDraftStateForExit(
-          context,
-          ref,
-          reason: 'back_create_story_surface_retry_flush',
-          locationUri: uri,
-        );
-        if (!context.mounted) {
-          return;
-        }
-        if (!ok2) {
-          return;
-        }
-      } else if (action == 'discard_leave' && hasPersisted) {
-        ref.read(storyCreatorDraftProvider.notifier).reset();
-      } else {
-        return;
-      }
-    }
-
-    await _resetEphemeralUiForBack(
-      context,
-      ref: ref,
-      progressDrawerDismissed: progressDrawerDismissed,
-      closeProgressDrawer: closeProgressDrawer,
-    );
-    if (!context.mounted) {
-      return;
-    }
-
-    final couldPopBefore = context.canPop();
-    performPopCreateSubrouteIfPossible(context);
-    if (!context.mounted) {
-      return;
-    }
-    if (!couldPopBefore) {
-      _goToParentForEntryChannel(ref, router);
-    }
-    return;
-  }
-
-  // Fallback: exit by entry context.
-  await _resetEphemeralUiForBack(
-    context,
-    ref: ref,
-    progressDrawerDismissed: progressDrawerDismissed,
-    closeProgressDrawer: closeProgressDrawer,
-  );
-  if (!context.mounted) {
-    return;
-  }
-  _goToParentForEntryChannel(ref, router);
   } finally {
     // Always clear even if navigation disposes the caller.
     ref.read(creatorBackInProgressProvider.notifier).state = false;

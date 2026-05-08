@@ -18,11 +18,14 @@ void main() {
         likes: 4200,
         readTime: '5 min',
         category: 'Love',
-        preview: 'Rain was falling softly in Kyoto. Aya stood under her umbrella.',
+        preview:
+            'Rain was falling softly in Kyoto. Aya stood under her umbrella.',
       );
     });
 
-    testWidgets('Premium episode sheet displays correctly with Material 3 design', (WidgetTester tester) async {
+    testWidgets(
+        'Premium episode sheet displays correctly with Material 3 design',
+        (WidgetTester tester) async {
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
@@ -45,12 +48,16 @@ void main() {
       expect(find.text('Episode 7'), findsOneWidget);
       expect(find.text('Test Author'), findsOneWidget);
       expect(find.text('N5'), findsOneWidget);
-      expect(find.text('Rain was falling softly in Kyoto. Aya stood under her umbrella.'), findsOneWidget);
+      expect(
+          find.text(
+              'Rain was falling softly in Kyoto. Aya stood under her umbrella.'),
+          findsOneWidget);
       expect(find.text('Learn Now'), findsOneWidget);
       expect(find.text('Start Reading'), findsOneWidget);
     });
 
-    testWidgets('Accessibility semantics are correct', (WidgetTester tester) async {
+    testWidgets('Accessibility semantics are correct',
+        (WidgetTester tester) async {
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
@@ -73,8 +80,8 @@ void main() {
       expect(find.text('N5'), findsOneWidget);
     });
 
-    testWidgets('Buttons respond to taps (no crash)', (WidgetTester tester) async {
-
+    testWidgets('Buttons respond to taps (no crash)',
+        (WidgetTester tester) async {
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
@@ -97,13 +104,16 @@ void main() {
 
       // For widget tests, avoid triggering navigation into provider-dependent screens.
       // We just verify the CTAs are present and enabled.
-      final learn = tester.widget<OutlinedButton>(find.widgetWithText(OutlinedButton, 'Learn Now'));
-      final start = tester.widget<FilledButton>(find.widgetWithText(FilledButton, 'Start Reading'));
+      final learn = tester.widget<OutlinedButton>(
+          find.widgetWithText(OutlinedButton, 'Learn Now'));
+      final start = tester.widget<FilledButton>(
+          find.widgetWithText(FilledButton, 'Start Reading'));
       expect(learn.onPressed, isNotNull);
       expect(start.onPressed, isNotNull);
     });
 
-    testWidgets('Sheet can be dismissed by swiping down', (WidgetTester tester) async {
+    testWidgets('Sheet can be dismissed by swiping down',
+        (WidgetTester tester) async {
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
@@ -133,4 +143,3 @@ void main() {
     });
   });
 }
-

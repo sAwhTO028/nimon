@@ -4,7 +4,14 @@ import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:nimon/features/auth/auth_providers.dart';
+import 'package:nimon/features/auth/auth_session_state.dart';
 import 'package:nimon/features/create/create_story_basics_form.dart';
+import 'package:nimon/features/create/data/media_upload_repository.dart';
+import 'package:nimon/features/create/data/media_upload_repository_provider.dart';
+import 'package:nimon/features/create/story_basics_cover_upload_outcome.dart';
+import 'package:nimon/features/create/story_basics_remote_cover_url.dart';
 import 'package:nimon/features/create/creator_back_policy.dart';
 import 'package:nimon/features/create/creator_route_sync_listener.dart';
 import 'package:nimon/features/create/story_creator_provider.dart';
@@ -27,17 +34,52 @@ class _StoryCreatorBasicsScreenState
   bool _formDirty = false;
   bool _nextBusy = false;
 
+  Future<StoryBasicsCoverUploadOutcome> _uploadCoverFromGallery(
+      XFile file) async {
+    final tok = await ref.read(authTokenStoreProvider).readTokens();
+    if (tok == null || tok.accessToken.trim().isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Sign in to upload cover images.')),
+        );
+      }
+      return StoryBasicsCoverUploadOutcome.pendingLocal(inlineHint: null);
+    }
+    try {
+      final r = await ref.read(mediaUploadRepositoryProvider).uploadCover(file);
+      return StoryBasicsCoverUploadOutcome.ok(r);
+    } on MediaUploadException catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.userMessage)),
+        );
+      }
+      return StoryBasicsCoverUploadOutcome.pendingLocal(
+        inlineHint: coverUploadFailureInlineHint(e),
+      );
+    }
+  }
+
   void _handleAutosaveDraftFields(StoryBasicsDraftFields f) {
     // New untouched sessions must not create/persist anything until first meaningful edit.
     _formDirty = f.isDirty;
     if (!f.isDirty) return;
+
+    final draft = ref.read(storyCreatorDraftDataProvider);
+    final coverImageUrl = storyBasicsPersistedCoverUrl(
+      coverExplicitlyCleared: f.coverExplicitlyCleared,
+      coverLocalPath: f.coverLocalPath,
+      coverNetworkUrl: f.coverNetworkUrl,
+      draftCoverImageUrl: draft.basics.coverImageUrl,
+    );
+
     ref.read(storyCreatorDraftProvider.notifier).applyBasicsDebounced(
           title: f.title,
           category: (f.category ?? '').trim(),
           level: (f.level ?? '').trim(),
           description: f.description,
-          promptSourceNote: '', // not editable on Story basics UI
-          coverImageUrl: null, // cover is not persisted as local path in V1
+          promptSourceNote: draft.promptSourceNote,
+          coverImageUrl: coverImageUrl,
           targetDurationBandKey: switch ((f.durationLabel ?? '').trim()) {
             '3–5 mins' => '3_5',
             '5–7 mins' => '5_7',
@@ -101,8 +143,9 @@ class _StoryCreatorBasicsScreenState
       // lookups that can throw ("deactivated widget's ancestor is unsafe").
       routeDraftId = null;
     }
-    final cleanedRouteId =
-        (routeDraftId == null || routeDraftId.trim().isEmpty) ? null : routeDraftId.trim();
+    final cleanedRouteId = (routeDraftId == null || routeDraftId.trim().isEmpty)
+        ? null
+        : routeDraftId.trim();
     if (cleanedRouteId != null) {
       final current = ref.watch(storyCreatorDraftDataProvider);
       if (current.id != cleanedRouteId) {
@@ -112,14 +155,16 @@ class _StoryCreatorBasicsScreenState
           appBar: AppBar(
             title: const Text('Story basics'),
             leading: NimonBackButton(
-                onPressed: () => unawaited(_attemptExit()),
-              ),
+              onPressed: () => unawaited(_attemptExit()),
+            ),
           ),
           body: const Center(child: CircularProgressIndicator()),
         );
       }
     }
     final draft = ref.watch(storyCreatorDraftDataProvider);
+    final coverUploadAllowed =
+        ref.watch(authSessionProvider) is AuthSessionAuthenticated;
     final canContinue = _formKey.currentState?.isStep1Complete ?? false;
     final nextEnabled = canContinue && !_nextBusy;
 
@@ -141,55 +186,59 @@ class _StoryCreatorBasicsScreenState
           unawaited(_attemptExit());
         },
         child: Scaffold(
-        appBar: AppBar(
-          title: const Text('Story basics'),
-          leading: NimonBackButton(
-            onPressed: () => unawaited(_attemptExit()),
-          ),
-          actions: [
-            IconButton(
-              tooltip: 'Progress',
-              onPressed: () => _formKey.currentState?.showProgressBottomSheet(),
-              icon: const Icon(Icons.error_outline_rounded),
-              visualDensity: VisualDensity.compact,
+          appBar: AppBar(
+            title: const Text('Story basics'),
+            leading: NimonBackButton(
+              onPressed: () => unawaited(_attemptExit()),
             ),
-            const SizedBox(width: 2),
-            TextButton(
-              onPressed: nextEnabled ? () => unawaited(_continue()) : null,
-              style: TextButton.styleFrom(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                tapTargetSize: MaterialTapTargetSize.padded,
+            actions: [
+              IconButton(
+                tooltip: 'Progress',
+                onPressed: () =>
+                    _formKey.currentState?.showProgressBottomSheet(),
+                icon: const Icon(Icons.error_outline_rounded),
                 visualDensity: VisualDensity.compact,
-                textStyle: theme.textTheme.labelLarge?.copyWith(
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: 0.15,
+              ),
+              const SizedBox(width: 2),
+              TextButton(
+                onPressed: nextEnabled ? () => unawaited(_continue()) : null,
+                style: TextButton.styleFrom(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                  tapTargetSize: MaterialTapTargetSize.padded,
+                  visualDensity: VisualDensity.compact,
+                  textStyle: theme.textTheme.labelLarge?.copyWith(
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 0.15,
+                  ),
+                ),
+                child: _nextBusy
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Text('Next'),
+              ),
+              const SizedBox(width: 10),
+            ],
+          ),
+          body: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Expanded(
+                child: CreateStoryBasicsForm(
+                  key: _formKey,
+                  initialDraft: draft,
+                  progressSheetActionLabel: 'Continue',
+                  onFieldsChanged: () => setState(() {}),
+                  onDraftFieldsChanged: _handleAutosaveDraftFields,
+                  onCoverUpload: _uploadCoverFromGallery,
+                  coverUploadAllowed: coverUploadAllowed,
                 ),
               ),
-              child: _nextBusy
-                  ? const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Text('Next'),
-            ),
-            const SizedBox(width: 10),
-          ],
-        ),
-      body: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Expanded(
-            child: CreateStoryBasicsForm(
-              key: _formKey,
-              initialDraft: draft,
-              progressSheetActionLabel: 'Continue',
-              onFieldsChanged: () => setState(() {}),
-              onDraftFieldsChanged: _handleAutosaveDraftFields,
-            ),
+            ],
           ),
-        ],
-      ),
         ),
       ),
     );

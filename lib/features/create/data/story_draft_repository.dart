@@ -4,6 +4,10 @@ import 'package:nimon/features/create/data/dto/draft_list_summary_dto.dart';
 import 'package:nimon/features/create/story_creator_draft_storage.dart';
 import 'package:nimon/features/create/story_creator_models.dart';
 
+/// Remote [StoryDraftRepository] only: after PUT, optionally chain Nest publish endpoints.
+/// Plain edits use [StoryDraftRemotePublishIntent.none] so PublishedMono is not updated.
+enum StoryDraftRemotePublishIntent { none, readOnly, fullLearn }
+
 /// Persistence boundary for Add-flow story drafts (local today; swappable later).
 abstract interface class StoryDraftRepository {
   /// New id, persisted immediately (same intent as [StoryCreatorDraftNotifier.startNewLocalDraft]).
@@ -21,7 +25,11 @@ abstract interface class StoryDraftRepository {
 
   /// Bumps [StoryBasics.updatedAt], writes draft JSON, then touches resume `lastEditedAtUtc`.
   /// Returns the aggregate actually written (including the new [StoryBasics.updatedAt]).
-  Future<CreatorStoryV1> saveDraft(CreatorStoryV1 draft);
+  Future<CreatorStoryV1> saveDraft(
+    CreatorStoryV1 draft, {
+    StoryDraftRemotePublishIntent remotePublishAfterPut =
+        StoryDraftRemotePublishIntent.none,
+  });
 
   /// Local-only flush alias; same semantics as [saveDraft] until a queue exists.
   Future<CreatorStoryV1> saveDraftNow(CreatorStoryV1 draft);

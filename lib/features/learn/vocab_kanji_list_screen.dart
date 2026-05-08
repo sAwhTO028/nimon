@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:nimon/features/learn/learn_catalog_content_gate.dart';
 import 'package:nimon/features/learn/learn_explanation_language_provider.dart';
+import 'package:nimon/features/learn/learn_published_snapshot_mappers.dart';
+import 'package:nimon/features/learn/learn_published_snapshot_providers.dart';
+import 'package:nimon/features/profile/data/published_mono_catalog_visibility_exception.dart';
 import 'package:nimon/features/learn/learn_support_text.dart';
 import 'package:nimon/features/learn/vocab_kanji_detail_sheet.dart';
 import 'package:nimon/features/learn/vocab_kanji_item.dart';
@@ -20,8 +24,8 @@ void onVocabKanjiItemTapForDetail(
   );
 }
 
-/// V1: scrollable vocabulary/kanji list for a story ([contentId]).
-class VocabKanjiListScreen extends StatelessWidget {
+/// Scrollable vocabulary/kanji list for a story ([contentId] = catalog mono id).
+class VocabKanjiListScreen extends ConsumerWidget {
   const VocabKanjiListScreen({
     super.key,
     required this.contentId,
@@ -32,7 +36,7 @@ class VocabKanjiListScreen extends StatelessWidget {
   static const _bg = Color(0xFFF6F3EA);
   static const _ink = Color(0xFF1A1917);
 
-  /// V1 mock items (later: derived from story).
+  /// Dev-only demo items when [contentId] is not a catalog UUID (see [learnDemoMocksAllowed]).
   static const List<VocabKanjiItem> mockItems = [
     VocabKanjiItem(
       id: 'v1',
@@ -44,8 +48,7 @@ class VocabKanjiListScreen extends StatelessWidget {
       exampleSentence: '図書館は駅から歩いて五分です。',
       exampleMeaningMm:
           'စာကြည့်တိုက်က ဘူတာကနေ လမ်းလျှောက် ၅ မိနစ်အကွာမှာ ရှိတယ်။',
-      exampleMeaningEn:
-          'The library is a five-minute walk from the station.',
+      exampleMeaningEn: 'The library is a five-minute walk from the station.',
       storySource: '町の図書館',
     ),
     VocabKanjiItem(
@@ -94,10 +97,91 @@ class VocabKanjiListScreen extends StatelessWidget {
   ];
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
-    final bottomInset = MediaQuery.paddingOf(context).bottom;
+    if (learnDemoMocksAllowed(contentId)) {
+      return _buildScaffold(
+        context,
+        theme,
+        body: _buildList(context, mockItems),
+      );
+    }
 
+    final detailAsync =
+        ref.watch(catalogPublishedMonoDetailProvider(contentId));
+    final snapAsync = ref.watch(learnPublishedSnapshotProvider(contentId));
+
+    return detailAsync.when(
+      loading: () => _buildScaffold(
+        context,
+        theme,
+        body: const Center(child: CircularProgressIndicator()),
+      ),
+      error: (err, _) => _buildScaffold(
+        context,
+        theme,
+        body: _ErrorBody(
+          message: publishedMonoCatalogDetailErrorTitle(err),
+          detail: publishedMonoCatalogDetailErrorBody(err),
+          onRetry: () =>
+              ref.invalidate(catalogPublishedMonoDetailProvider(contentId)),
+        ),
+      ),
+      data: (detail) {
+        return snapAsync.when(
+          loading: () => _buildScaffold(
+            context,
+            theme,
+            body: const Center(child: CircularProgressIndicator()),
+          ),
+          error: (err, _) => _buildScaffold(
+            context,
+            theme,
+            body: _ErrorBody(
+              message: 'Could not load learning content.',
+              detail: err.toString(),
+              onRetry: () =>
+                  ref.invalidate(catalogPublishedMonoDetailProvider(contentId)),
+            ),
+          ),
+          data: (snap) {
+            final useLearn =
+                shouldUsePublishedLearnSnapshot(detail.publishKind, snap);
+            final items = useLearn && snap != null
+                ? snap.vocabularyKanjiEntries
+                    .map(vocabKanjiItemFromPublishedEntry)
+                    .toList()
+                : <VocabKanjiItem>[];
+
+            if (!useLearn || items.isEmpty) {
+              final msg = !useLearn
+                  ? 'Published vocabulary isn’t available for this story yet. '
+                      'Stories published as read-only don’t include learning modules '
+                      'until you publish full learn.'
+                  : 'No vocabulary for this story yet.';
+              return _buildScaffold(
+                context,
+                theme,
+                body: _EmptyLearnBody(message: msg),
+              );
+            }
+
+            return _buildScaffold(
+              context,
+              theme,
+              body: _buildList(context, items),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildScaffold(
+    BuildContext context,
+    ThemeData theme, {
+    required Widget body,
+  }) {
     return Scaffold(
       backgroundColor: _bg,
       appBar: AppBar(
@@ -114,20 +198,104 @@ class VocabKanjiListScreen extends StatelessWidget {
         ),
         centerTitle: false,
       ),
-      body: ListView.builder(
-        padding: EdgeInsets.fromLTRB(18, 8, 18, bottomInset + 18),
-        itemCount: mockItems.length,
-        itemBuilder: (context, index) {
-          final item = mockItems[index];
-          return Padding(
-            padding: const EdgeInsets.only(bottom: 10),
-            child: _VocabKanjiListCard(
-              item: item,
-              onTap: () =>
-                  onVocabKanjiItemTapForDetail(context, contentId, item),
+      body: body,
+    );
+  }
+
+  Widget _buildList(BuildContext context, List<VocabKanjiItem> items) {
+    final bottomInset = MediaQuery.paddingOf(context).bottom;
+    return ListView.builder(
+      padding: EdgeInsets.fromLTRB(18, 8, 18, bottomInset + 18),
+      itemCount: items.length,
+      itemBuilder: (context, index) {
+        final item = items[index];
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 10),
+          child: _VocabKanjiListCard(
+            item: item,
+            onTap: () => onVocabKanjiItemTapForDetail(context, contentId, item),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _EmptyLearnBody extends StatelessWidget {
+  const _EmptyLearnBody({required this.message});
+
+  final String message;
+
+  static const _ink = Color(0xFF1A1917);
+  static const _inkMuted = Color(0xFF5C5A55);
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final bottomInset = MediaQuery.paddingOf(context).bottom;
+    return Padding(
+      padding: EdgeInsets.fromLTRB(24, 24, 24, bottomInset + 24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            message,
+            style: theme.textTheme.bodyLarge?.copyWith(
+              color: _ink,
+              height: 1.45,
             ),
-          );
-        },
+          ),
+          const SizedBox(height: 12),
+          Text(
+            'Publish Full Learn from the creator workspace to sync vocabulary to readers.',
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: _inkMuted,
+              height: 1.4,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ErrorBody extends StatelessWidget {
+  const _ErrorBody({
+    required this.message,
+    required this.detail,
+    required this.onRetry,
+  });
+
+  final String message;
+  final String detail;
+  final VoidCallback onRetry;
+
+  static const _ink = Color(0xFF1A1917);
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final bottomInset = MediaQuery.paddingOf(context).bottom;
+    return Padding(
+      padding: EdgeInsets.fromLTRB(24, 24, 24, bottomInset + 24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            message,
+            style: theme.textTheme.titleMedium?.copyWith(
+              color: _ink,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            detail,
+            style: theme.textTheme.bodySmall?.copyWith(color: _ink),
+          ),
+          const SizedBox(height: 16),
+          TextButton(onPressed: onRetry, child: const Text('Retry')),
+        ],
       ),
     );
   }

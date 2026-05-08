@@ -178,4 +178,3 @@ extension NimonTypographyX on ThemeData {
 extension NimonTypographyContextX on BuildContext {
   NimonWidthClass get widthClass => NimonBreakpoints.of(this);
 }
-

@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:nimon/core/pagination/page_request.dart';
 import 'package:nimon/core/pagination/paginated_state.dart';
 import 'package:nimon/core/pagination/pagination_defaults.dart';
+import 'package:nimon/features/auth/auth_providers.dart';
 import 'package:nimon/features/create/data/remote_backend_config.dart';
 import 'package:nimon/features/profile/data/published_mono_dto.dart';
 import 'package:nimon/features/profile/data/remote_published_mono_repository.dart';
@@ -11,6 +12,7 @@ final remotePublishedMonoRepositoryForProfileProvider =
     Provider<RemotePublishedMonoRepository>((ref) {
   return RemotePublishedMonoRepository(
     apiBaseUrl: RemoteBackendConfig.apiBaseUrl,
+    authHeaderBuilder: ref.watch(authHeaderBuilderProvider),
   );
 });
 
@@ -37,6 +39,7 @@ class ProfilePublishedMonoPager
     state = state.copyWith(
       requestEpoch: myEpoch,
       isInitialLoading: true,
+      isRefreshing: false,
       isLoadingMore: false,
       error: null,
     );
@@ -51,6 +54,7 @@ class ProfilePublishedMonoPager
         hasMore: result.hasMore,
         isInitialLoading: false,
         error: null,
+        totalCount: result.totalCount,
       );
     } catch (e) {
       if (state.requestEpoch != myEpoch) return;
@@ -58,6 +62,10 @@ class ProfilePublishedMonoPager
         isInitialLoading: false,
         error: e,
       );
+    } finally {
+      if (state.requestEpoch == myEpoch) {
+        state = state.copyWith(isInitialLoading: false);
+      }
     }
   }
 
@@ -66,6 +74,7 @@ class ProfilePublishedMonoPager
     state = state.copyWith(
       requestEpoch: myEpoch,
       isRefreshing: true,
+      isInitialLoading: false,
       isLoadingMore: false,
       nextCursor: null,
       error: null,
@@ -81,6 +90,7 @@ class ProfilePublishedMonoPager
         hasMore: result.hasMore,
         isRefreshing: false,
         error: null,
+        totalCount: result.totalCount,
       );
     } catch (e) {
       if (state.requestEpoch != myEpoch) return;
@@ -88,6 +98,10 @@ class ProfilePublishedMonoPager
         isRefreshing: false,
         error: e,
       );
+    } finally {
+      if (state.requestEpoch == myEpoch) {
+        state = state.copyWith(isRefreshing: false);
+      }
     }
   }
 
@@ -109,13 +123,15 @@ class ProfilePublishedMonoPager
         nextCursor: result.nextCursor,
         hasMore: result.hasMore,
         error: null,
+        totalCount: result.totalCount ?? state.totalCount,
       );
     } catch (e) {
       if (state.requestEpoch != myEpoch) return;
       state = state.copyWith(error: e);
     } finally {
-      // Always clear: superseded requests must not leave [isLoadingMore] stuck.
-      state = state.copyWith(isLoadingMore: false);
+      if (state.requestEpoch == myEpoch) {
+        state = state.copyWith(isLoadingMore: false);
+      }
     }
   }
 
@@ -126,6 +142,7 @@ class ProfilePublishedMonoPager
         for (final e in state.items)
           if (!ids.contains(e.id)) e,
       ],
+      totalCount: null,
     );
   }
 }

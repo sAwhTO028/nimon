@@ -35,5 +35,17 @@ abstract final class RemoteBackendConfig {
   /// silently returning local fallback results.
   static const bool strictRemoteDrafts =
       bool.fromEnvironment('NIMON_STRICT_REMOTE_DRAFTS', defaultValue: false);
-}
 
+  /// When true, Mono Home can use [RemoteMonoFeedRepository] instead of mock feed data.
+  ///
+  /// `--dart-define=NIMON_USE_REMOTE_MONO_FEED=true`
+  static const bool useRemoteMonoFeed =
+      bool.fromEnvironment('NIMON_USE_REMOTE_MONO_FEED', defaultValue: false);
+
+  /// When true, Creator Listening audio sheet exposes **public URL** and **attach without uploading**.
+  ///
+  /// Normal release builds omit these paths (`false`). Enable for internal/support tooling:
+  /// `--dart-define=NIMON_CREATOR_AUDIO_ADVANCED=true`
+  static const bool creatorAudioAdvancedUxEnabled =
+      bool.fromEnvironment('NIMON_CREATOR_AUDIO_ADVANCED', defaultValue: false);
+}

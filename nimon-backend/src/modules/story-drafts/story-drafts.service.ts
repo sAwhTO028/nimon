@@ -14,8 +14,6 @@ import {
   StoryDraftWriteDto,
 } from './dto/story-draft.requests';
 
-const DEFAULT_DEV_OWNER_ID = '00000000-0000-0000-0000-000000000001';
-
 /** GET /v1/story-drafts — aligns with docs/NIMON_API_QUERY_CONTRACT.md §3 (workspace). */
 /** Default matches pre-pagination remote list (Flutter `listDraftIds()` omits `limit`). */
 const LIST_DEFAULT_LIMIT = 50;
@@ -27,10 +25,6 @@ type ListCursorPayload = { u: string; i: string };
 @Injectable()
 export class StoryDraftsService {
   constructor(private readonly prisma: PrismaService) {}
-
-  private getDevOwnerId(): string {
-    return process.env.DEV_OWNER_ID ?? DEFAULT_DEV_OWNER_ID;
-  }
 
   private etagFromVersion(version: number): string {
     return `"v${version}"`;
@@ -65,6 +59,75 @@ export class StoryDraftsService {
       grammar: 'not_started',
       quiz: 'not_started',
       audio: 'not_started',
+    };
+  }
+
+  /** Safe shallow copy for Prisma Json row.content — avoids mutating stored objects. */
+  private shallowJsonObjectCopy(content: unknown): Record<string, unknown> {
+    if (content == null) {
+      return {};
+    }
+    if (typeof content !== 'object' || Array.isArray(content)) {
+      return {};
+    }
+    return { ...(content as Record<string, unknown>) };
+  }
+
+  /**
+   * PublishedMono `content.core` — reader + feed use this (not only `content.learn`).
+   * Sorted by `DraftSentence.order`; each row `{ order, content }` preserves the JSON blob
+   * (japaneseText, furiganaSpans, meanings, etc.).
+   */
+  private buildPublishedCorePayloadFromDraft(draft: any): Record<string, unknown> {
+    return {
+      title: draft.title ?? '',
+      category: draft.category ?? '',
+      level: draft.level ?? '',
+      description: draft.description ?? '',
+      targetDurationBandKey: draft.targetDurationBandKey,
+      coverImageUrl: draft.coverImageUrl,
+      sentences: (draft.sentences ?? [])
+        .slice()
+        .sort((a: any, b: any) => a.order - b.order)
+        .map((s: any) => ({
+          order: s.order,
+          content: s.content,
+        })),
+    };
+  }
+
+  /**
+   * PublishedMono `content.learn` snapshot — same ordering as mapFullDraft learn layers.
+   */
+  private buildLearnSnapshotFromDraft(draft: any): Record<string, unknown> {
+    const vocabularyEntries = (draft.vocabEntries ?? [])
+      .slice()
+      .sort((a: any, b: any) => a.order - b.order)
+      .map((e: any) => this.shallowJsonObjectCopy(e.content));
+
+    const grammarEntries = (draft.grammarEntries ?? [])
+      .slice()
+      .sort((a: any, b: any) => a.order - b.order)
+      .map((e: any) => this.shallowJsonObjectCopy(e.content));
+
+    const quizEntries = (draft.quizEntries ?? [])
+      .slice()
+      .sort((a: any, b: any) => a.order - b.order)
+      .map((e: any) => this.shallowJsonObjectCopy(e.content));
+
+    const storyAudioRow = (draft.audios ?? []).find(
+      (a: any) => a.kind === 'storyAudio',
+    );
+    const storyAudio = storyAudioRow
+      ? this.shallowJsonObjectCopy(storyAudioRow.content)
+      : null;
+
+    return {
+      schemaVersion: 1,
+      vocabularyKanji: { entries: vocabularyEntries },
+      grammar: { entries: grammarEntries },
+      quiz: { entries: quizEntries },
+      audio: { storyAudio },
     };
   }
 
@@ -148,8 +211,10 @@ export class StoryDraftsService {
     };
   }
 
-  async createDraft(req: CreateStoryDraftRequestDto): Promise<StoryDraftResponseDto> {
-    const ownerId = this.getDevOwnerId();
+  async createDraft(
+    ownerId: string,
+    req: CreateStoryDraftRequestDto,
+  ): Promise<StoryDraftResponseDto> {
     await this.ensureDevOwnerUser(ownerId);
 
     const draftId = req.draftId ?? crypto.randomUUID();
@@ -183,8 +248,29 @@ export class StoryDraftsService {
     return this.mapFullDraft(created);
   }
 
-  async deleteDraft(draftId: string): Promise<void> {
-    const ownerId = this.getDevOwnerId();
+  async deleteDraft(ownerId: string, draftId: string): Promise<void> {
+    const existing = await this.prisma.storyDraft.findFirst({
+      where: { id: draftId, ownerId },
+      select: { publishedMonoId: true },
+    });
+    if (!existing) {
+      throw apiError(HttpStatus.NOT_FOUND, 'draft_not_found', 'Draft not found');
+    }
+    const linkedId = existing.publishedMonoId?.trim();
+    if (linkedId) {
+      const pm = await this.prisma.publishedMono.findUnique({
+        where: { id: linkedId },
+        select: { trashedAt: true },
+      });
+      if (pm && pm.trashedAt == null) {
+        throw apiError(
+          HttpStatus.CONFLICT,
+          'published_draft_must_be_trashed_first',
+          'Move the published story to Trash before deleting this draft.',
+        );
+      }
+    }
+
     const result = await this.prisma.storyDraft.deleteMany({
       where: { id: draftId, ownerId },
     });
@@ -193,8 +279,7 @@ export class StoryDraftsService {
     }
   }
 
-  async getDraftById(draftId: string): Promise<StoryDraftResponseDto> {
-    const ownerId = this.getDevOwnerId();
+  async getDraftById(ownerId: string, draftId: string): Promise<StoryDraftResponseDto> {
     const draft = await this.prisma.storyDraft.findFirst({
       where: { id: draftId, ownerId },
       include: {
@@ -214,26 +299,24 @@ export class StoryDraftsService {
   }
 
   async updateDraft(
+    ownerId: string,
     draftId: string,
     body: StoryDraftWriteDto,
     ifMatch?: string,
   ): Promise<StoryDraftResponseDto> {
-    const ownerId = this.getDevOwnerId();
     const requiredIfMatch = this.requireIfMatch(ifMatch);
 
-    if (body.basics.storyId !== draftId) {
+    const basics = {
+      ...body.basics,
+      ownerId,
+      storyId: draftId,
+    };
+
+    if (basics.storyId !== draftId) {
       throw apiError(
         HttpStatus.BAD_REQUEST,
         'draft_id_mismatch',
         'basics.storyId must equal path draftId',
-      );
-    }
-
-    if (body.basics.ownerId && body.basics.ownerId !== ownerId) {
-      throw apiError(
-        HttpStatus.FORBIDDEN,
-        'owner_mismatch',
-        'ownerId does not match authenticated user',
       );
     }
 
@@ -246,15 +329,26 @@ export class StoryDraftsService {
     const updated = await this.prisma.$transaction(async (tx) => {
       const current = await tx.storyDraft.findFirst({
         where: { id: draftId, ownerId },
-        select: { version: true, publishState: true },
+        select: { version: true, publishState: true, publishedMonoId: true },
       });
       if (!current) {
         throw apiError(HttpStatus.NOT_FOUND, 'draft_not_found', 'Draft not found');
       }
 
+      const hasLinkedMono =
+        current.publishedMonoId != null && String(current.publishedMonoId).trim() !== '';
+
+      /** Staging edits on a published-linked draft must not demote publishState via PUT. */
+      const nextPublishState = hasLinkedMono
+        ? current.publishState
+        : (body.publishState as PublishState);
+
       const becomesPublishedRelated =
         current.publishState !== PublishState.draft ||
         body.publishState !== PublishState.draft;
+
+      /** Linked publishes: any core PUT marks workspace dirty; visibility hides catalog until republish. */
+      const nextHasUnpublishedCoreChanges = hasLinkedMono ? true : becomesPublishedRelated;
 
       const currentEtag = this.etagFromVersion(current.version);
       if (requiredIfMatch !== currentEtag) {
@@ -321,15 +415,15 @@ export class StoryDraftsService {
         where: { id: draftId, ownerId, version: current.version },
         data: {
           schemaVersion: body.schemaVersion ?? 1,
-          publishState: body.publishState,
-          hasUnpublishedCoreChanges: becomesPublishedRelated,
-          title: body.basics.title ?? '',
-          category: body.basics.category ?? '',
-          level: body.basics.level ?? '',
-          description: body.basics.description ?? '',
-          promptSourceNote: body.basics.promptSourceNote ?? '',
-          targetDurationBandKey: body.basics.targetDurationBandKey ?? null,
-          coverImageUrl: body.basics.coverImageUrl ?? null,
+          publishState: nextPublishState,
+          hasUnpublishedCoreChanges: nextHasUnpublishedCoreChanges,
+          title: basics.title ?? '',
+          category: basics.category ?? '',
+          level: basics.level ?? '',
+          description: basics.description ?? '',
+          promptSourceNote: basics.promptSourceNote ?? '',
+          targetDurationBandKey: basics.targetDurationBandKey ?? null,
+          coverImageUrl: basics.coverImageUrl ?? null,
           moduleWorkflowStatuses: this.ensureModuleWorkflowStatuses(
             body.moduleWorkflowStatuses,
           ),
@@ -368,8 +462,10 @@ export class StoryDraftsService {
     return this.mapFullDraft(updated);
   }
 
-  async listDrafts(q: ListStoryDraftsQuery): Promise<StoryDraftListEnvelopeDto> {
-    const ownerId = this.getDevOwnerId();
+  async listDrafts(
+    ownerId: string,
+    q: ListStoryDraftsQuery,
+  ): Promise<StoryDraftListEnvelopeDto> {
     await this.ensureDevOwnerUser(ownerId);
 
     const limitNum = q.limit ? Number(q.limit) : LIST_DEFAULT_LIMIT;
@@ -682,8 +778,7 @@ export class StoryDraftsService {
     return unmet;
   }
 
-  async publishReadOnly(draftId: string, ifMatch?: string) {
-    const ownerId = this.getDevOwnerId();
+  async publishReadOnly(ownerId: string, draftId: string, ifMatch?: string) {
     const requiredIfMatch = this.requireIfMatch(ifMatch);
 
     const now = new Date();
@@ -736,6 +831,12 @@ export class StoryDraftsService {
       // - first publish creates a PublishedMono
       // - subsequent "publish read-only" updates the SAME PublishedMono (reuses id)
       // so "Update Read Only" is backend-safe and does not create a new logical publish.
+      // Merge with existing content so a prior full_learn snapshot (`content.learn`) is preserved.
+      const existingPm = await tx.publishedMono.findUnique({
+        where: { id: publishedMonoId },
+        select: { content: true },
+      });
+      const prevContent = (existingPm?.content ?? {}) as Record<string, unknown>;
       await tx.publishedMono.update({
         where: { id: publishedMonoId },
         data: {
@@ -744,25 +845,12 @@ export class StoryDraftsService {
           level: draft.level ?? '',
           description: draft.description ?? '',
           content: {
+            ...prevContent,
             sourceDraftId: draft.id,
             publishKind: 'read_only_v1',
             updatedAt: now.toISOString(),
-            core: {
-              title: draft.title ?? '',
-              category: draft.category ?? '',
-              level: draft.level ?? '',
-              description: draft.description ?? '',
-              targetDurationBandKey: draft.targetDurationBandKey,
-              coverImageUrl: draft.coverImageUrl,
-              sentences: (draft.sentences ?? [])
-                .slice()
-                .sort((a, b) => a.order - b.order)
-                .map((s) => ({
-                  order: s.order,
-                  content: s.content,
-                })),
-            },
-          },
+            core: this.buildPublishedCorePayloadFromDraft(draft),
+          } as Prisma.InputJsonValue,
         },
       });
 
@@ -807,8 +895,7 @@ export class StoryDraftsService {
     return this.mapFullDraft(updated);
   }
 
-  async publishFullLearn(draftId: string, ifMatch?: string) {
-    const ownerId = this.getDevOwnerId();
+  async publishFullLearn(ownerId: string, draftId: string, ifMatch?: string) {
     const requiredIfMatch = this.requireIfMatch(ifMatch);
 
     const now = new Date();
@@ -889,22 +976,28 @@ export class StoryDraftsService {
         throw apiError(HttpStatus.NOT_FOUND, 'draft_not_found', 'Draft not found');
       }
 
-      // Mark PublishedMono as Full Learn. Learn module snapshots are not written here yet
-      // (V1: Flutter must not render fake learn data; [content.learn] is optional for later).
       const publishedMonoId = reloaded.publishedMonoId;
       if (publishedMonoId) {
         const pm = await tx.publishedMono.findUnique({ where: { id: publishedMonoId } });
         if (pm) {
           const prev = (pm.content ?? {}) as Record<string, unknown>;
+          const learn = this.buildLearnSnapshotFromDraft(reloaded);
+          const core = this.buildPublishedCorePayloadFromDraft(reloaded);
           await tx.publishedMono.update({
             where: { id: publishedMonoId },
             data: {
+              title: reloaded.title ?? '',
+              category: reloaded.category ?? '',
+              level: reloaded.level ?? '',
+              description: reloaded.description ?? '',
               content: {
                 ...prev,
                 sourceDraftId: reloaded.id,
                 publishKind: 'full_learn_v1',
                 updatedAt: now.toISOString(),
-              } as any,
+                core,
+                learn,
+              } as Prisma.InputJsonValue,
             },
           });
         }

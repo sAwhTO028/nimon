@@ -8,4 +8,3 @@ enum CreatorStepId {
   quiz,
   listening,
 }
-

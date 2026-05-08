@@ -18,8 +18,9 @@ class PublicFolderDetailScreen extends StatelessWidget {
     final scheme = theme.colorScheme;
     final bundle = nimonDemoPublicProfile;
     final folder = bundle.folderById(folderId);
-    final stories =
-        folder == null ? const <PublicStory>[] : bundle.storiesForFolder(folder);
+    final stories = folder == null
+        ? const <PublicStory>[]
+        : bundle.storiesForFolder(folder);
 
     return Scaffold(
       appBar: AppBar(

@@ -94,7 +94,11 @@ class _StubWorkspaceDraftRepository implements StoryDraftRepository {
       throw UnimplementedError();
 
   @override
-  Future<CreatorStoryV1> saveDraft(CreatorStoryV1 draft) =>
+  Future<CreatorStoryV1> saveDraft(
+    CreatorStoryV1 draft, {
+    StoryDraftRemotePublishIntent remotePublishAfterPut =
+        StoryDraftRemotePublishIntent.none,
+  }) =>
       throw UnimplementedError();
 
   @override
@@ -209,6 +213,38 @@ void main() {
       expect(n.state.items.single.draftId, 'x');
       expect(n.state.nextCursor, isNull);
       expect(calls, 2);
+    });
+
+    test(
+        'stale loadFirstPage does not leave isInitialLoading true after refresh',
+        () async {
+      final hold = Completer<void>();
+      var calls = 0;
+      final stub = _StubWorkspaceDraftRepository((_) async {
+        calls++;
+        if (calls == 1) {
+          await hold.future;
+          return PageResult<DraftListSummaryDto>(
+            items: const [],
+            nextCursor: null,
+            hasMore: false,
+          );
+        }
+        return PageResult<DraftListSummaryDto>(
+          items: [_row('after_refresh')],
+          nextCursor: null,
+          hasMore: false,
+        );
+      });
+      final n = ProfileWorkspaceDraftPager(stub);
+      final slowFirst = n.loadFirstPage();
+      await n.refresh();
+      hold.complete();
+      await slowFirst;
+      await pumpEventQueue();
+      expect(n.state.isInitialLoading, isFalse);
+      expect(n.state.isRefreshing, isFalse);
+      expect(n.state.items.single.draftId, 'after_refresh');
     });
 
     test('stale loadMore ignored after refresh bumps epoch', () async {

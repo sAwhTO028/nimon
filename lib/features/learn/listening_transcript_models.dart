@@ -1,3 +1,5 @@
+import 'package:nimon/features/mono/mono_content_model.dart';
+
 /// V1 transcript line for Listening / Pronunciation (no sync metadata).
 class ListeningTranscriptLine {
   const ListeningTranscriptLine({
@@ -5,6 +7,8 @@ class ListeningTranscriptLine {
     this.reading,
     this.translationMyanmar,
     this.translationEnglish,
+    this.rubyTokens,
+    this.publishedExplanation,
   });
 
   final String japanese;
@@ -15,6 +19,12 @@ class ListeningTranscriptLine {
 
   /// English meaning (same as [meaningEn]).
   final String? translationEnglish;
+
+  /// When non-null and non-empty, Japanese is rendered with per-span furigana (catalog core).
+  final List<MonoRubyToken>? rubyTokens;
+
+  /// Structured meanings from published sentence `content` (preferred for translations).
+  final MonoExplanationLine? publishedExplanation;
 
   String? get meaningEn => translationEnglish;
   String? get meaningMy => translationMyanmar;
@@ -32,7 +42,8 @@ abstract final class ListeningSampleData {
     ListeningTranscriptLine(
       japanese: '朝、めがねをかけて新聞を読みました。',
       reading: 'あさ、めがねをかけてしんぶんをよみました。',
-      translationEnglish: 'In the morning, I put on my glasses and read the newspaper.',
+      translationEnglish:
+          'In the morning, I put on my glasses and read the newspaper.',
       translationMyanmar: 'မနက်ပိုင်းမှာ မျက်မှန်တပ်ပြီး သတင်းစာဖတ်ခဲ့တယ်။',
     ),
     ListeningTranscriptLine(

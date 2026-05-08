@@ -21,8 +21,8 @@ class NimonTranslationText extends StatelessWidget {
     final type = theme.type;
 
     final style = type.translation(theme, wc).copyWith(
-      color: theme.colorScheme.onSurface.withValues(alpha: 0.72),
-    );
+          color: theme.colorScheme.onSurface.withValues(alpha: 0.72),
+        );
 
     return Padding(
       padding: EdgeInsets.only(top: s.x1),
@@ -30,9 +30,9 @@ class NimonTranslationText extends StatelessWidget {
         text,
         style: style,
         maxLines: maxLines,
-        overflow: maxLines != null ? TextOverflow.ellipsis : TextOverflow.visible,
+        overflow:
+            maxLines != null ? TextOverflow.ellipsis : TextOverflow.visible,
       ),
     );
   }
 }
-

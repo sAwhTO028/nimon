@@ -1,10 +1,10 @@
 /// CANONICAL MOCK EPISODE DATA SOURCE
-/// 
+///
 /// This is the OFFICIAL source of truth for mock episode content used throughout the app.
 /// All other mock episode text should reference this file or be removed.
-/// 
+///
 /// When the backend is unavailable, episodes use this content for UI testing.
-/// 
+///
 /// Last updated: 2024 - Replaced short text with long multi-page content
 
 /// Long mock episode text for Episode 1 (approximately 3500+ characters)
@@ -61,4 +61,3 @@ String getMockEpisodeText(int episodeNumber) {
 String getMockEpisodePreview(int episodeNumber) {
   return 'The rain continued to fall on the ancient streets of Kyoto. Yuki discovered a mysterious bookshop that would change everything...';
 }
-

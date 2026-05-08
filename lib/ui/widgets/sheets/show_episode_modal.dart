@@ -20,4 +20,3 @@ Future<void> showEpisodeModalFromMeta(
   onSave?.call();
   onStartReading?.call();
 }
-

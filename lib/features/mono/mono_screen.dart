@@ -1,17 +1,19 @@
+// ignore_for_file: unnecessary_const, unnecessary_brace_in_string_interps, use_build_context_synchronously, prefer_function_declarations_over_variables, deprecated_member_use
+
 import 'dart:async' show unawaited;
 import 'dart:math' as math;
 import 'dart:ui' show ImageFilter;
 
-import 'package:characters/characters.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:nimon/data/story_repo.dart';
+import 'package:nimon/features/auth/auth_providers.dart';
+import 'package:nimon/features/auth/auth_session_state.dart';
+import 'package:nimon/features/auth/guest_remote_draft_warning.dart';
 import 'package:nimon/features/create/creator_back_policy.dart';
 import 'package:nimon/features/mono/mono_content_model.dart';
 import 'package:nimon/features/mono/mono_reading_layout.dart';
-import 'package:nimon/features/profile/data/published_mono_display_contract.dart';
 import 'package:nimon/features/mono/mono_reader_dock.dart';
 import 'package:nimon/features/mono/mono_reader_menu_origin.dart';
 import 'package:nimon/ui/reading/nimon_ruby_text.dart';
@@ -19,16 +21,28 @@ import 'package:nimon/ui/reading/nimon_sentence_block.dart';
 import 'package:nimon/ui/bottom_sheets/mono_story_options_sheet.dart';
 import 'package:nimon/widgets/floating_dock_nav_bar.dart';
 import 'package:nimon/core/design_system/nimon_typography.dart';
+import 'package:nimon/core/format_social_count.dart';
+import 'package:nimon/l10n/nimon_app_strings.dart';
 import 'package:nimon/ui/widgets/nimon_circle_nav_button.dart';
+import 'package:nimon/features/create/data/remote_backend_config.dart';
+import 'package:nimon/features/mono/data/mono_feed_item_mapper.dart';
+import 'package:nimon/features/mono/data/mono_feed_providers.dart';
+import 'package:nimon/features/mono/expandable_footer_description.dart';
+import 'package:nimon/features/mono/mono_feed_models.dart';
+import 'package:nimon/features/mono/saved_only_ux_policy.dart';
+import 'package:nimon/features/mono/share_mono_link.dart';
+import 'package:nimon/features/profile/saved_library_copy.dart';
+import 'package:nimon/features/profile/data/published_mono_catalog_visibility_exception.dart';
+import 'package:nimon/features/profile/creator_profile_location.dart';
+import 'package:nimon/features/profile/profile_processing_refresh.dart';
+import 'package:nimon/features/mono/mono_line_explanation_display.dart';
+import 'package:nimon/features/settings/settings_providers.dart';
+import 'package:nimon/features/mono/bookmark_ownership_policy.dart';
+
+export 'mono_feed_models.dart';
 
 /// Learn Group actions (Hero + Read): unified icon and label color.
 const Color monoLearnGroupActionColor = Color(0xFF23231E);
-
-/// Reading post type (Japanese labels via [_contentTypeLabel]).
-enum MonoContentType { story, letter, dialogue, sentence, diary, article }
-
-/// Fallback cover art when [MonoFeedItem.coverImageUrl] is absent (demo / mock).
-enum MonoCoverCategory { love, horror, culture, comedy, art, history }
 
 String _monoCoverFallbackAsset(MonoCoverCategory c) {
   switch (c) {
@@ -67,56 +81,8 @@ MonoCoverCategory _monoDefaultCoverCategory(MonoContentType t) {
 MonoCoverCategory _monoEffectiveCoverCategory(MonoFeedItem item) =>
     item.coverCategory ?? _monoDefaultCoverCategory(item.contentType);
 
-class MonoFeedItem {
-  final String id;
-  final String writerName;
-  final String writerHandle;
-  final String level;
-  final MonoContentType contentType;
-  final String? title;
-
-  /// Full Japanese body; reading layout is Hero + optional Reading mode (see [_ReadingFeedPost]).
-  final String bodyText;
-
-  /// Optional structured reader content (preferred direction for V1+).
-  ///
-  /// When null, [bodyText] is used as the source of truth.
-  final MonoContent? content;
-
-  /// Custom cover from uploader (network or file URL string); when null, [_monoCoverFallbackAsset] applies.
-  final String? coverImageUrl;
-
-  /// When [coverImageUrl] is null, pick fallback art; when null, inferred from [contentType].
-  final MonoCoverCategory? coverCategory;
-
-  /// When from Published tab API, drives Learn gating in [_MonoScreenState._openLearn].
-  final PublishedMonoAccess? publishedAccess;
-
-  const MonoFeedItem({
-    required this.id,
-    required this.writerName,
-    required this.writerHandle,
-    required this.level,
-    required this.contentType,
-    required this.bodyText,
-    this.title,
-    this.content,
-    this.coverImageUrl,
-    this.coverCategory,
-    this.publishedAccess,
-  });
-
-  /// V1 reader compatibility: use structured content when present, otherwise
-  /// fall back to legacy [bodyText].
-  String get effectiveBodyText {
-    final c = content;
-    if (c == null) return bodyText;
-    final hasPages = c.pages.isNotEmpty && c.pages.any((p) => p.lines.isNotEmpty);
-    if (!hasPages) return bodyText;
-    final t = c.toPlainText().trim();
-    return t.isEmpty ? bodyText : t;
-  }
-}
+/// Main Mono feed scope (For You vs Following) — only used when [MonoScreen.showTopControls] is true.
+enum _MonoMainFeedKind { forYou, following }
 
 /// Mono reader–only collections (V1 mock); not wired to Profile folder screens.
 class _MonoSaveFolder {
@@ -124,9 +90,6 @@ class _MonoSaveFolder {
   final String id;
   String name;
 }
-
-/// Main Mono feed scope (For You vs Following) — only used when [MonoScreen.showTopControls] is true.
-enum _MonoMainFeedKind { forYou, following }
 
 class MonoScreen extends ConsumerStatefulWidget {
   final StoryRepo repo;
@@ -173,6 +136,7 @@ class _MonoScreenState extends ConsumerState<MonoScreen> {
   static const _readingInkMuted = Color(0xFF5C5A55);
 
   /// Legacy small mock set (retired from primary V1 dataset).
+  // ignore: unused_field
   static const _legacyMockItems = <MonoFeedItem>[
     MonoFeedItem(
       id: 'm1',
@@ -231,16 +195,14 @@ class _MonoScreenState extends ConsumerState<MonoScreen> {
               ),
               MonoSentenceLine(
                 tokens: const [],
-                plainText:
-                    '自動ドアが開くと、紙と木の匂いがふわりと流れてくる。',
+                plainText: '自動ドアが開くと、紙と木の匂いがふわりと流れてくる。',
                 explanation: const MonoExplanationLine(
                   en: 'When the automatic doors open, you smell paper and wood.',
                 ),
               ),
               MonoSentenceLine(
                 tokens: const [],
-                plainText:
-                    'ロビーの案内図には、児童書、一般書、郷土資料室、学習席が示されている。',
+                plainText: 'ロビーの案内図には、児童書、一般書、郷土資料室、学習席が示されている。',
                 explanation: const MonoExplanationLine(
                   en: 'The lobby map shows children’s books, general books, local history room, and study seats.',
                 ),
@@ -288,16 +250,14 @@ class _MonoScreenState extends ConsumerState<MonoScreen> {
               ),
               MonoSentenceLine(
                 tokens: const [],
-                plainText:
-                    '混雑する日は、入口の掲示板で学習席の空き状況を確認できる。',
+                plainText: '混雑する日は、入口の掲示板で学習席の空き状況を確認できる。',
                 explanation: const MonoExplanationLine(
                   en: 'On busy days, you can check seat availability on the entrance board.',
                 ),
               ),
               MonoSentenceLine(
                 tokens: const [],
-                plainText:
-                    '貸出は十冊まで、期限は二週間。返却日を忘れない工夫が大切だ。',
+                plainText: '貸出は十冊まで、期限は二週間。返却日を忘れない工夫が大切だ。',
                 explanation: const MonoExplanationLine(
                   en: 'You can borrow up to 10 books for two weeks.',
                 ),
@@ -657,7 +617,8 @@ class _MonoScreenState extends ConsumerState<MonoScreen> {
   static MonoRubyToken _rt(String text, [String? reading]) =>
       MonoRubyToken(text: text, reading: reading);
 
-  static MonoSentenceLine _jaPlain(String text, {MonoExplanationLine? explain}) =>
+  static MonoSentenceLine _jaPlain(String text,
+          {MonoExplanationLine? explain}) =>
       MonoSentenceLine(tokens: const [], plainText: text, explanation: explain);
 
   static MonoSentenceLine _jaRuby(
@@ -665,9 +626,11 @@ class _MonoScreenState extends ConsumerState<MonoScreen> {
     List<MonoRubyToken> tokens, {
     MonoExplanationLine? explain,
   }) =>
-      MonoSentenceLine(tokens: tokens, plainText: plainText, explanation: explain);
+      MonoSentenceLine(
+          tokens: tokens, plainText: plainText, explanation: explain);
 
-  static MonoContent _content(String id, String title, List<MonoSentenceLine> lines) {
+  static MonoContent _content(
+      String id, String title, List<MonoSentenceLine> lines) {
     return MonoContent(
       id: id,
       title: title,
@@ -688,19 +651,6 @@ class _MonoScreenState extends ConsumerState<MonoScreen> {
     'n5_1',
     'n5_3',
     'n4_2',
-    'n4_long_1',
-    'n3_2',
-    'n3_5',
-    'n2_1',
-    'n2_4',
-    'n1_1',
-    'n1_long_1',
-    'n5_8',
-    'n4_7',
-    'n3_long_1',
-    'n2_long_1',
-    'n1_7',
-    'n2_article_funin_1',
   };
 
   /// One optional folder per saved item (absent => default Saved only).
@@ -708,19 +658,6 @@ class _MonoScreenState extends ConsumerState<MonoScreen> {
     'n5_1': 'mono_read_later',
     'n5_3': 'mono_favorites',
     'n4_2': 'mono_read_later',
-    'n4_long_1': 'mono_favorites',
-    'n3_2': 'mono_grammar',
-    'n3_5': 'mono_read_later',
-    'n2_1': 'mono_favorites',
-    'n2_4': 'mono_grammar',
-    'n1_1': 'mono_favorites',
-    'n1_long_1': 'mono_read_later',
-    'n5_8': 'mono_read_later',
-    'n4_7': 'mono_favorites',
-    'n3_long_1': 'mono_grammar',
-    'n2_long_1': 'mono_read_later',
-    'n1_7': 'mono_favorites',
-    'n2_article_funin_1': 'mono_read_later',
   };
 
   static List<MonoFeedItem> _buildV1MonoMockItems() {
@@ -1037,7 +974,8 @@ class _MonoScreenState extends ConsumerState<MonoScreen> {
           ]);
           break;
         default:
-          base.addAll(makeCoreDailyLines(place: themeKey, level: level, extraCount: 0));
+          base.addAll(
+              makeCoreDailyLines(place: themeKey, level: level, extraCount: 0));
       }
 
       final out = <MonoSentenceLine>[...base];
@@ -1937,12 +1875,14 @@ class _MonoScreenState extends ConsumerState<MonoScreen> {
       '@classroom_n3',
       '@news_n2',
     };
-    final out = all.where((i) => followedHandles.contains(i.writerHandle)).toList();
+    final out =
+        all.where((i) => followedHandles.contains(i.writerHandle)).toList();
     // Keep Following feeling varied and non-trivial.
     return out.length <= 32 ? out : out.take(32).toList(growable: false);
   }
 
   /// Legacy temporary Following-only feed (retired).
+  // ignore: unused_field
   static const _legacyFollowingMockItems = <MonoFeedItem>[
     MonoFeedItem(
       id: 'mf1',
@@ -2066,10 +2006,20 @@ class _MonoScreenState extends ConsumerState<MonoScreen> {
   PageController? _verticalForYou;
   PageController? _verticalFollowing;
   int _feedIndex = 0;
+
+  /// Full detail rows loaded via `GET /v1/mono/:id` for catalog items.
+  final Map<String, MonoFeedItem> _hydratedRemoteItems =
+      <String, MonoFeedItem>{};
+  final Set<String> _detailInflight = <String>{};
+
+  ProviderSubscription<int>? _profileCatalogSurfacesRefreshSub;
+
   /// Last [PageView] page index (0=Following, 1=For You) we ran settle-side-effects for.
   int _lastSettledHorizontalFeedPage = 1;
   final Map<String, ValueNotifier<bool>> _bookmarkNotifiers = {};
   final Map<String, ValueNotifier<bool>> _reactNotifiers = {};
+  final Map<String, ValueNotifier<int>> _likesCountNotifiers = {};
+  final Set<String> _socialTouchedIds = <String>{};
 
   /// At most one custom collection per saved Mono item; absent entry = default Saved only.
   final Map<String, String> _monoSingleCollectionByItemId = {};
@@ -2080,11 +2030,257 @@ class _MonoScreenState extends ConsumerState<MonoScreen> {
     _MonoSaveFolder(id: 'mono_grammar', name: 'Grammar picks'),
   ];
 
-  ValueNotifier<bool> _bookmarkNotifierFor(String id) =>
-      _bookmarkNotifiers.putIfAbsent(id, () => ValueNotifier(false));
+  ValueNotifier<bool> _bookmarkNotifierFor(String id, {required bool initial}) {
+    final n = _bookmarkNotifiers.putIfAbsent(id, () => ValueNotifier(initial));
+    if (!_socialTouchedIds.contains(id)) {
+      n.value = initial;
+    }
+    return n;
+  }
 
-  ValueNotifier<bool> _reactNotifierFor(String id) =>
-      _reactNotifiers.putIfAbsent(id, () => ValueNotifier(false));
+  ValueNotifier<bool> _reactNotifierFor(String id, {required bool initial}) {
+    final n = _reactNotifiers.putIfAbsent(id, () => ValueNotifier(initial));
+    if (!_socialTouchedIds.contains(id)) {
+      n.value = initial;
+    }
+    return n;
+  }
+
+  ValueNotifier<int> _likesCountNotifierFor(String id, {required int initial}) {
+    final n =
+        _likesCountNotifiers.putIfAbsent(id, () => ValueNotifier(initial));
+    if (!_socialTouchedIds.contains(id)) {
+      n.value = initial;
+    }
+    return n;
+  }
+
+  bool get _useRemoteForYouFeed =>
+      RemoteBackendConfig.useRemoteMonoFeed &&
+      widget.showTopControls &&
+      widget.initialItemsOverride == null &&
+      widget.initialItemOverride == null;
+
+  bool get _useRemoteFollowingFeed =>
+      RemoteBackendConfig.useRemoteMonoFeed &&
+      widget.showTopControls &&
+      widget.initialItemsOverride == null &&
+      widget.initialItemOverride == null &&
+      _isAuthed;
+
+  bool get _isAuthed {
+    final s = ref.read(authSessionProvider);
+    return s is AuthSessionAuthenticated;
+  }
+
+  String? get _currentUserId {
+    final s = ref.read(authSessionProvider);
+    return s is AuthSessionAuthenticated ? s.user.id : null;
+  }
+
+  void _snack(String msg) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(msg),
+        behavior: SnackBarBehavior.floating,
+        margin: const EdgeInsets.all(16),
+        duration: const Duration(seconds: 2),
+      ),
+    );
+  }
+
+  Future<void> _toggleBookmark(MonoFeedItem item) async {
+    if (!canBookmarkMono(
+      currentUserId: _currentUserId,
+      monoOwnerId: item.writerId,
+    )) {
+      return;
+    }
+    if (!_isAuthed) {
+      _snack(SavedLibraryCopy.monoGuestSave);
+      return;
+    }
+    final id = item.id;
+    _socialTouchedIds.add(id);
+    final n = _bookmarkNotifierFor(id, initial: item.isBookmarkedByMe);
+    final before = n.value;
+    final next = !before;
+    n.value = next;
+
+    try {
+      final repo = ref.read(remoteMonoSocialRepositoryProvider);
+      final out = next
+          ? await repo.bookmarkMono(item.monoIdForLearnRoutes)
+          : await repo.unbookmarkMono(item.monoIdForLearnRoutes);
+      n.value = out;
+      bumpProfileSavedListRefresh(
+        ProviderScope.containerOf(context, listen: false),
+      );
+      if (!mounted) return;
+      _snack(
+        out
+            ? SavedLibraryCopy.monoSavedSnack
+            : SavedLibraryCopy.monoRemovedSnack,
+      );
+    } catch (e) {
+      n.value = before;
+      _snack(e is StateError ? e.message : SavedLibraryCopy.monoSaveError);
+    }
+  }
+
+  Future<void> _toggleReact(MonoFeedItem item) async {
+    if (!_isAuthed) {
+      _snack(NimonAppStrings.signInToReact);
+      return;
+    }
+    final id = item.id;
+    _socialTouchedIds.add(id);
+    final reactedInitial = (item.myReaction ?? '').trim().isNotEmpty;
+    final reactN = _reactNotifierFor(id, initial: reactedInitial);
+    final likesN = _likesCountNotifierFor(id, initial: item.likesCount);
+
+    final beforeReact = reactN.value;
+    final beforeLikes = likesN.value;
+    final nextReact = !beforeReact;
+    reactN.value = nextReact;
+    likesN.value = math.max(0, beforeLikes + (nextReact ? 1 : -1));
+
+    try {
+      final repo = ref.read(remoteMonoSocialRepositoryProvider);
+      final likesOut = nextReact
+          ? await repo.reactMono(item.monoIdForLearnRoutes)
+          : await repo.unreactMono(item.monoIdForLearnRoutes);
+      likesN.value = likesOut;
+    } catch (e) {
+      reactN.value = beforeReact;
+      likesN.value = beforeLikes;
+      _snack(e is StateError ? e.message : 'Could not update reaction.');
+    }
+  }
+
+  String? _pagerLevelFromUi(String selectedLevel) =>
+      selectedLevel == 'All' ? null : selectedLevel;
+
+  List<MonoFeedItem> _remoteCatalogItemsResolved() {
+    final pager = ref.read(monoFeedPagerProvider);
+    return pager.items
+        .map(
+          (dto) =>
+              _hydratedRemoteItems[dto.monoId] ??
+              monoFeedItemFromMonoFeedSummary(dto),
+        )
+        .toList();
+  }
+
+  List<MonoFeedItem> _remoteFollowingItemsResolved() {
+    final pager = ref.read(followingMonoFeedPagerProvider);
+    return pager.items
+        .map(
+          (dto) =>
+              _hydratedRemoteItems[dto.monoId] ??
+              monoFeedItemFromMonoFeedSummary(dto),
+        )
+        .toList();
+  }
+
+  bool get _hydrateCatalogMonoDetailsInReaderDock =>
+      _useRemoteForYouFeed ||
+      _useRemoteFollowingFeed ||
+      (!widget.showTopControls && widget.initialItemsOverride != null);
+
+  Future<void> _ensureDetailLoaded(MonoFeedItem item) async {
+    if (!_hydrateCatalogMonoDetailsInReaderDock) return;
+    if (!item.needsRemoteDetailHydration) return;
+    if (_hydratedRemoteItems.containsKey(item.id)) return;
+    if (_detailInflight.contains(item.id)) return;
+    _detailInflight.add(item.id);
+    try {
+      final catalogId = item.monoIdForLearnRoutes;
+      final dto =
+          await ref.read(remoteMonoFeedRepositoryProvider).fetchMonoDetail(
+                catalogId,
+              );
+      if (!mounted) return;
+      final merged = monoFeedItemMergePublishedDetail(item, dto);
+      setState(() {
+        _hydratedRemoteItems[item.id] = merged;
+        _detailInflight.remove(item.id);
+      });
+    } catch (e) {
+      _detailInflight.remove(item.id);
+      if (!mounted) return;
+      final msg = e is PublishedMonoHiddenWhileEditingException
+          ? e.message
+          : 'Could not load story: $e';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(msg),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
+  void _clearRemoteHydration() {
+    _hydratedRemoteItems.clear();
+    _detailInflight.clear();
+  }
+
+  Widget _remoteFeedErrorPanel(ThemeData theme, Object error) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'Could not load the feed.',
+              style: theme.textTheme.titleMedium?.copyWith(
+                color: _readingInk,
+                fontWeight: FontWeight.w700,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              '$error',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: _readingInkMuted,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 16),
+            FilledButton(
+              onPressed: () {
+                unawaited(
+                  ref.read(monoFeedPagerProvider.notifier).loadFirstPage(),
+                );
+              },
+              child: const Text('Retry'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _remoteFeedEmptyPanel(ThemeData theme) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Text(
+          _selectedLevel == 'All'
+              ? 'No published stories yet.'
+              : '$_selectedLevel の投稿はありません',
+          style: theme.textTheme.bodyLarge?.copyWith(
+            color: _readingInkMuted,
+          ),
+          textAlign: TextAlign.center,
+        ),
+      ),
+    );
+  }
 
   void _precacheCoversNear(
     BuildContext context,
@@ -2107,6 +2303,15 @@ class _MonoScreenState extends ConsumerState<MonoScreen> {
   @override
   void initState() {
     super.initState();
+    _profileCatalogSurfacesRefreshSub = ref.listenManual<int>(
+      profileProcessingListRefreshProvider,
+      (previous, next) {
+        if (!mounted) return;
+        if (!_useRemoteForYouFeed) return;
+        _clearRemoteHydration();
+        unawaited(ref.read(monoFeedPagerProvider.notifier).refresh());
+      },
+    );
     final initialPage =
         widget.initialItemsOverride != null ? widget.initialIndexOverride : 0;
     _feedIndex = math.max(0, initialPage);
@@ -2114,23 +2319,49 @@ class _MonoScreenState extends ConsumerState<MonoScreen> {
       _feedTabController = PageController(initialPage: 1);
       _verticalForYou = PageController();
       _verticalFollowing = PageController();
-      // Seed Saved + folders for V1 demo flows (bookmarks + collections).
-      for (final id in _seedSavedIds) {
-        _bookmarkNotifierFor(id).value = true;
+      if (monoDemoBookmarkFoldersEnabled) {
+        // Debug mock only: seed Saved + fake single-folder map (no backend).
+        for (final id in _seedSavedIds) {
+          _bookmarkNotifierFor(id, initial: true).value = true;
+        }
+        _monoSingleCollectionByItemId.addAll(_seedFolderByItemId);
       }
-      _monoSingleCollectionByItemId.addAll(_seedFolderByItemId);
+      if (_useRemoteForYouFeed) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          ref.read(monoFeedPagerProvider.notifier).setFilters(
+                level: _pagerLevelFromUi(_selectedLevel),
+              );
+          unawaited(ref.read(monoFeedPagerProvider.notifier).loadFirstPage());
+        });
+      }
+      if (_useRemoteFollowingFeed) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          unawaited(
+            ref.read(followingMonoFeedPagerProvider.notifier).loadFirstPage(),
+          );
+        });
+      }
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
-        _precacheCoversNear(context, _forYouFilteredItems, 0);
-        _precacheCoversNear(context, _followingMockItems, 0);
+        if (!_useRemoteForYouFeed) {
+          _precacheCoversNear(context, _forYouFilteredItems, 0);
+        }
+        final followingItems = _useRemoteFollowingFeed
+            ? _remoteFollowingItemsResolved()
+            : _followingMockItems;
+        _precacheCoversNear(context, followingItems, 0);
       });
     } else {
       _readerFeedController =
           PageController(initialPage: math.max(0, initialPage));
-      for (final id in _seedSavedIds) {
-        _bookmarkNotifierFor(id).value = true;
+      if (monoDemoBookmarkFoldersEnabled) {
+        for (final id in _seedSavedIds) {
+          _bookmarkNotifierFor(id, initial: true).value = true;
+        }
+        _monoSingleCollectionByItemId.addAll(_seedFolderByItemId);
       }
-      _monoSingleCollectionByItemId.addAll(_seedFolderByItemId);
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
         final items = widget.initialItemsOverride ??
@@ -2144,6 +2375,8 @@ class _MonoScreenState extends ConsumerState<MonoScreen> {
 
   @override
   void dispose() {
+    _profileCatalogSurfacesRefreshSub?.close();
+    _profileCatalogSurfacesRefreshSub = null;
     if (!widget.showTopControls) {
       hideMonoStoryOptionsPanel();
     }
@@ -2157,17 +2390,27 @@ class _MonoScreenState extends ConsumerState<MonoScreen> {
     for (final n in _reactNotifiers.values) {
       n.dispose();
     }
+    for (final n in _likesCountNotifiers.values) {
+      n.dispose();
+    }
     super.dispose();
   }
 
   List<MonoFeedItem> get _forYouFilteredItems {
+    if (_useRemoteForYouFeed) {
+      return _remoteCatalogItemsResolved();
+    }
     if (_selectedLevel == 'All') return _mockItems;
     return _mockItems.where((i) => i.level == _selectedLevel).toList();
   }
 
   /// Following feed is not JLPT-filtered (level applies to For You only).
-  List<MonoFeedItem> get _followingFilteredItems =>
-      List<MonoFeedItem>.unmodifiable(_followingMockItems);
+  List<MonoFeedItem> get _followingFilteredItems {
+    if (_useRemoteFollowingFeed) {
+      return _remoteFollowingItemsResolved();
+    }
+    return List<MonoFeedItem>.unmodifiable(_followingMockItems);
+  }
 
   List<MonoFeedItem> _itemsForMainKind(_MonoMainFeedKind kind) =>
       kind == _MonoMainFeedKind.forYou
@@ -2232,6 +2475,34 @@ class _MonoScreenState extends ConsumerState<MonoScreen> {
     _MonoMainFeedKind segmentKind,
     bool showExplanationLines,
   ) {
+    if (segmentKind == _MonoMainFeedKind.forYou && _useRemoteForYouFeed) {
+      final ps = ref.watch(monoFeedPagerProvider);
+      if (ps.isInitialLoading && ps.items.isEmpty) {
+        return const Center(child: CircularProgressIndicator());
+      }
+      if (ps.error != null && ps.items.isEmpty && !ps.isInitialLoading) {
+        return _remoteFeedErrorPanel(theme, ps.error!);
+      }
+      if (!ps.isInitialLoading && ps.items.isEmpty && ps.error == null) {
+        return _remoteFeedEmptyPanel(theme);
+      }
+    }
+    if (segmentKind == _MonoMainFeedKind.following &&
+        RemoteBackendConfig.useRemoteMonoFeed) {
+      if (!_isAuthed) {
+        return const _FollowingFeedAuthGateState();
+      }
+      final ps = ref.watch(followingMonoFeedPagerProvider);
+      if (ps.isInitialLoading && ps.items.isEmpty) {
+        return const Center(child: CircularProgressIndicator());
+      }
+      if (ps.error != null && ps.items.isEmpty && !ps.isInitialLoading) {
+        return _remoteFollowingFeedErrorPanel(theme, ps.error!);
+      }
+      if (!ps.isInitialLoading && ps.items.isEmpty && ps.error == null) {
+        return const _FollowingFeedEmptyState();
+      }
+    }
     final data = _itemsForMainKind(segmentKind);
     final controller = segmentKind == _MonoMainFeedKind.forYou
         ? _verticalForYou!
@@ -2246,31 +2517,64 @@ class _MonoScreenState extends ConsumerState<MonoScreen> {
       // pager subtree (web-sensitive). Segment + JLPT filter already define the feed.
       key: ValueKey<String>(
         'v_${segmentKind.name}_'
-        '${segmentKind == _MonoMainFeedKind.forYou ? _selectedLevel : 'all'}',
+        '${segmentKind == _MonoMainFeedKind.forYou ? _selectedLevel : 'all'}'
+        '${_useRemoteForYouFeed ? '_remote' : ''}',
       ),
       onPageChanged: (i) {
         if (_mainFeedKind != segmentKind) return;
         setState(() => _feedIndex = i);
         _precacheCoversNear(context, data, i);
+        if (segmentKind == _MonoMainFeedKind.forYou && _useRemoteForYouFeed) {
+          final pagerState = ref.read(monoFeedPagerProvider);
+          if (pagerState.hasMore &&
+              !pagerState.isLoadingMore &&
+              i >= data.length - 2) {
+            unawaited(ref.read(monoFeedPagerProvider.notifier).loadMore());
+          }
+          if (i >= 0 && i < data.length) {
+            unawaited(_ensureDetailLoaded(data[i]));
+          }
+        }
+        if (segmentKind == _MonoMainFeedKind.following &&
+            _useRemoteFollowingFeed) {
+          final pagerState = ref.read(followingMonoFeedPagerProvider);
+          if (pagerState.hasMore &&
+              !pagerState.isLoadingMore &&
+              i >= data.length - 2) {
+            unawaited(
+              ref.read(followingMonoFeedPagerProvider.notifier).loadMore(),
+            );
+          }
+          if (i >= 0 && i < data.length) {
+            unawaited(_ensureDetailLoaded(data[i]));
+          }
+        }
       },
       itemCount: data.length,
       itemBuilder: (context, index) {
         final item = data[index];
+        final bookmarkN = _bookmarkNotifierFor(
+          item.id,
+          initial: item.isBookmarkedByMe,
+        );
+        final reactedInitial = (item.myReaction ?? '').trim().isNotEmpty;
+        final reactN = _reactNotifierFor(item.id, initial: reactedInitial);
+        final likesN =
+            _likesCountNotifierFor(item.id, initial: item.likesCount);
         return _ReadingFeedPost(
           item: item,
-          bookmarkNotifier: _bookmarkNotifierFor(item.id),
-          reactNotifier: _reactNotifierFor(item.id),
+          bookmarkNotifier: bookmarkN,
+          reactNotifier: reactN,
+          likesCountNotifier: likesN,
           onLearn: () => _openLearn(item),
-          onToggleBookmark: () => _openBookmarkCollectionSheet(item),
-          onToggleReact: () {
-            final n = _reactNotifierFor(item.id);
-            n.value = !n.value;
-          },
+          onToggleBookmark: () => unawaited(_toggleBookmark(item)),
+          onToggleReact: () => unawaited(_toggleReact(item)),
           onShare: () => _share(item),
           readingBg: _readingBg,
           readingInk: _readingInk,
           readingInkMuted: _readingInkMuted,
           showExplanationLines: showExplanationLines,
+          currentUserId: _currentUserId,
         );
       },
     );
@@ -2278,7 +2582,9 @@ class _MonoScreenState extends ConsumerState<MonoScreen> {
 
   List<MonoFeedItem> get _resolvedFeedItems {
     if (widget.initialItemsOverride != null) {
-      return widget.initialItemsOverride!;
+      return widget.initialItemsOverride!
+          .map((it) => _hydratedRemoteItems[it.id] ?? it)
+          .toList(growable: false);
     }
     if (widget.initialItemOverride != null) {
       return <MonoFeedItem>[widget.initialItemOverride!];
@@ -2399,11 +2705,15 @@ class _MonoScreenState extends ConsumerState<MonoScreen> {
     final storyTitle = title.isNotEmpty ? title : 'Mono Story';
     final unlock =
         (item.level == 'N1' || item.level == 'N2') ? 'Premium' : 'Free';
-    final desc = item.effectiveBodyText.trim();
-    final description =
-        desc.isEmpty ? '' : desc.split(RegExp(r'\n\s*\n')).first.trim();
+    final basics = item.storyDescription.trim();
+    final fallback = item.effectiveBodyText.trim();
+    final description = basics.isNotEmpty
+        ? basics
+        : (fallback.isEmpty
+            ? ''
+            : fallback.split(RegExp(r'\n\s*\n')).first.trim());
     context.push(
-      '/learn/${item.id}',
+      '/learn/${item.monoIdForLearnRoutes}',
       extra: <String, String?>{
         'coverImageUrl': url,
         'coverFallbackAsset': fallbackAsset,
@@ -2417,17 +2727,7 @@ class _MonoScreenState extends ConsumerState<MonoScreen> {
   }
 
   Future<void> _share(MonoFeedItem item) async {
-    final text = item.effectiveBodyText.trim();
-    await Clipboard.setData(ClipboardData(text: text));
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('コピーしました'),
-        behavior: SnackBarBehavior.floating,
-        margin: EdgeInsets.all(16),
-        duration: Duration(seconds: 2),
-      ),
-    );
+    await shareMonoLink(context, item);
   }
 
   String? _monoAssignedCollectionId(String itemId) =>
@@ -2482,10 +2782,13 @@ class _MonoScreenState extends ConsumerState<MonoScreen> {
   }
 
   /// Save sheet: default Saved card, collections with per-folder add, create via header action.
+  // ignore: unused_element
   Future<void> _openBookmarkCollectionSheet(MonoFeedItem item) async {
+    if (!monoDemoBookmarkFoldersEnabled) return;
     final theme = Theme.of(context);
     final monoContext = context;
-    final bookmarkN = _bookmarkNotifierFor(item.id);
+    final bookmarkN =
+        _bookmarkNotifierFor(item.id, initial: item.isBookmarkedByMe);
     final sheetMaxListHeight = MediaQuery.sizeOf(context).height * 0.42;
     final wasSavedOnOpen = bookmarkN.value;
 
@@ -2608,8 +2911,7 @@ class _MonoScreenState extends ConsumerState<MonoScreen> {
                                         children: [
                                           Text(
                                             'Saved',
-                                            style: theme
-                                                .textTheme.titleSmall
+                                            style: theme.textTheme.titleSmall
                                                 ?.copyWith(
                                               fontWeight: FontWeight.w700,
                                               color: _readingInk,
@@ -2618,8 +2920,7 @@ class _MonoScreenState extends ConsumerState<MonoScreen> {
                                           const SizedBox(height: 2),
                                           Text(
                                             savedCardSubtitle,
-                                            style: theme
-                                                .textTheme.bodySmall
+                                            style: theme.textTheme.bodySmall
                                                 ?.copyWith(
                                               color: _readingInkMuted,
                                             ),
@@ -2659,8 +2960,7 @@ class _MonoScreenState extends ConsumerState<MonoScreen> {
                                   minimumSize: Size.zero,
                                   tapTargetSize:
                                       MaterialTapTargetSize.shrinkWrap,
-                                  foregroundColor:
-                                      theme.colorScheme.primary,
+                                  foregroundColor: theme.colorScheme.primary,
                                 ),
                                 onPressed: onCreateCollection,
                                 child: const Text('Create'),
@@ -2669,8 +2969,8 @@ class _MonoScreenState extends ConsumerState<MonoScreen> {
                           ),
                         ),
                         ConstrainedBox(
-                          constraints: BoxConstraints(
-                              maxHeight: sheetMaxListHeight),
+                          constraints:
+                              BoxConstraints(maxHeight: sheetMaxListHeight),
                           child: ListView.builder(
                             shrinkWrap: true,
                             physics: const ClampingScrollPhysics(),
@@ -2709,8 +3009,8 @@ class _MonoScreenState extends ConsumerState<MonoScreen> {
                                           _monoSingleCollectionByItemId[
                                               item.id] = f.id;
                                           bump();
-                                          final moved = prev != null &&
-                                              prev != f.id;
+                                          final moved =
+                                              prev != null && prev != f.id;
                                           Navigator.of(sheetContext).pop();
                                           if (!mounted) return;
                                           ScaffoldMessenger.of(monoContext)
@@ -2723,10 +3023,9 @@ class _MonoScreenState extends ConsumerState<MonoScreen> {
                                               ),
                                               behavior:
                                                   SnackBarBehavior.floating,
-                                              margin:
-                                                  const EdgeInsets.all(16),
-                                              duration: const Duration(
-                                                  seconds: 2),
+                                              margin: const EdgeInsets.all(16),
+                                              duration:
+                                                  const Duration(seconds: 2),
                                             ),
                                           );
                                         },
@@ -2761,18 +3060,24 @@ class _MonoScreenState extends ConsumerState<MonoScreen> {
         return 'Published Mono';
       case MonoReaderMenuOrigin.profileSaved:
         return 'Saved Mono';
+      case MonoReaderMenuOrigin.publicCreatorProfile:
+        return 'Mono';
       case null:
         return 'Mono';
     }
   }
 
+  /// Owner-only story options (+/- Saved collections). Hidden for learner/public readers.
+  bool get _readerDockShowsOwnerStoryMenu =>
+      widget.readerMenuOrigin == MonoReaderMenuOrigin.profileUploaded ||
+      widget.readerMenuOrigin == MonoReaderMenuOrigin.profileSaved;
+
   /// Reader dock + reader header menu: dock-anchored story options (Saved vs Uploaded actions).
   void _openReaderDockStoryOptionsPanel(List<MonoFeedItem> items) {
+    if (!_readerDockShowsOwnerStoryMenu) return;
     if (items.isEmpty) return;
-    final idx =
-        _feedIndex.clamp(0, math.max(0, items.length - 1)).toInt();
-    final origin = widget.readerMenuOrigin ??
-        MonoReaderMenuOrigin.profileUploaded;
+    final idx = _feedIndex.clamp(0, math.max(0, items.length - 1)).toInt();
+    final origin = widget.readerMenuOrigin!;
     final saved = origin == MonoReaderMenuOrigin.profileSaved;
     showMonoStoryOptionsPanel(
       context,
@@ -2790,10 +3095,43 @@ class _MonoScreenState extends ConsumerState<MonoScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    if (_useRemoteForYouFeed) {
+      ref.watch(monoFeedPagerProvider);
+      final ps = ref.read(monoFeedPagerProvider);
+      if (!ps.isInitialLoading && ps.items.isNotEmpty) {
+        final list = _remoteCatalogItemsResolved();
+        if (list.isNotEmpty && _feedIndex < list.length) {
+          final cur = list[_feedIndex];
+          if (cur.needsRemoteDetailHydration) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (mounted) {
+                unawaited(_ensureDetailLoaded(cur));
+              }
+            });
+          }
+        }
+      }
+    }
+    if (_useRemoteFollowingFeed) {
+      ref.watch(followingMonoFeedPagerProvider);
+    }
+    final showGuestRemoteWarn =
+        ref.watch(guestRemoteDraftWarningVisibleProvider);
     final items = _resolvedFeedItems;
-    // V1 product direction: Mono is Japanese-only. Explanations belong to the
-    // Listening / Pronunciation module and are controlled there.
-    const showExplanation = false;
+    if (!widget.showTopControls &&
+        widget.initialItemsOverride != null &&
+        items.isNotEmpty) {
+      final safeIdx = _feedIndex.clamp(0, items.length - 1);
+      final base = widget.initialItemsOverride![safeIdx];
+      if (base.needsRemoteDetailHydration &&
+          !_hydratedRemoteItems.containsKey(base.id) &&
+          !_detailInflight.contains(base.id)) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) unawaited(_ensureDetailLoaded(base));
+        });
+      }
+    }
+    final showExplanation = ref.watch(monoReaderTranslationEnabledProvider);
     final useReaderDock = widget.showTopControls == false;
     final effectiveDockHeight = useReaderDock
         ? MonoReaderDock.occupiedHeight(context)
@@ -2835,6 +3173,36 @@ class _MonoScreenState extends ConsumerState<MonoScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
+                    if (widget.showTopControls && showGuestRemoteWarn)
+                      Material(
+                        color: theme.colorScheme.errorContainer
+                            .withValues(alpha: 0.45),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 8,
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.info_outline,
+                                size: 18,
+                                color: theme.colorScheme.onErrorContainer,
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  'Remote drafts require sign-in.',
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    color: theme.colorScheme.onErrorContainer,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
                     if (widget.showTopControls)
                       Padding(
                         padding: const EdgeInsets.fromLTRB(16, 10, 10, 8),
@@ -2843,8 +3211,8 @@ class _MonoScreenState extends ConsumerState<MonoScreen> {
                           children: [
                             _MonoFeedTextTab(
                               label: 'Following',
-                              selected: _mainFeedKind ==
-                                  _MonoMainFeedKind.following,
+                              selected:
+                                  _mainFeedKind == _MonoMainFeedKind.following,
                               onTap: () =>
                                   _setMainFeedKind(_MonoMainFeedKind.following),
                               ink: _readingInk,
@@ -2879,14 +3247,28 @@ class _MonoScreenState extends ConsumerState<MonoScreen> {
                                   color: theme.colorScheme.surfaceContainerHigh
                                       .withValues(alpha: 0.97),
                                   elevation: 1,
-                                  shadowColor: Colors.black
-                                      .withValues(alpha: 0.06),
+                                  shadowColor:
+                                      Colors.black.withValues(alpha: 0.06),
                                   surfaceTintColor: Colors.transparent,
                                   shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(14),
                                   ),
                                   onSelected: (v) {
                                     setState(() => _selectedLevel = v);
+                                    if (_useRemoteForYouFeed) {
+                                      _clearRemoteHydration();
+                                      ref
+                                          .read(monoFeedPagerProvider.notifier)
+                                          .setFilters(
+                                            level: _pagerLevelFromUi(v),
+                                          );
+                                      unawaited(
+                                        ref
+                                            .read(
+                                                monoFeedPagerProvider.notifier)
+                                            .loadFirstPage(),
+                                      );
+                                    }
                                     WidgetsBinding.instance
                                         .addPostFrameCallback((_) {
                                       if (!mounted) return;
@@ -2895,7 +3277,9 @@ class _MonoScreenState extends ConsumerState<MonoScreen> {
                                         fy.jumpToPage(0);
                                       }
                                       setState(() => _feedIndex = 0);
-                                      final list = _forYouFilteredItems;
+                                      final list = _useRemoteForYouFeed
+                                          ? _remoteCatalogItemsResolved()
+                                          : _forYouFilteredItems;
                                       if (list.isNotEmpty) {
                                         _precacheCoversNear(
                                           context,
@@ -2921,8 +3305,8 @@ class _MonoScreenState extends ConsumerState<MonoScreen> {
                                                   ? Icon(
                                                       Icons.check_rounded,
                                                       size: 18,
-                                                      color: theme.colorScheme
-                                                          .primary,
+                                                      color: theme
+                                                          .colorScheme.primary,
                                                     )
                                                   : const SizedBox.shrink(),
                                             ),
@@ -2951,8 +3335,8 @@ class _MonoScreenState extends ConsumerState<MonoScreen> {
                                           ),
                                           style: theme.textTheme.labelMedium
                                               ?.copyWith(
-                                            color: _readingInkMuted
-                                                .withValues(alpha: 0.92),
+                                            color: _readingInkMuted.withValues(
+                                                alpha: 0.92),
                                             fontWeight: FontWeight.w500,
                                             letterSpacing: 0.1,
                                             height: 1.1,
@@ -2962,8 +3346,8 @@ class _MonoScreenState extends ConsumerState<MonoScreen> {
                                         Icon(
                                           Icons.keyboard_arrow_down_rounded,
                                           size: 18,
-                                          color: _readingInkMuted
-                                              .withValues(alpha: 0.75),
+                                          color: _readingInkMuted.withValues(
+                                              alpha: 0.75),
                                         ),
                                       ],
                                     ),
@@ -2971,6 +3355,44 @@ class _MonoScreenState extends ConsumerState<MonoScreen> {
                                 ),
                               ),
                             if (_mainFeedKind == _MonoMainFeedKind.forYou)
+                              const SizedBox(width: 2),
+                            if (_useRemoteForYouFeed &&
+                                _mainFeedKind == _MonoMainFeedKind.forYou)
+                              Tooltip(
+                                message: 'Refresh feed',
+                                child: Material(
+                                  color: Colors.transparent,
+                                  child: InkWell(
+                                    onTap: () {
+                                      _clearRemoteHydration();
+                                      unawaited(
+                                        ref
+                                            .read(
+                                              monoFeedPagerProvider.notifier,
+                                            )
+                                            .refresh(),
+                                      );
+                                    },
+                                    borderRadius: BorderRadius.circular(12),
+                                    splashColor: theme.colorScheme.primary
+                                        .withValues(alpha: 0.10),
+                                    highlightColor: theme.colorScheme.primary
+                                        .withValues(alpha: 0.05),
+                                    child: Padding(
+                                      padding: const EdgeInsets.all(10),
+                                      child: Icon(
+                                        Icons.refresh_rounded,
+                                        size: 22,
+                                        color: _readingInk.withValues(
+                                          alpha: 0.88,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            if (_useRemoteForYouFeed &&
+                                _mainFeedKind == _MonoMainFeedKind.forYou)
                               const SizedBox(width: 2),
                             Tooltip(
                               message: 'Search Mono',
@@ -3016,7 +3438,8 @@ class _MonoScreenState extends ConsumerState<MonoScreen> {
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: theme.textTheme.labelLarge?.copyWith(
-                                  color: _readingInkMuted.withValues(alpha: 0.92),
+                                  color:
+                                      _readingInkMuted.withValues(alpha: 0.92),
                                   fontWeight: FontWeight.w600,
                                   letterSpacing: 0.12,
                                 ),
@@ -3025,80 +3448,92 @@ class _MonoScreenState extends ConsumerState<MonoScreen> {
                           ],
                         ),
                       ),
-                          Expanded(
-                            child: widget.showTopControls
-                                ? Directionality(
-                                    textDirection: TextDirection.ltr,
-                                    child: PageView(
-                                      controller: _feedTabController,
-                                      physics:
-                                          const NeverScrollableScrollPhysics(),
-                                      onPageChanged:
-                                          _onHorizontalFeedPageChanged,
-                                      children: [
-                                        _buildMainMonoVerticalFeed(
-                                          theme,
-                                          _MonoMainFeedKind.following,
-                                          showExplanation,
-                                        ),
-                                        _buildMainMonoVerticalFeed(
-                                          theme,
-                                          _MonoMainFeedKind.forYou,
-                                          showExplanation,
-                                        ),
-                                      ],
-                                    ),
-                                  )
-                                : (items.isEmpty
-                                    ? _monoEmptyFeed(theme)
-                                    : PageView.builder(
-                                        key: ValueKey<String>(
-                                          'reader_$_selectedLevel',
-                                        ),
-                                        controller: _readerFeedController,
-                                        scrollDirection: Axis.vertical,
-                                        onPageChanged: (i) {
-                                          setState(() => _feedIndex = i);
-                                          _precacheCoversNear(
-                                            context,
-                                            items,
-                                            i,
-                                          );
-                                        },
-                                        itemCount: items.length,
-                                        itemBuilder: (context, index) {
-                                          final item = items[index];
-                                          return _ReadingFeedPost(
-                                            item: item,
-                                            bookmarkNotifier:
-                                                _bookmarkNotifierFor(
-                                              item.id,
-                                            ),
-                                            reactNotifier: _reactNotifierFor(
-                                              item.id,
-                                            ),
-                                            onLearn: () => _openLearn(item),
-                                            onToggleBookmark: () =>
-                                                _openBookmarkCollectionSheet(
-                                                  item,
-                                                ),
-                                            onToggleReact: () {
-                                              final n =
-                                                  _reactNotifierFor(item.id);
-                                              n.value = !n.value;
-                                            },
-                                            onShare: () => _share(item),
-                                            readingBg: _readingBg,
-                                            readingInk: _readingInk,
-                                            readingInkMuted: _readingInkMuted,
-                                            showExplanationLines:
-                                                showExplanation,
-                                          );
-                                        },
-                                      )),
-                          ),
-                        ],
-                      ),
+                    Expanded(
+                      child: widget.showTopControls
+                          ? Directionality(
+                              textDirection: TextDirection.ltr,
+                              child: PageView(
+                                controller: _feedTabController,
+                                physics: const NeverScrollableScrollPhysics(),
+                                onPageChanged: _onHorizontalFeedPageChanged,
+                                children: [
+                                  _buildMainMonoVerticalFeed(
+                                    theme,
+                                    _MonoMainFeedKind.following,
+                                    showExplanation,
+                                  ),
+                                  _buildMainMonoVerticalFeed(
+                                    theme,
+                                    _MonoMainFeedKind.forYou,
+                                    showExplanation,
+                                  ),
+                                ],
+                              ),
+                            )
+                          : (items.isEmpty
+                              ? _monoEmptyFeed(theme)
+                              : PageView.builder(
+                                  key: ValueKey<String>(
+                                    'reader_$_selectedLevel',
+                                  ),
+                                  controller: _readerFeedController,
+                                  scrollDirection: Axis.vertical,
+                                  onPageChanged: (i) {
+                                    setState(() => _feedIndex = i);
+                                    _precacheCoversNear(
+                                      context,
+                                      items,
+                                      i,
+                                    );
+                                    final ov = widget.initialItemsOverride;
+                                    if (ov != null && i >= 0 && i < ov.length) {
+                                      final b = ov[i];
+                                      if (b.needsRemoteDetailHydration) {
+                                        unawaited(_ensureDetailLoaded(b));
+                                      }
+                                    }
+                                  },
+                                  itemCount: items.length,
+                                  itemBuilder: (context, index) {
+                                    final item = items[index];
+                                    final bookmarkN = _bookmarkNotifierFor(
+                                      item.id,
+                                      initial: item.isBookmarkedByMe,
+                                    );
+                                    final reactedInitial =
+                                        (item.myReaction ?? '')
+                                            .trim()
+                                            .isNotEmpty;
+                                    final reactN = _reactNotifierFor(
+                                      item.id,
+                                      initial: reactedInitial,
+                                    );
+                                    final likesN = _likesCountNotifierFor(
+                                      item.id,
+                                      initial: item.likesCount,
+                                    );
+                                    return _ReadingFeedPost(
+                                      item: item,
+                                      bookmarkNotifier: bookmarkN,
+                                      reactNotifier: reactN,
+                                      likesCountNotifier: likesN,
+                                      onLearn: () => _openLearn(item),
+                                      onToggleBookmark: () =>
+                                          unawaited(_toggleBookmark(item)),
+                                      onToggleReact: () =>
+                                          unawaited(_toggleReact(item)),
+                                      onShare: () => _share(item),
+                                      readingBg: _readingBg,
+                                      readingInk: _readingInk,
+                                      readingInkMuted: _readingInkMuted,
+                                      showExplanationLines: showExplanation,
+                                      currentUserId: _currentUserId,
+                                    );
+                                  },
+                                )),
+                    ),
+                  ],
+                ),
               ),
             ),
             Align(
@@ -3111,7 +3546,9 @@ class _MonoScreenState extends ConsumerState<MonoScreen> {
                             CreatorEntryChannel.add;
                         context.push('/create');
                       },
-                      onMenu: () => _openReaderDockStoryOptionsPanel(items),
+                      onMenu: _readerDockShowsOwnerStoryMenu
+                          ? () => _openReaderDockStoryOptionsPanel(items)
+                          : null,
                     )
                   : (widget.bottomDock ??
                       FloatingDockNavBar(
@@ -3141,6 +3578,46 @@ class _MonoScreenState extends ConsumerState<MonoScreen> {
         );
       },
       child: scaffold,
+    );
+  }
+
+  Widget _remoteFollowingFeedErrorPanel(ThemeData theme, Object error) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'Could not load Following.',
+              style: theme.textTheme.titleMedium?.copyWith(
+                color: _readingInk,
+                fontWeight: FontWeight.w700,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              '$error',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: _readingInkMuted,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 16),
+            FilledButton(
+              onPressed: () {
+                unawaited(
+                  ref
+                      .read(followingMonoFeedPagerProvider.notifier)
+                      .loadFirstPage(),
+                );
+              },
+              child: const Text('Retry'),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -3205,6 +3682,7 @@ class _ReadingFeedPost extends StatefulWidget {
   final MonoFeedItem item;
   final ValueNotifier<bool> bookmarkNotifier;
   final ValueNotifier<bool> reactNotifier;
+  final ValueNotifier<int> likesCountNotifier;
   final VoidCallback onLearn;
   final VoidCallback onToggleBookmark;
   final VoidCallback onToggleReact;
@@ -3213,11 +3691,13 @@ class _ReadingFeedPost extends StatefulWidget {
   final Color readingInk;
   final Color readingInkMuted;
   final bool showExplanationLines;
+  final String? currentUserId;
 
   const _ReadingFeedPost({
     required this.item,
     required this.bookmarkNotifier,
     required this.reactNotifier,
+    required this.likesCountNotifier,
     required this.onLearn,
     required this.onToggleBookmark,
     required this.onToggleReact,
@@ -3226,6 +3706,7 @@ class _ReadingFeedPost extends StatefulWidget {
     required this.readingInk,
     required this.readingInkMuted,
     required this.showExplanationLines,
+    required this.currentUserId,
   });
 
   @override
@@ -3383,24 +3864,28 @@ class _ReadModeLearnGroupCollapsible extends StatelessWidget {
   final ValueChanged<bool> onSetExpanded;
   final ValueNotifier<bool> bookmarkNotifier;
   final ValueNotifier<bool> reactNotifier;
+  final ValueNotifier<int> likesCountNotifier;
   final VoidCallback onLearn;
   final VoidCallback onToggleBookmark;
   final VoidCallback onToggleReact;
   final VoidCallback onShare;
   final double railWidth;
   final Color surfaceColor;
+  final bool showBookmark;
 
   const _ReadModeLearnGroupCollapsible({
     required this.expanded,
     required this.onSetExpanded,
     required this.bookmarkNotifier,
     required this.reactNotifier,
+    required this.likesCountNotifier,
     required this.onLearn,
     required this.onToggleBookmark,
     required this.onToggleReact,
     required this.onShare,
     required this.railWidth,
     required this.surfaceColor,
+    this.showBookmark = true,
   });
 
   /// Small compact FAB (matches “not intrusive” / right-column alignment).
@@ -3491,16 +3976,22 @@ class _ReadModeLearnGroupCollapsible extends StatelessWidget {
         collapseFab(),
         const SizedBox(height: _gapAboveRail),
         AnimatedBuilder(
-          animation: Listenable.merge([bookmarkNotifier, reactNotifier]),
+          animation: Listenable.merge([
+            bookmarkNotifier,
+            reactNotifier,
+            likesCountNotifier,
+          ]),
           builder: (context, _) {
             return _BottomActionRail(
               width: railWidth,
               isBookmarked: bookmarkNotifier.value,
               isReacted: reactNotifier.value,
+              likesCount: likesCountNotifier.value,
               onLearn: onLearn,
               onToggleReact: onToggleReact,
               onToggleBookmark: onToggleBookmark,
               onShare: onShare,
+              showBookmark: showBookmark,
               ink: monoLearnGroupActionColor,
               inkMuted: monoLearnGroupActionColor,
             );
@@ -3578,6 +4069,7 @@ class _ReadingFeedPostState extends State<_ReadingFeedPost>
   int _pageIndex = 0;
   double _metaH = 0;
   int? _lastHPageLayoutKey;
+
   /// Read mode only: collapsed '^' FAB vs full [_BottomActionRail]. Reset when returning to Hero.
   bool _readModeLearnExpanded = false;
   late final PageController _horizontalPageController;
@@ -3613,21 +4105,28 @@ class _ReadingFeedPostState extends State<_ReadingFeedPost>
   }
 
   Widget _buildLearnGroup(bool onReadingPage) {
+    final allowBookmark = canBookmarkMono(
+      currentUserId: widget.currentUserId,
+      monoOwnerId: widget.item.writerId,
+    );
     if (!onReadingPage) {
       return AnimatedBuilder(
         animation: Listenable.merge([
           widget.bookmarkNotifier,
           widget.reactNotifier,
+          widget.likesCountNotifier,
         ]),
         builder: (context, _) {
           return _BottomActionRail(
             width: _railWidth,
             isBookmarked: widget.bookmarkNotifier.value,
             isReacted: widget.reactNotifier.value,
+            likesCount: widget.likesCountNotifier.value,
             onLearn: widget.onLearn,
             onToggleReact: widget.onToggleReact,
             onToggleBookmark: widget.onToggleBookmark,
             onShare: widget.onShare,
+            showBookmark: allowBookmark,
             ink: monoLearnGroupActionColor,
             inkMuted: monoLearnGroupActionColor,
           );
@@ -3639,12 +4138,14 @@ class _ReadingFeedPostState extends State<_ReadingFeedPost>
       onSetExpanded: (v) => setState(() => _readModeLearnExpanded = v),
       bookmarkNotifier: widget.bookmarkNotifier,
       reactNotifier: widget.reactNotifier,
+      likesCountNotifier: widget.likesCountNotifier,
       onLearn: widget.onLearn,
       onToggleBookmark: widget.onToggleBookmark,
       onToggleReact: widget.onToggleReact,
       onShare: widget.onShare,
       railWidth: _railWidth,
       surfaceColor: widget.readingBg,
+      showBookmark: allowBookmark,
     );
   }
 
@@ -3694,9 +4195,9 @@ class _ReadingFeedPostState extends State<_ReadingFeedPost>
               for (final p in structuredPages) ...p.lines,
             ];
             final rubyStyleForMeasure = Theme.of(context).type.furigana(
-              Theme.of(context),
-              context.widthClass,
-            );
+                  Theme.of(context),
+                  context.widthClass,
+                );
             // One continuous token stream with line breaks between sentences.
             final allTokens = <NimonRubyToken>[];
             for (int i = 0; i < allLines.length; i++) {
@@ -3734,31 +4235,104 @@ class _ReadingFeedPostState extends State<_ReadingFeedPost>
                 MediaQuery.paddingOf(context).bottom;
 
             Widget structuredReadingScroll() {
-              return SingleChildScrollView(
-                physics: const BouncingScrollPhysics(
-                  parent: AlwaysScrollableScrollPhysics(),
-                ),
-                padding: EdgeInsets.fromLTRB(
-                  _hPad,
-                  readingTopPad,
-                  _hPad,
-                  readingBottomInset,
-                ),
-                child: SelectionArea(
-                  child: Align(
-                    alignment: Alignment.topCenter,
-                    child: ConstrainedBox(
-                      constraints: BoxConstraints(maxWidth: readingColumnMaxW),
-                      child: NimonRubyText(
-                        tokens: allTokens,
+              Widget rubyScroll(Widget body) {
+                return SingleChildScrollView(
+                  physics: const BouncingScrollPhysics(
+                    parent: AlwaysScrollableScrollPhysics(),
+                  ),
+                  padding: EdgeInsets.fromLTRB(
+                    _hPad,
+                    readingTopPad,
+                    _hPad,
+                    readingBottomInset,
+                  ),
+                  child: SelectionArea(
+                    child: Align(
+                      alignment: Alignment.topCenter,
+                      child: ConstrainedBox(
+                        constraints:
+                            BoxConstraints(maxWidth: readingColumnMaxW),
+                        child: body,
+                      ),
+                    ),
+                  ),
+                );
+              }
+
+              if (!widget.showExplanationLines) {
+                return rubyScroll(
+                  NimonRubyText(
+                    tokens: allTokens,
+                    baseStyle: bodyStyle,
+                    rubyStyle: rubyStyleForMeasure,
+                    rubyColor: widget.readingInkMuted.withValues(alpha: 0.92),
+                    textAlign: TextAlign.start,
+                  ),
+                );
+              }
+
+              final explanationMutedStyle =
+                  theme.textTheme.bodyMedium?.copyWith(
+                        color: widget.readingInkMuted.withValues(alpha: 0.95),
+                        height: 1.38,
+                        fontWeight: FontWeight.w400,
+                      ) ??
+                      TextStyle(
+                        color: widget.readingInkMuted.withValues(alpha: 0.95),
+                        height: 1.38,
+                      );
+              final explanationSecondaryStyle = explanationMutedStyle.copyWith(
+                fontSize: (explanationMutedStyle.fontSize ?? 14) - 0.5,
+                color: widget.readingInkMuted.withValues(alpha: 0.82),
+              );
+
+              return rubyScroll(
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    for (var i = 0; i < allLines.length; i++) ...[
+                      if (i > 0) const SizedBox(height: 14),
+                      NimonRubyText(
+                        tokens: _lineToLayoutTokens(allLines[i]),
                         baseStyle: bodyStyle,
                         rubyStyle: rubyStyleForMeasure,
                         rubyColor:
                             widget.readingInkMuted.withValues(alpha: 0.92),
                         textAlign: TextAlign.start,
                       ),
-                    ),
-                  ),
+                      Builder(
+                        builder: (context) {
+                          final disp = monoLineExplanationDisplay(
+                            allLines[i].explanation,
+                          );
+                          if (disp == null || disp.isEmpty) {
+                            return const SizedBox.shrink();
+                          }
+                          return Padding(
+                            padding: const EdgeInsets.only(top: 6),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  disp.primary,
+                                  style: explanationMutedStyle,
+                                ),
+                                if (disp.secondary != null &&
+                                    disp.secondary!.trim().isNotEmpty)
+                                  Padding(
+                                    padding: const EdgeInsets.only(top: 4),
+                                    child: Text(
+                                      disp.secondary!,
+                                      style: explanationSecondaryStyle,
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          );
+                        },
+                      ),
+                    ],
+                  ],
                 ),
               );
             }
@@ -3810,15 +4384,28 @@ class _ReadingFeedPostState extends State<_ReadingFeedPost>
                 child: _PostFooterMeta(
                   writerName: item.writerName,
                   writerHandle: item.writerHandle,
+                  writerAvatarUrl: item.writerAvatarUrl,
                   title: item.title,
-                  typeLabel: _contentTypeLabel(item.contentType),
+                  subtitleLine: item.storyDescription.trim(),
                   ink: widget.readingInk,
                   inkMuted: widget.readingInkMuted,
                   onTapCreator: () {
-                    final handle = item.writerHandle.trim();
-                    final q =
-                        Uri.encodeComponent(handle.isEmpty ? '@' : handle);
-                    context.push('/profile/public?creator=$q');
+                    final loc = creatorProfileLocation(
+                      userId: item.writerId,
+                      handle: item.writerHandle,
+                      allowLegacyHandle: false,
+                    );
+                    if (loc == null) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content:
+                              Text('Creator profile is not available yet.'),
+                          behavior: SnackBarBehavior.floating,
+                        ),
+                      );
+                      return;
+                    }
+                    context.push(loc);
                   },
                 ),
               ),
@@ -3949,14 +4536,27 @@ class _ReadingFeedPostState extends State<_ReadingFeedPost>
               child: _PostFooterMeta(
                 writerName: item.writerName,
                 writerHandle: item.writerHandle,
+                writerAvatarUrl: item.writerAvatarUrl,
                 title: item.title,
-                typeLabel: _contentTypeLabel(item.contentType),
+                subtitleLine: item.storyDescription.trim(),
                 ink: widget.readingInk,
                 inkMuted: widget.readingInkMuted,
                 onTapCreator: () {
-                  final handle = item.writerHandle.trim();
-                  final q = Uri.encodeComponent(handle.isEmpty ? '@' : handle);
-                  context.push('/profile/public?creator=$q');
+                  final loc = creatorProfileLocation(
+                    userId: item.writerId,
+                    handle: item.writerHandle,
+                    allowLegacyHandle: false,
+                  );
+                  if (loc == null) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Creator profile is not available yet.'),
+                        behavior: SnackBarBehavior.floating,
+                      ),
+                    );
+                    return;
+                  }
+                  context.push(loc);
                 },
               ),
             ),
@@ -4014,6 +4614,7 @@ class _MeasureSizeState extends State<_MeasureSize> {
   }
 }
 
+// ignore: unused_element
 class _MonoStructuredLineBlock extends StatelessWidget {
   const _MonoStructuredLineBlock({
     required this.line,
@@ -4290,11 +4891,91 @@ class _FollowingFeedEmptyState extends StatelessWidget {
   }
 }
 
+class _FollowingFeedAuthGateState extends StatelessWidget {
+  const _FollowingFeedAuthGateState();
+
+  static const _titleInk = Color(0xFF1A1917);
+  static const _bodyInk = Color(0xFF5C5A55);
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 36),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'Sign in to see Following',
+              style: theme.textTheme.titleMedium?.copyWith(
+                color: _titleInk,
+                fontWeight: FontWeight.w800,
+                letterSpacing: -0.2,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'Sign in to see stories from people you follow.',
+              style: theme.textTheme.bodyLarge?.copyWith(
+                color: _bodyInk,
+                height: 1.45,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _WriterFooterAvatar extends StatelessWidget {
+  const _WriterFooterAvatar({
+    this.url,
+    required this.ink,
+    required this.inkMuted,
+  });
+
+  final String? url;
+  final Color ink;
+  final Color inkMuted;
+
+  @override
+  Widget build(BuildContext context) {
+    final u = (url ?? '').trim();
+    return Container(
+      width: 42,
+      height: 42,
+      decoration: BoxDecoration(
+        color: ink.withOpacity(0.06),
+        shape: BoxShape.circle,
+        border: Border.all(color: ink.withOpacity(0.11)),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: u.isEmpty
+          ? Icon(Icons.person_outline, size: 22, color: inkMuted)
+          : Image.network(
+              u,
+              fit: BoxFit.cover,
+              gaplessPlayback: true,
+              filterQuality: FilterQuality.low,
+              errorBuilder: (_, __, ___) =>
+                  Icon(Icons.person_outline, size: 22, color: inkMuted),
+            ),
+    );
+  }
+}
+
 class _PostFooterMeta extends StatelessWidget {
   final String writerName;
   final String writerHandle;
+  final String? writerAvatarUrl;
   final String? title;
-  final String typeLabel;
+
+  /// Story Basics description preview; empty hides the line.
+  final String subtitleLine;
   final Color ink;
   final Color inkMuted;
   final VoidCallback? onTapCreator;
@@ -4302,7 +4983,8 @@ class _PostFooterMeta extends StatelessWidget {
   const _PostFooterMeta({
     required this.writerName,
     required this.writerHandle,
-    required this.typeLabel,
+    this.writerAvatarUrl,
+    required this.subtitleLine,
     required this.ink,
     required this.inkMuted,
     this.title,
@@ -4323,15 +5005,10 @@ class _PostFooterMeta extends StatelessWidget {
             customBorder: const CircleBorder(),
             splashColor: ink.withValues(alpha: 0.10),
             highlightColor: ink.withValues(alpha: 0.04),
-            child: Container(
-              width: 42,
-              height: 42,
-              decoration: BoxDecoration(
-                color: ink.withOpacity(0.06),
-                shape: BoxShape.circle,
-                border: Border.all(color: ink.withOpacity(0.11)),
-              ),
-              child: Icon(Icons.person_outline, size: 22, color: inkMuted),
+            child: _WriterFooterAvatar(
+              url: writerAvatarUrl,
+              ink: ink,
+              inkMuted: inkMuted,
             ),
           ),
         ),
@@ -4397,18 +5074,13 @@ class _PostFooterMeta extends StatelessWidget {
                   ),
                 ),
               ],
-              const SizedBox(height: 5),
-              Text(
-                typeLabel,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.labelSmall?.copyWith(
-                  color: inkMuted,
-                  fontWeight: FontWeight.w600,
-                  fontSize: 10.5,
-                  letterSpacing: 0.15,
+              if (subtitleLine.trim().isNotEmpty) ...[
+                const SizedBox(height: 5),
+                ExpandableFooterDescription(
+                  text: subtitleLine.trim(),
+                  inkMuted: inkMuted,
                 ),
-              ),
+              ],
             ],
           ),
         ),
@@ -4431,23 +5103,27 @@ class _BottomActionRail extends StatelessWidget {
   final double width;
   final bool isBookmarked;
   final bool isReacted;
+  final int likesCount;
   final VoidCallback onLearn;
   final VoidCallback onToggleReact;
   final VoidCallback onToggleBookmark;
   final VoidCallback onShare;
   final Color ink;
   final Color inkMuted;
+  final bool showBookmark;
 
   const _BottomActionRail({
     required this.width,
     required this.isBookmarked,
     required this.isReacted,
+    required this.likesCount,
     required this.onLearn,
     required this.onToggleReact,
     required this.onToggleBookmark,
     required this.onShare,
     required this.ink,
     required this.inkMuted,
+    this.showBookmark = true,
   });
 
   @override
@@ -4467,7 +5143,8 @@ class _BottomActionRail extends StatelessWidget {
             labelHeight: _labelH,
             iconSize: _iconSize,
             icon: isReacted ? Icons.favorite : Icons.favorite_border,
-            label: 'React',
+            label: monoReactRailPrimaryLabel(likesCount),
+            semanticsLabel: monoReactRailSemanticsLabel(likesCount),
             onTap: onToggleReact,
             ink: ink,
             inkMuted: inkMuted,
@@ -4488,20 +5165,22 @@ class _BottomActionRail extends StatelessWidget {
             theme: theme,
           ),
           const SizedBox(height: _between),
-          _RailActionSlot(
-            width: width,
-            slotHeight: _slotH,
-            iconArea: _iconArea,
-            labelHeight: _labelH,
-            iconSize: _iconSize,
-            icon: isBookmarked ? Icons.bookmark : Icons.bookmark_outline,
-            label: 'Bookmark',
-            onTap: onToggleBookmark,
-            ink: ink,
-            inkMuted: inkMuted,
-            theme: theme,
-          ),
-          const SizedBox(height: _between),
+          if (showBookmark) ...[
+            _RailActionSlot(
+              width: width,
+              slotHeight: _slotH,
+              iconArea: _iconArea,
+              labelHeight: _labelH,
+              iconSize: _iconSize,
+              icon: isBookmarked ? Icons.bookmark : Icons.bookmark_outline,
+              label: isBookmarked ? 'Saved' : 'Save',
+              onTap: onToggleBookmark,
+              ink: ink,
+              inkMuted: inkMuted,
+              theme: theme,
+            ),
+            const SizedBox(height: _between),
+          ],
           _RailActionSlot(
             width: width,
             slotHeight: _slotH,
@@ -4530,6 +5209,7 @@ class _RailActionSlot extends StatelessWidget {
   final IconData? icon;
   final String? iconEmoji;
   final String label;
+  final String? semanticsLabel;
   final VoidCallback onTap;
   final Color ink;
   final Color inkMuted;
@@ -4544,6 +5224,7 @@ class _RailActionSlot extends StatelessWidget {
     this.icon,
     this.iconEmoji,
     required this.label,
+    this.semanticsLabel,
     required this.onTap,
     required this.ink,
     required this.inkMuted,
@@ -4571,7 +5252,7 @@ class _RailActionSlot extends StatelessWidget {
 
     return Semantics(
       button: true,
-      label: label,
+      label: semanticsLabel ?? label,
       child: Material(
         color: Colors.transparent,
         child: InkWell(
@@ -4614,22 +5295,5 @@ class _RailActionSlot extends StatelessWidget {
         ),
       ),
     );
-  }
-}
-
-String _contentTypeLabel(MonoContentType t) {
-  switch (t) {
-    case MonoContentType.story:
-      return '読み物 · 短編';
-    case MonoContentType.letter:
-      return '手紙';
-    case MonoContentType.dialogue:
-      return '会話 · 対話';
-    case MonoContentType.sentence:
-      return '随筆 · 短文';
-    case MonoContentType.diary:
-      return '日記';
-    case MonoContentType.article:
-      return '読解 · 記事';
   }
 }

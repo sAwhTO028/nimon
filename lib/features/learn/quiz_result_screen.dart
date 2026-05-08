@@ -107,8 +107,7 @@ class QuizResultScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 32),
                 FilledButton(
-                  onPressed: () =>
-                      context.go('/learn/$contentId/quiz'),
+                  onPressed: () => context.go('/learn/$contentId/quiz'),
                   style: FilledButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 16),
                     backgroundColor: QuizFlowTheme.primary,

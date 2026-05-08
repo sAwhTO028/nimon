@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:nimon/features/learn/grammar_pattern.dart';
+import 'package:nimon/features/learn/learn_catalog_content_gate.dart';
 import 'package:nimon/features/learn/learn_explanation_language.dart';
 import 'package:nimon/features/learn/learn_explanation_language_provider.dart';
 import 'package:nimon/features/learn/learn_support_text.dart';
@@ -47,7 +48,10 @@ class GrammarPatternDetailScreen extends ConsumerWidget {
           ? Padding(
               padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
               child: Text(
-                'No pattern data.',
+                catalogMonoIdLooksLikeUuid(contentId)
+                    ? 'No grammar pattern was opened for this story. '
+                        'Go back and choose a pattern from the list.'
+                    : 'No pattern data.',
                 style: theme.textTheme.bodyLarge?.copyWith(color: _ink),
               ),
             )
@@ -445,7 +449,8 @@ class _SurfaceCard extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: 0.9),
-        borderRadius: BorderRadius.circular(GrammarPatternDetailScreen._cardRadius),
+        borderRadius:
+            BorderRadius.circular(GrammarPatternDetailScreen._cardRadius),
         border: Border.all(color: const Color(0x14000000)),
       ),
       child: child,

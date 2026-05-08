@@ -72,4 +72,3 @@ class _CreatorRouteSyncListenerState
   @override
   Widget build(BuildContext context) => widget.child;
 }
-

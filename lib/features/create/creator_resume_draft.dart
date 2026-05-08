@@ -1,15 +1,19 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart' show debugPrint, kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:nimon/features/create/creator_back_policy.dart';
 import 'package:nimon/features/create/creator_drawer_session.dart';
+import 'package:nimon/features/create/data/remote_backend_config.dart';
 import 'package:nimon/features/create/data/story_draft_repository_provider.dart';
 import 'package:nimon/features/create/story_creator_draft_storage.dart'
     show CreatorLastActiveModule;
 import 'package:nimon/features/create/story_creator_models.dart';
 import 'package:nimon/features/create/story_creator_provider.dart';
+import 'package:nimon/features/profile/presentation/providers/profile_published_mono_pager.dart';
+import 'package:nimon/features/profile/profile_processing_refresh.dart';
 
 /// Centralized local-draft resume workflow (V1).
 ///
@@ -98,7 +102,9 @@ abstract final class CreatorDraftResumeFlow {
     if (d.audio.storyAudio?.isValidV1 == true) return true;
     // Module workflow statuses (e.g. "in_progress") indicate learn work has begun.
     if (d.moduleWorkflowStatuses.values.any(
-      (s) => s == LearnModuleTaskStatus.inProgress || s == LearnModuleTaskStatus.completed,
+      (s) =>
+          s == LearnModuleTaskStatus.inProgress ||
+          s == LearnModuleTaskStatus.completed,
     )) {
       return true;
     }
@@ -115,7 +121,8 @@ abstract final class CreatorDraftResumeFlow {
     // Ensure creator session matches persistent intent on resume.
     c.read(creatorDrawerSessionProvider.notifier).setLearnMode(learnOn);
     final meta = await c.read(storyDraftRepositoryProvider).loadResumeMeta(id);
-    final module = meta?.lastActiveModule ?? CreatorLastActiveModule.storytelling;
+    final module =
+        meta?.lastActiveModule ?? CreatorLastActiveModule.storytelling;
     final sub = (meta?.lastActiveSubPage ?? '').trim();
 
     if (!learnOn) {
@@ -125,7 +132,10 @@ abstract final class CreatorDraftResumeFlow {
     }
 
     // Learn mode ON: honor last module when it maps to B1, S0, or canonical `?panel=`.
-    if (sub == 'vocabulary' || sub == 'grammar' || sub == 'quiz' || sub == 'listening') {
+    if (sub == 'vocabulary' ||
+        sub == 'grammar' ||
+        sub == 'quiz' ||
+        sub == 'listening') {
       return _createPathWithQuery(
         path: '/create/story/sentences',
         draftId: id,
@@ -171,34 +181,163 @@ abstract final class CreatorDraftResumeFlow {
     }
   }
 
-  /// Re-open a **local** draft from a **Published** surface (reader `Edit`, profile loose-item `Edit`, …).
-  ///
-  /// [monoOrDraftId] may be a [MonoFeedItem] id with a `profile-` prefix or a raw local draft id.
-  /// If no local draft is found, shows the legacy **Edit — coming soon** snack (V1 mock / non-local monos).
-  static Future<void> tryResumeFromPublishedSurface(
-    BuildContext context,
+  /// Ordered ids for [StoryDraftRepository.loadDraft]:
+  /// **[sourceDraftId] first** (real draft UUID), then stripped surface id (often a
+  /// published mono id — usually fails remote GET /story-drafts/:id).
+  @visibleForTesting
+  static List<String> publishedEditResumeDraftLookupIds(
     String monoOrDraftId,
-  ) async {
+    String? sourceDraftId,
+  ) {
     var id = monoOrDraftId.trim();
     if (id.startsWith(_profileIdPrefix)) {
-      id = id.substring(_profileIdPrefix.length);
+      id = id.substring(_profileIdPrefix.length).trim();
     }
-    if (id.isEmpty) return;
+    final out = <String>[];
+    final sid = sourceDraftId?.trim();
+    if (sid != null && sid.isNotEmpty) out.add(sid);
+    if (id.isNotEmpty && !out.contains(id)) out.add(id);
+    return out;
+  }
+
+  static String _stripProfilePrefix(String raw) {
+    var id = raw.trim();
+    if (id.startsWith(_profileIdPrefix)) {
+      id = id.substring(_profileIdPrefix.length).trim();
+    }
+    return id;
+  }
+
+  /// Re-fetch owner published detail when the reader item omitted `sourceDraftId`.
+  static Future<String?> _tryRefreshSourceDraftIdFromPublishedDetail(
+    ProviderContainer container,
+    String monoOrDraftId,
+  ) async {
+    if (!RemoteBackendConfig.useRemoteDrafts) return null;
+    final monoId = _stripProfilePrefix(monoOrDraftId);
+    if (monoId.isEmpty) return null;
+    try {
+      final repo =
+          container.read(remotePublishedMonoRepositoryForProfileProvider);
+      final d = await repo.get(monoId);
+      final s = d.sourceDraftId?.trim();
+      if (kDebugMode) {
+        debugPrint(
+          '[PublishedEdit] refreshed GET /v1/published-monos/$monoId → sourceDraftId=${s ?? "(null)"}',
+        );
+      }
+      return (s != null && s.isNotEmpty) ? s : null;
+    } catch (e, st) {
+      if (kDebugMode) {
+        debugPrint(
+          '[PublishedEdit] refresh published detail failed: $e\n$st',
+        );
+      }
+      return null;
+    }
+  }
+
+  /// Re-open the linked **StoryDraft** from a **Published** surface (reader `Edit`, profile sheet `Edit`, …).
+  ///
+  /// [monoOrDraftId] is typically a **published mono** id (optionally `profile-` prefixed) or a raw draft id.
+  /// When the API provides [sourceDraftId], pass it so Creator can load the draft after catalog hydration.
+  static Future<void> tryResumeFromPublishedSurface(
+    BuildContext context,
+    String monoOrDraftId, {
+    String? sourceDraftId,
+  }) async {
+    final messenger = ScaffoldMessenger.maybeOf(context);
+
+    void showResumeFailure() {
+      messenger?.showSnackBar(
+        const SnackBar(
+          content: Text('Could not open this story for editing.'),
+        ),
+      );
+    }
+
+    if (!context.mounted) return;
+
+    if (kDebugMode) {
+      debugPrint(
+        '[PublishedEdit] tap monoOrDraftId=$monoOrDraftId '
+        'sourceDraftId=$sourceDraftId useRemoteDrafts=${RemoteBackendConfig.useRemoteDrafts}',
+      );
+    }
 
     final container = ProviderScope.containerOf(context, listen: false);
-    final draft = await container.read(storyDraftRepositoryProvider).loadDraft(id);
-    if (!context.mounted) return;
-    if (draft == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Edit - Coming soon')),
+
+    var effectiveSource = sourceDraftId?.trim();
+    if (effectiveSource == null || effectiveSource.isEmpty) {
+      effectiveSource = await _tryRefreshSourceDraftIdFromPublishedDetail(
+        container,
+        monoOrDraftId,
       );
+    }
+
+    final candidates = publishedEditResumeDraftLookupIds(
+      monoOrDraftId,
+      effectiveSource,
+    );
+    if (kDebugMode) {
+      debugPrint('[PublishedEdit] candidates=$candidates');
+    }
+    if (candidates.isEmpty) {
+      showResumeFailure();
       return;
     }
+
+    final repo = container.read(storyDraftRepositoryProvider);
+    CreatorStoryV1? found;
+    String? resolvedDraftId;
+    for (final cid in candidates) {
+      try {
+        final d = await repo.loadDraft(cid);
+        if (kDebugMode) {
+          debugPrint(
+            '[PublishedEdit] loadDraft("$cid") → ${d != null ? "found id=${d.id}" : "null"}',
+          );
+        }
+        if (d != null) {
+          found = d;
+          resolvedDraftId = d.id;
+          break;
+        }
+      } catch (e, st) {
+        if (kDebugMode) {
+          debugPrint('[PublishedEdit] loadDraft("$cid") threw: $e\n$st');
+        }
+      }
+    }
+
+    if (found == null || resolvedDraftId == null) {
+      if (kDebugMode) {
+        debugPrint(
+          '[PublishedEdit] failed — no draft loaded (remoteDrafts=${RemoteBackendConfig.useRemoteDrafts})',
+        );
+      }
+      showResumeFailure();
+      return;
+    }
+
+    if (kDebugMode) {
+      debugPrint('[PublishedEdit] resume resolvedDraftId=$resolvedDraftId');
+    }
+
+    if (!context.mounted) {
+      showResumeFailure();
+      return;
+    }
+
     await resume(
       context,
-      id,
+      resolvedDraftId,
       entryChannel: CreatorEntryChannel.publishedReopen,
     );
+
+    if (kDebugMode) {
+      debugPrint('[PublishedEdit] resume() finished');
+    }
   }
 
   /// [entryChannel] must match how the user entered this resume (Add tab vs Processing sheet, etc.).
@@ -219,7 +358,11 @@ abstract final class CreatorDraftResumeFlow {
         .read(creatorEntryChannelProvider.notifier)
         .state = entryChannel;
     if (!context.mounted) return;
+    if (kDebugMode && entryChannel == CreatorEntryChannel.publishedReopen) {
+      debugPrint('[PublishedEdit] navigate push target=$target');
+    }
     _navigateToResumeTarget(context, target);
+    bumpProfileCatalogSurfacesRefresh(container);
   }
 
   /// Resume from Profile > Processing (row primary, sheets, etc.).
@@ -244,10 +387,14 @@ abstract final class CreatorDraftResumeFlow {
         CreatorEntryChannel.processing;
     if (!context.mounted) return;
     _navigateToResumeTarget(context, target);
+    bumpProfileCatalogSurfacesRefresh(container);
   }
 
-  static Future<void> _restoreDraftState(ProviderContainer c, String draftId) async {
-    await c.read(storyDraftRepositoryProvider).ensureResumeMetaInitialized(draftId);
+  static Future<void> _restoreDraftState(
+      ProviderContainer c, String draftId) async {
+    await c
+        .read(storyDraftRepositoryProvider)
+        .ensureResumeMetaInitialized(draftId);
     await c.read(storyCreatorDraftProvider.notifier).loadDraftById(
           draftId,
           forceReloadFromDisk: true,

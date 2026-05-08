@@ -69,4 +69,3 @@ enum StoryCategory {
     }
   }
 }
-

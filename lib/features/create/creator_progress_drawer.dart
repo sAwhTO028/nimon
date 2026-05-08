@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:nimon/features/create/creator_drawer_publish_labels.dart';
 import 'package:nimon/features/create/creator_drawer_session.dart';
+import 'package:nimon/features/create/creator_publish_status_provider.dart';
 import 'package:nimon/features/create/creator_step_id.dart';
 import 'package:nimon/features/create/creator_workspace_step.dart';
 import 'package:nimon/features/create/story_creator_models.dart';
@@ -21,10 +24,13 @@ class CreatorProgressItem {
 
   final CreatorStepId id;
   final String title;
+
   /// Progress detail (counts, requirements) — not a second status line.
   final String subtitle;
+
   /// One of: Not started | In progress | Complete
   final String statusLabel;
+
   /// One of: Open | Continue | Edit
   final String actionLabel;
   final String route;
@@ -122,7 +128,8 @@ String _moduleSubtitleLine(CreatorModuleCompletion m) {
   CreatorV1DurationThresholds? t,
 ) {
   final m = computeStoryBasicsStatus(draft, thresholds: t);
-  final pair = _statusActionFromTask(learnModuleTaskStatusFromStoryBasics(draft));
+  final pair =
+      _statusActionFromTask(learnModuleTaskStatusFromStoryBasics(draft));
   return (pair.$1, pair.$2, _moduleSubtitleLine(m));
 }
 
@@ -132,7 +139,8 @@ String _moduleSubtitleLine(CreatorModuleCompletion m) {
   CreatorV1DurationThresholds? t,
 ) {
   final m = computeStorySentencesStatus(draft, thresholds: t);
-  final pair = _statusActionFromTask(learnModuleTaskStatusFromStorySentences(draft));
+  final pair =
+      _statusActionFromTask(learnModuleTaskStatusFromStorySentences(draft));
   return (pair.$1, pair.$2, _moduleSubtitleLine(m));
 }
 
@@ -142,13 +150,14 @@ String _moduleSubtitleLine(CreatorModuleCompletion m) {
   CreatorV1DurationThresholds? t,
 ) {
   final m = switch (id) {
-    LearnModuleId.vocabularyKanji => computeVocabularyStatus(draft, thresholds: t),
+    LearnModuleId.vocabularyKanji =>
+      computeVocabularyStatus(draft, thresholds: t),
     LearnModuleId.grammar => computeGrammarStatus(draft, thresholds: t),
     LearnModuleId.quiz => computeQuizStatus(draft, thresholds: t),
     LearnModuleId.audio => computeListeningStatus(draft, thresholds: t),
   };
-  final pair =
-      _statusActionFromTask(learnModuleProgressTaskStatus(draft, id, thresholds: t));
+  final pair = _statusActionFromTask(
+      learnModuleProgressTaskStatus(draft, id, thresholds: t));
   return (pair.$1, pair.$2, _moduleSubtitleLine(m));
 }
 
@@ -234,10 +243,15 @@ const ValueKey<String> kCreatorProgressDrawerKeyVocabulary =
     ValueKey<String>('creator_progress_drawer_vocabulary');
 const ValueKey<String> kCreatorProgressDrawerKeyGrammar =
     ValueKey<String>('creator_progress_drawer_grammar');
+const ValueKey<String> kCreatorProgressDrawerKeyQuiz =
+    ValueKey<String>('creator_progress_drawer_quiz');
+const ValueKey<String> kCreatorProgressDrawerKeyListening =
+    ValueKey<String>('creator_progress_drawer_listening');
 
-class CreatorProgressDrawer extends StatefulWidget {
+class CreatorProgressDrawer extends ConsumerStatefulWidget {
   const CreatorProgressDrawer({
     super.key,
+
     /// Must match [kCreatorProgressDrawerKey*] used for this host (sentences / vocab / grammar).
     required this.drawerKeySlot,
     required this.coreItems,
@@ -253,6 +267,11 @@ class CreatorProgressDrawer extends StatefulWidget {
     required this.onOpenStep,
     required this.onSaveDraft,
     required this.onPublish,
+    required this.creatorDraft,
+    required this.localDraftDirty,
+    required this.readOnlyPublishedCoreSig,
+    required this.publishedEditReadOnlyBaselineSig,
+    required this.publishedEditFullLearnBaselineSig,
   });
 
   /// Drives a unique [KeyedSubtree] so multiple creator surfaces never share one key.
@@ -260,14 +279,34 @@ class CreatorProgressDrawer extends StatefulWidget {
   final List<CreatorProgressItem> coreItems;
   final List<CreatorProgressItem> learnItems;
   final StoryReviewDisplayModel publishModel;
+
   /// True when a Read Only version exists (published at least once).
   final bool readOnlyPublishedExists;
+
   /// True when the current draft core differs from the last Read Only published core.
   final bool readOnlyHasUnpublishedChanges;
+
   /// True when [CreatorStoryV1.publishState] is [StoryPublishState.fullLearnPublished].
   final bool fullLearnPublishedExists;
-  /// True when the in-memory draft has unsaved / unpublished edits ([StoryCreatorDraftState.dirty]).
+
+  /// True when Full Learn needs republish (core staging and/or unsaved learn edits).
   final bool fullLearnHasUnpublishedChanges;
+
+  /// Current in-memory draft (trace + parity with flags computed upstream).
+  final CreatorStoryV1 creatorDraft;
+
+  /// True while local edits are not flushed to disk / remote ([StoryCreatorDraftState.dirty]).
+  final bool localDraftDirty;
+
+  /// Local baseline signature after last Read-only publish ([StoryCreatorDraftState.readOnlyPublishedCoreSig]).
+  final String? readOnlyPublishedCoreSig;
+
+  /// v2 read-only published baseline (prefs + notifier).
+  final String? publishedEditReadOnlyBaselineSig;
+
+  /// Last full-learn published baseline.
+  final String? publishedEditFullLearnBaselineSig;
+
   /// From [CreatorDrawerSessionState.learnModeEnabled] — single source of truth.
   final bool learnModeEnabled;
   final CreatorStepId? currentStepId;
@@ -277,20 +316,35 @@ class CreatorProgressDrawer extends StatefulWidget {
   final Future<void> Function(StoryReviewPublishMode mode) onPublish;
 
   @override
-  State<CreatorProgressDrawer> createState() => _CreatorProgressDrawerState();
+  ConsumerState<CreatorProgressDrawer> createState() =>
+      _CreatorProgressDrawerState();
 }
 
-class _CreatorProgressDrawerState extends State<CreatorProgressDrawer> {
+class _CreatorProgressDrawerState extends ConsumerState<CreatorProgressDrawer> {
   bool _publishing = false;
 
   @override
   void didUpdateWidget(covariant CreatorProgressDrawer oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.publishModel.isFullLearnReady != widget.publishModel.isFullLearnReady ||
-        oldWidget.publishModel.isReadingOnlyReady != widget.publishModel.isReadingOnlyReady ||
+    if (oldWidget.publishModel.isFullLearnReady !=
+            widget.publishModel.isFullLearnReady ||
+        oldWidget.publishModel.isReadingOnlyReady !=
+            widget.publishModel.isReadingOnlyReady ||
+        oldWidget.readOnlyPublishedExists != widget.readOnlyPublishedExists ||
+        oldWidget.readOnlyHasUnpublishedChanges !=
+            widget.readOnlyHasUnpublishedChanges ||
         oldWidget.fullLearnPublishedExists != widget.fullLearnPublishedExists ||
         oldWidget.fullLearnHasUnpublishedChanges !=
-            widget.fullLearnHasUnpublishedChanges) {
+            widget.fullLearnHasUnpublishedChanges ||
+        oldWidget.localDraftDirty != widget.localDraftDirty ||
+        oldWidget.creatorDraft.hasUnpublishedCoreChanges !=
+            widget.creatorDraft.hasUnpublishedCoreChanges ||
+        oldWidget.creatorDraft.publishState !=
+            widget.creatorDraft.publishState ||
+        oldWidget.publishedEditReadOnlyBaselineSig !=
+            widget.publishedEditReadOnlyBaselineSig ||
+        oldWidget.publishedEditFullLearnBaselineSig !=
+            widget.publishedEditFullLearnBaselineSig) {
       setState(() {});
     }
   }
@@ -306,32 +360,45 @@ class _CreatorProgressDrawerState extends State<CreatorProgressDrawer> {
       widget.fullLearnPublishedExists && !widget.fullLearnHasUnpublishedChanges;
 
   bool get _publishEnabled {
-    if (_publishMode == StoryReviewPublishMode.readingOnly && _readOnlyUpToDate) {
+    if (_publishMode == StoryReviewPublishMode.readingOnly &&
+        _readOnlyUpToDate) {
       return false;
     }
-    if (_publishMode == StoryReviewPublishMode.fullLearn && _fullLearnUpToDate) {
+    if (_publishMode == StoryReviewPublishMode.fullLearn &&
+        _fullLearnUpToDate) {
       return false;
     }
     return isStoryReviewModeAllowed(_publishMode, widget.publishModel);
   }
 
+  String _publishDisabledReason(bool publishEnabled) {
+    if (_publishing) return 'publishing';
+    if (publishEnabled) return 'ok';
+    if (_publishMode == StoryReviewPublishMode.readingOnly &&
+        _readOnlyUpToDate) {
+      return 'read_only_up_to_date';
+    }
+    if (_publishMode == StoryReviewPublishMode.fullLearn &&
+        _fullLearnUpToDate) {
+      return 'full_learn_up_to_date';
+    }
+    if (!isStoryReviewModeAllowed(_publishMode, widget.publishModel)) {
+      return 'requirements_not_met';
+    }
+    return 'unknown';
+  }
+
   String? _publishHelperText() {
-    if (_publishEnabled) return null;
-    if (!widget.learnModeEnabled && _readOnlyUpToDate) {
-      return 'Published version exists and is up to date.';
-    }
-    if (widget.learnModeEnabled && _fullLearnUpToDate) {
-      return 'Published version is up to date.';
-    }
-    if (!widget.learnModeEnabled) {
-      return widget.publishModel.isReadingOnlyReady
-          ? null
-          : 'Finish story basics and storytelling first.';
-    }
-    if (!widget.publishModel.isReadingOnlyReady) {
-      return 'Finish story basics and storytelling first.';
-    }
-    return 'Complete all Learn modules to publish Full Learn.';
+    return creatorProgressDrawerPublishHelperText(
+      learnModeEnabled: widget.learnModeEnabled,
+      publishEnabled: _publishEnabled,
+      readOnlyPublishedExists: widget.readOnlyPublishedExists,
+      readOnlyHasUnpublishedChanges: widget.readOnlyHasUnpublishedChanges,
+      fullLearnPublishedExists: widget.fullLearnPublishedExists,
+      fullLearnHasUnpublishedChanges: widget.fullLearnHasUnpublishedChanges,
+      hasLocalUnsavedEdits: widget.localDraftDirty,
+      publishModel: widget.publishModel,
+    );
   }
 
   Future<void> _handlePublish() async {
@@ -349,15 +416,34 @@ class _CreatorProgressDrawerState extends State<CreatorProgressDrawer> {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
     final onVar = cs.onSurfaceVariant;
+    final publishPhase = ref.watch(creatorPublishStatusTextProvider);
+    final publishEnabled = _publishEnabled;
     final helper = _publishHelperText();
-    final publishLabel = widget.learnModeEnabled
-        ? (_fullLearnUpToDate ? 'Full Learn Published' : 'Full Learn')
-        : (_readOnlyUpToDate
-            ? 'Read Only Published'
-            : (widget.readOnlyPublishedExists &&
-                    widget.readOnlyHasUnpublishedChanges
-                ? 'Update Read Only'
-                : 'Read Only Publish'));
+    final publishLabel = creatorProgressDrawerPublishPrimaryLabel(
+      learnModeEnabled: widget.learnModeEnabled,
+      readOnlyPublishedExists: widget.readOnlyPublishedExists,
+      readOnlyHasUnpublishedChanges: widget.readOnlyHasUnpublishedChanges,
+      fullLearnPublishedExists: widget.fullLearnPublishedExists,
+      fullLearnHasUnpublishedChanges: widget.fullLearnHasUnpublishedChanges,
+    );
+    debugTraceCreatorDrawerPublish(
+      surface: widget.drawerKeySlot.value,
+      draft: widget.creatorDraft,
+      localDirty: widget.localDraftDirty,
+      readOnlyPublishedCoreSig: widget.readOnlyPublishedCoreSig,
+      publishedEditReadOnlyBaselineSig: widget.publishedEditReadOnlyBaselineSig,
+      publishedEditFullLearnBaselineSig:
+          widget.publishedEditFullLearnBaselineSig,
+      learnModeEnabled: widget.learnModeEnabled,
+      readOnlyPublishedExists: widget.readOnlyPublishedExists,
+      readOnlyHasUnpublishedChanges: widget.readOnlyHasUnpublishedChanges,
+      fullLearnPublishedExists: widget.fullLearnPublishedExists,
+      fullLearnHasUnpublishedChanges: widget.fullLearnHasUnpublishedChanges,
+      publishEnabled: publishEnabled,
+      publishDisabledReason: _publishDisabledReason(publishEnabled),
+      publishLabel: publishLabel,
+      helperText: helper,
+    );
 
     return KeyedSubtree(
       key: widget.drawerKeySlot,
@@ -384,72 +470,98 @@ class _CreatorProgressDrawerState extends State<CreatorProgressDrawer> {
                 ),
                 SafeArea(
                   child: ListView(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
-                children: [
-                  Text(
-                    'Creator progress',
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  Row(
+                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
                     children: [
-                      Expanded(
-                        child: OutlinedButton(
-                          onPressed: widget.onSaveDraft,
-                          child: const Text('Save draft'),
+                      Text(
+                        'Creator progress',
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w700,
                         ),
                       ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: FilledButton.icon(
-                          onPressed: _publishing || !_publishEnabled
-                              ? null
-                              : _handlePublish,
-                          icon: _publishing
-                              ? SizedBox(
-                                  width: 18,
-                                  height: 18,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    color: cs.onPrimary,
+                      const SizedBox(height: 12),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Row(
+                            children: [
+                              Expanded(
+                                child: OutlinedButton(
+                                  onPressed: widget.onSaveDraft,
+                                  child: Text(
+                                    (widget.readOnlyPublishedExists ||
+                                                widget
+                                                    .fullLearnPublishedExists) &&
+                                            (widget.readOnlyHasUnpublishedChanges ||
+                                                widget
+                                                    .fullLearnHasUnpublishedChanges)
+                                        ? 'Save changes (workspace)'
+                                        : 'Save draft',
                                   ),
-                                )
-                              : const Icon(Icons.publish_rounded, size: 20),
-                          label: Text(publishLabel),
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: FilledButton.icon(
+                                  onPressed: _publishing || !_publishEnabled
+                                      ? null
+                                      : _handlePublish,
+                                  icon: _publishing
+                                      ? SizedBox(
+                                          width: 18,
+                                          height: 18,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                            color: cs.onPrimary,
+                                          ),
+                                        )
+                                      : const Icon(Icons.publish_rounded,
+                                          size: 20),
+                                  label: Text(publishLabel),
+                                ),
+                              ),
+                            ],
+                          ),
+                          if (_publishing &&
+                              (publishPhase ?? '').trim().isNotEmpty) ...[
+                            const SizedBox(height: 8),
+                            Text(
+                              publishPhase!.trim(),
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: onVar,
+                                height: 1.35,
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      _CreatorProgressSection(
+                        title: 'Core progress',
+                        items: widget.coreItems,
+                        currentStepId: widget.currentStepId,
+                        onOpenStep: widget.onOpenStep,
+                      ),
+                      const SizedBox(height: 16),
+                      _LearnModulesBlock(
+                        learnItems: widget.learnItems,
+                        learnModeEnabled: widget.learnModeEnabled,
+                        onLearnModeChanged: widget.onLearnModeChanged,
+                        currentStepId: widget.currentStepId,
+                        onOpenStep: widget.onOpenStep,
+                        theme: theme,
+                        colorScheme: cs,
+                      ),
+                      if (helper != null) ...[
+                        const SizedBox(height: 12),
+                        Text(
+                          helper,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: onVar,
+                            height: 1.35,
+                          ),
                         ),
-                      ),
+                      ],
                     ],
-                  ),
-                  const SizedBox(height: 16),
-                  _CreatorProgressSection(
-                    title: 'Core progress',
-                    items: widget.coreItems,
-                    currentStepId: widget.currentStepId,
-                    onOpenStep: widget.onOpenStep,
-                  ),
-                  const SizedBox(height: 16),
-                  _LearnModulesBlock(
-                    learnItems: widget.learnItems,
-                    learnModeEnabled: widget.learnModeEnabled,
-                    onLearnModeChanged: widget.onLearnModeChanged,
-                    currentStepId: widget.currentStepId,
-                    onOpenStep: widget.onOpenStep,
-                    theme: theme,
-                    colorScheme: cs,
-                  ),
-                  if (helper != null) ...[
-                    const SizedBox(height: 12),
-                    Text(
-                      helper,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: onVar,
-                        height: 1.35,
-                      ),
-                    ),
-                  ],
-                ],
                   ),
                 ),
               ],

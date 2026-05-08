@@ -99,4 +99,3 @@ String _joinLabels(List<PublishMissingItem> items) {
   if (labels.length <= 2) return labels.join(' and ');
   return '${labels.sublist(0, labels.length - 1).join(', ')}, and ${labels.last}';
 }
-

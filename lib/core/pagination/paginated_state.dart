@@ -14,6 +14,7 @@ class PaginatedState<T> {
     this.isRefreshing = false,
     this.error,
     this.requestEpoch = 0,
+    this.totalCount,
   });
 
   final List<T> items;
@@ -24,6 +25,9 @@ class PaginatedState<T> {
   final bool isRefreshing;
   final Object? error;
   final int requestEpoch;
+
+  /// Optional total item count from the backend (e.g. first page metadata).
+  final int? totalCount;
 
   factory PaginatedState.initial() => const PaginatedState();
 
@@ -49,6 +53,7 @@ class PaginatedState<T> {
     bool? isRefreshing,
     Object? error = _unset,
     int? requestEpoch,
+    Object? totalCount = _unset,
   }) {
     return PaginatedState<T>(
       items: items ?? this.items,
@@ -60,6 +65,7 @@ class PaginatedState<T> {
       isRefreshing: isRefreshing ?? this.isRefreshing,
       error: error == _unset ? this.error : error,
       requestEpoch: requestEpoch ?? this.requestEpoch,
+      totalCount: totalCount == _unset ? this.totalCount : totalCount as int?,
     );
   }
 
@@ -74,7 +80,8 @@ class PaginatedState<T> {
         isLoadingMore == other.isLoadingMore &&
         isRefreshing == other.isRefreshing &&
         error == other.error &&
-        requestEpoch == other.requestEpoch;
+        requestEpoch == other.requestEpoch &&
+        totalCount == other.totalCount;
   }
 
   @override
@@ -87,5 +94,6 @@ class PaginatedState<T> {
         isRefreshing,
         error,
         requestEpoch,
+        totalCount,
       );
 }

@@ -28,7 +28,7 @@ class PaperSheetWidget extends StatelessWidget {
   Widget build(BuildContext context) {
     final isSelected = state == PaperSheetState.selected;
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    
+
     return GestureDetector(
       onTap: onSelect,
       child: Container(
@@ -38,89 +38,94 @@ class PaperSheetWidget extends StatelessWidget {
           color: isDark ? Colors.grey.shade900 : Colors.white,
           borderRadius: BorderRadius.circular(4),
           border: Border.all(
-            color: isSelected 
+            color: isSelected
                 ? const Color(0xFF3B82F6)
                 : (isDark ? Colors.grey.shade700 : const Color(0x80222222)),
             width: isSelected ? 2 : 1,
           ),
-          boxShadow: isSelected ? [
-            BoxShadow(
-              color: const Color(0xFF3B82F6).withOpacity(0.08),
-              blurRadius: 8,
-              offset: const Offset(0, 2),
-            ),
-          ] : [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.06),
-              blurRadius: 6,
-              offset: const Offset(0, 2),
-            ),
-          ],
+          boxShadow: isSelected
+              ? [
+                  BoxShadow(
+                    color: const Color(0xFF3B82F6).withOpacity(0.08),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ]
+              : [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.06),
+                    blurRadius: 6,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
         ),
         child: Padding(
           padding: const EdgeInsets.all(16),
-              child: Column(
+          child: Column(
             crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
+            children: [
               // Level badge (top-right)
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: [
-                      if (level.isNotEmpty)
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  if (level.isNotEmpty)
                     Text(
-                            level,
+                      level,
                       style: TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w700,
-                        color: isDark ? Colors.grey.shade300 : const Color(0xFF111111),
-                          ),
-                        ),
-                    ],
-                  ),
+                        color: isDark
+                            ? Colors.grey.shade300
+                            : const Color(0xFF111111),
+                      ),
+                    ),
+                ],
+              ),
               const SizedBox(height: 4),
-              
+
               // Title (centered)
               Text(
-                      title,
+                title,
                 style: TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w600,
                   letterSpacing: 0.26, // +2%
-                  color: isDark ? Colors.grey.shade300 : const Color(0xFF111111),
-                      ),
-                      textAlign: TextAlign.center,
+                  color:
+                      isDark ? Colors.grey.shade300 : const Color(0xFF111111),
+                ),
+                textAlign: TextAlign.center,
               ),
               const SizedBox(height: 8),
-              
+
               // Thumbnail
               Container(
                 width: 80,
-                      height: 80,
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(8),
-                        color: isDark ? Colors.grey.shade800 : Colors.grey.shade200,
-                      ),
-                      child: _buildThumbnail(isDark),
-                    ),
+                height: 80,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(8),
+                  color: isDark ? Colors.grey.shade800 : Colors.grey.shade200,
+                ),
+                child: _buildThumbnail(isDark),
+              ),
               const SizedBox(height: 8),
-                  
+
               // Story name
-                  if (storyName.isNotEmpty)
+              if (storyName.isNotEmpty)
                 Align(
                   alignment: Alignment.centerLeft,
                   child: Text(
-                      storyName,
-                      style: const TextStyle(
+                    storyName,
+                    style: const TextStyle(
                       fontSize: 12,
-                        fontWeight: FontWeight.w600,
+                      fontWeight: FontWeight.w600,
                       color: Color(0xFFD94C4C),
                     ),
                   ),
                 ),
               if (storyName.isNotEmpty) const SizedBox(height: 8),
-                  
+
               // Context
-                  if (contextText.isNotEmpty)
+              if (contextText.isNotEmpty)
                 Align(
                   alignment: Alignment.centerLeft,
                   child: Text(
@@ -128,35 +133,40 @@ class PaperSheetWidget extends StatelessWidget {
                     style: TextStyle(
                       fontSize: 11,
                       height: 1.35,
-                      color: isDark ? Colors.grey.shade400 : const Color(0xFF444444),
+                      color: isDark
+                          ? Colors.grey.shade400
+                          : const Color(0xFF444444),
                     ),
                     maxLines: 3,
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
               if (contextText.isNotEmpty) const SizedBox(height: 6),
-              
+
               // Duration
               if (duration.isNotEmpty)
-                  Align(
+                Align(
                   alignment: Alignment.centerLeft,
-                    child: Text(
+                  child: Text(
                     'Duration: $duration',
                     style: TextStyle(
                       fontSize: 11,
-                      color: isDark ? Colors.grey.shade500 : const Color(0xFF666666),
+                      color: isDark
+                          ? Colors.grey.shade500
+                          : const Color(0xFF666666),
                     ),
                   ),
                 ),
-              
+
               const Spacer(),
-              
+
               // Footer label
               Text(
                 'One-Short paper',
                 style: TextStyle(
                   fontSize: 11,
-                  color: isDark ? Colors.grey.shade500 : const Color(0xFF6A6A6A),
+                  color:
+                      isDark ? Colors.grey.shade500 : const Color(0xFF6A6A6A),
                 ),
                 textAlign: TextAlign.center,
               ),
@@ -205,7 +215,7 @@ class PaperSheetWidget extends StatelessWidget {
   Widget _buildCategoryPlaceholder() {
     // Map story name to category for placeholder
     String category = 'General';
-    if (storyName.toLowerCase().contains('love') || 
+    if (storyName.toLowerCase().contains('love') ||
         storyName.toLowerCase().contains('rainy') ||
         storyName.toLowerCase().contains('snow')) {
       category = 'Love';

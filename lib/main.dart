@@ -9,12 +9,19 @@ import 'package:nimon/features/mono/mono_search_screen.dart';
 import 'package:nimon/features/mono/mono_screen.dart';
 import 'package:nimon/features/profile/profile_push_drawer_scope.dart';
 import 'package:nimon/features/profile/profile_screen.dart';
+import 'package:nimon/features/profile/profile_trash_screen.dart';
 import 'package:nimon/features/profile/profile_connections_screen.dart';
+import 'package:nimon/features/profile/edit_profile_screen.dart';
+import 'package:nimon/features/profile/public_creator_collection_detail_screen.dart';
 import 'package:nimon/features/profile/public_folder_detail_screen.dart';
 import 'package:nimon/features/profile/public_profile_screen.dart';
+import 'package:nimon/features/profile/owner_creator_collection_detail_screen.dart';
 import 'package:nimon/features/profile/share_profile_screen.dart';
 import 'package:nimon/features/profile/notifications_screen.dart';
+import 'package:nimon/features/auth/auth_providers.dart';
+import 'package:nimon/features/auth/auth_session_expired_bridge.dart';
 import 'package:nimon/features/auth/login_screen.dart';
+import 'package:nimon/features/auth/register_screen.dart';
 import 'package:nimon/data/repo_singleton.dart';
 import 'package:nimon/features/learn/grammar_pattern.dart';
 import 'package:nimon/features/learn/grammar_pattern_detail_screen.dart';
@@ -42,7 +49,8 @@ import 'package:nimon/widgets/floating_dock_nav_bar.dart';
 void main() {
   // Temporary crash stack capture (remove when resolved).
   FlutterError.onError = (details) {
-    debugPrint('[NIMON_CRASH_STACK] FlutterError: ${details.exceptionAsString()}');
+    debugPrint(
+        '[NIMON_CRASH_STACK] FlutterError: ${details.exceptionAsString()}');
     if (details.stack != null) {
       debugPrint('[NIMON_CRASH_STACK] stack:\n${details.stack}');
     }
@@ -61,6 +69,7 @@ void main() {
 }
 
 final _router = GoRouter(
+  navigatorKey: nimonAppNavigatorKey,
   initialLocation: '/login',
   routes: [
     GoRoute(
@@ -68,9 +77,16 @@ final _router = GoRouter(
       builder: (_, __) => const LoginScreen(),
     ),
     GoRoute(
+      path: '/register',
+      builder: (_, __) => const RegisterScreen(),
+    ),
+    GoRoute(
       path: '/profile/public',
+      // Query params: `userId` (canonical), optional `from=owner` preview banner,
+      // optional legacy `creator` (debug/mock-only mock UI — see PublicProfileScreen).
       builder: (ctx, st) => PublicProfileScreen(
         ownerPreview: st.uri.queryParameters['from'] == 'owner',
+        userId: st.uri.queryParameters['userId'],
         creatorHandle: st.uri.queryParameters['creator'],
       ),
       routes: [
@@ -80,7 +96,37 @@ final _router = GoRouter(
             folderId: st.pathParameters['folderId']!,
           ),
         ),
+        GoRoute(
+          path: 'collections/detail',
+          builder: (ctx, st) {
+            final extra = st.extra;
+            if (extra is! PublicCreatorCollectionDetailArgs) {
+              return Scaffold(
+                appBar: AppBar(
+                  title: const Text('Collection'),
+                ),
+                body: const Center(
+                  child: Text('Missing collection.'),
+                ),
+              );
+            }
+            return PublicCreatorCollectionDetailScreen(args: extra);
+          },
+        ),
       ],
+    ),
+    GoRoute(
+      path: '/profile/creator-collections/detail',
+      builder: (ctx, st) {
+        final extra = st.extra;
+        if (extra is! OwnerCreatorCollectionDetailArgs) {
+          return Scaffold(
+            appBar: AppBar(title: const Text('Collection')),
+            body: const Center(child: Text('Missing collection.')),
+          );
+        }
+        return OwnerCreatorCollectionDetailScreen(args: extra);
+      },
     ),
     GoRoute(
       path: '/profile/share',
@@ -89,6 +135,10 @@ final _router = GoRouter(
         handle: '@just4withyou',
         publicProfileUrl: 'https://nimon.app/u/just4withyou',
       ),
+    ),
+    GoRoute(
+      path: '/profile/edit',
+      builder: (_, __) => const EditProfileScreen(),
     ),
     GoRoute(
       path: '/profile/notifications',
@@ -105,6 +155,10 @@ final _router = GoRouter(
       builder: (_, __) => const ProfileConnectionsScreen(
         kind: ProfileConnectionsKind.following,
       ),
+    ),
+    GoRoute(
+      path: '/profile/trash',
+      builder: (_, __) => const ProfileTrashScreen(),
     ),
     GoRoute(
       path: '/settings',
@@ -428,11 +482,34 @@ final _router = GoRouter(
   ],
 );
 
-class NimonApp extends ConsumerWidget {
+class NimonApp extends ConsumerStatefulWidget {
   const NimonApp({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<NimonApp> createState() => _NimonAppState();
+}
+
+class _NimonAppState extends ConsumerState<NimonApp> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      AuthSessionExpiredBridge.instance.register(() async {
+        await ref.read(authSessionProvider.notifier).forceSessionExpired();
+        final ctx = nimonAppNavigatorKey.currentContext;
+        if (ctx != null && ctx.mounted) {
+          ScaffoldMessenger.of(ctx).showSnackBar(
+            const SnackBar(content: Text('Session expired — sign in again.')),
+          );
+          GoRouter.of(ctx).go('/login');
+        }
+      });
+      ref.read(authSessionProvider.notifier).restoreSession();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final themeMode = ref.watch(themeModeSettingProvider);
     final appLocale = ref.watch(appLocaleSettingProvider);
     final readingScale = ref.watch(readingTextScaleSettingProvider);
@@ -485,7 +562,8 @@ class _AppShellState extends State<AppShell> {
         loc.startsWith('/profile/public') ||
         loc.startsWith('/profile/notifications') ||
         loc.startsWith('/profile/followers') ||
-        loc.startsWith('/profile/following')) {
+        loc.startsWith('/profile/following') ||
+        loc.startsWith('/profile/trash')) {
       return 2;
     }
     return -1;
@@ -520,7 +598,7 @@ class _AppShellState extends State<AppShell> {
     final dockSelectedIndex = _indexFromLocation(loc);
     final theme = Theme.of(context);
 
-    final onDockTap = (int i) {
+    void onDockTap(int i) {
       final go = GoRouter.of(context);
       final onCreateStack = go.state.uri.path.startsWith('/create');
       // [goBranch] only switches the shell’s IndexedStack; it does not pop a
@@ -546,15 +624,15 @@ class _AppShellState extends State<AppShell> {
           }
           break;
       }
-    };
+    }
 
     return ProfilePushDrawerDockScope(
       obscuresDock: _profilePushDrawerObscuresDock,
       child: ListenableBuilder(
         listenable: _profilePushDrawerObscuresDock,
         builder: (context, _) {
-          final hideDock = _profilePushDrawerObscuresDock.value &&
-              loc.startsWith('/more');
+          final hideDock =
+              _profilePushDrawerObscuresDock.value && loc.startsWith('/more');
           return Scaffold(
             extendBody: true,
             body: SafeArea(
@@ -565,12 +643,14 @@ class _AppShellState extends State<AppShell> {
                     loc.startsWith('/profile/public') ||
                     loc.startsWith('/profile/notifications') ||
                     loc.startsWith('/profile/followers') ||
-                    loc.startsWith('/profile/following')
+                    loc.startsWith('/profile/following') ||
+                    loc.startsWith('/profile/trash')
                 ? null
                 : hideDock
                     ? null
                     : FloatingDockNavBar(
-                        selectedIndex: dockSelectedIndex >= 0 ? dockSelectedIndex : 0,
+                        selectedIndex:
+                            dockSelectedIndex >= 0 ? dockSelectedIndex : 0,
                         onItemTapped: onDockTap,
                         theme: theme,
                       ),

@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:developer' as developer;
 
+import 'package:flutter/foundation.dart' show debugPrint, kDebugMode;
 import 'package:http/http.dart' as http;
 import 'package:nimon/core/pagination/page_request.dart';
 import 'package:nimon/core/pagination/page_result.dart';
@@ -8,25 +9,62 @@ import 'package:nimon/features/create/data/dto/draft_list_summary_dto.dart';
 import 'package:nimon/features/create/data/dto/story_draft_dto.dart';
 import 'package:nimon/features/create/data/local_story_draft_repository.dart';
 import 'package:nimon/features/create/data/remote_backend_config.dart';
+import 'package:nimon/features/create/data/remote_story_draft_learn_layers_wire.dart';
+import 'package:nimon/features/create/data/remote_story_draft_sentence_wire.dart';
+import 'package:nimon/features/create/data/story_draft_remote_publish_errors.dart';
 import 'package:nimon/features/create/data/story_draft_mapper.dart';
+import 'package:nimon/features/auth/auth_strict_unauthorized.dart';
 import 'package:nimon/features/create/data/story_draft_repository.dart';
 import 'package:nimon/features/create/story_creator_draft_storage.dart'
     show CreatorDraftResumeMeta, CreatorLastActiveModule;
 import 'package:nimon/features/create/story_creator_models.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+/// Builds `Authorization: Bearer …` for guarded Nest routes (M1b+).
+typedef StoryDraftAuthHeaderBuilder = Future<Map<String, String>> Function();
+
+/// Optional UI hook while a multi-step remote publish runs (nullable clears).
+typedef StoryDraftPublishProgressCallback = void Function(String? message);
+
+bool? _parseOptionalBool(Object? v) {
+  if (v == null) return null;
+  if (v is bool) return v;
+  if (v is String) {
+    final s = v.toLowerCase().trim();
+    if (s == 'true') return true;
+    if (s == 'false') return false;
+  }
+  return null;
+}
+
 class RemoteStoryDraftRepository implements StoryDraftRepository {
   RemoteStoryDraftRepository({
     required String apiBaseUrl,
     http.Client? client,
     StoryDraftRepository? fallbackLocal,
+    StoryDraftAuthHeaderBuilder? authHeaderBuilder,
+    String Function()? resolveRemoteOwnerId,
+    StoryDraftPublishProgressCallback? onPublishProgress,
   })  : _apiBaseUrl = apiBaseUrl.replaceAll(RegExp(r'\/+$'), ''),
         _client = client ?? http.Client(),
-        _local = fallbackLocal ?? const LocalStoryDraftRepository();
+        _local = fallbackLocal ?? const LocalStoryDraftRepository(),
+        _authHeaderBuilder = authHeaderBuilder,
+        _resolveRemoteOwnerId = resolveRemoteOwnerId,
+        _onPublishProgress = onPublishProgress;
 
   final String _apiBaseUrl;
   final http.Client _client;
   final StoryDraftRepository _local;
+  final StoryDraftAuthHeaderBuilder? _authHeaderBuilder;
+  final String Function()? _resolveRemoteOwnerId;
+  final StoryDraftPublishProgressCallback? _onPublishProgress;
+
+  Future<Map<String, String>> _mergeAuth(Map<String, String> headers) async {
+    final builder = _authHeaderBuilder;
+    if (builder == null) return headers;
+    final auth = await builder();
+    return {...auth, ...headers};
+  }
 
   /// When strict remote drafts are enabled, we must not mask backend errors by
   /// returning successful local fallback results.
@@ -78,11 +116,19 @@ class RemoteStoryDraftRepository implements StoryDraftRepository {
 
   Future<void> _throwIfNotOk(http.Response r) async {
     if (r.statusCode >= 200 && r.statusCode < 300) return;
-    // Bubble server envelope as a string for now; UI already displays `toString()`.
+    notifyIfStrictUnauthorized401(r);
+    final friendly = publishedMonoMissingFriendlyMessageIfAny(
+      statusCode: r.statusCode,
+      body: r.body,
+    );
+    if (friendly != null) {
+      throw StoryDraftHttpResponseException(friendly);
+    }
+    // Bubble server envelope; UI shows [Exception.toString] via creator save errors.
     final msg = r.body.trim().isEmpty
         ? 'HTTP ${r.statusCode}'
         : 'HTTP ${r.statusCode}: ${r.body}';
-    throw StateError(msg);
+    throw StoryDraftHttpResponseException(msg);
   }
 
   /// True when the backend reports `draft_not_found` (or an empty 404 body on draft routes).
@@ -148,6 +194,83 @@ class RemoteStoryDraftRepository implements StoryDraftRepository {
     return second;
   }
 
+  static bool _publishedMonoIdMissing(StoryDraftDto dto) {
+    final v = dto.publishedMonoId?.trim() ?? '';
+    return v.isEmpty;
+  }
+
+  Future<StoryDraftDto> _postPublishReadOnlyHttp(
+    String draftId,
+    String ifMatch,
+  ) async {
+    final id = draftId.trim();
+    var sent = ifMatch.trim();
+    http.Response roResp = await _client.post(
+      _u('/v1/story-drafts/$id/publish/read-only'),
+      headers: await _mergeAuth({
+        'Content-Type': 'application/json',
+        'If-Match': sent,
+      }),
+      body: jsonEncode({}),
+    );
+    roResp = await _retryOnceOn409Conflict(
+      draftId: id,
+      operation: 'POST publish/read-only',
+      firstResp: roResp,
+      firstIfMatch: sent,
+      sendWithIfMatch: (match) async => _client.post(
+        _u('/v1/story-drafts/$id/publish/read-only'),
+        headers: await _mergeAuth({
+          'Content-Type': 'application/json',
+          'If-Match': match,
+        }),
+        body: jsonEncode({}),
+      ),
+    );
+    await _throwIfNotOk(roResp);
+    developer.log(
+      'draftId=$id publish read-only succeeded httpStatus=${roResp.statusCode}',
+      name: 'RemoteStoryDraftRepository',
+    );
+    return _dtoFromJson(await _jsonObjectFromResponse(roResp));
+  }
+
+  Future<StoryDraftDto> _postPublishFullLearnHttp(
+    String draftId,
+    String ifMatch,
+  ) async {
+    final id = draftId.trim();
+    var sent = ifMatch.trim();
+    http.Response flResp = await _client.post(
+      _u('/v1/story-drafts/$id/publish/full-learn'),
+      headers: await _mergeAuth({
+        'Content-Type': 'application/json',
+        'If-Match': sent,
+      }),
+      body: jsonEncode({}),
+    );
+    flResp = await _retryOnceOn409Conflict(
+      draftId: id,
+      operation: 'POST publish/full-learn',
+      firstResp: flResp,
+      firstIfMatch: sent,
+      sendWithIfMatch: (match) async => _client.post(
+        _u('/v1/story-drafts/$id/publish/full-learn'),
+        headers: await _mergeAuth({
+          'Content-Type': 'application/json',
+          'If-Match': match,
+        }),
+        body: jsonEncode({}),
+      ),
+    );
+    await _throwIfNotOk(flResp);
+    developer.log(
+      'draftId=$id publish full-learn succeeded httpStatus=${flResp.statusCode}',
+      name: 'RemoteStoryDraftRepository',
+    );
+    return _dtoFromJson(await _jsonObjectFromResponse(flResp));
+  }
+
   StoryDraftDto _dtoFromJson(Map<String, Object?> m) {
     // Minimal, tolerant parse (contract parity). Only reads what mapper needs.
     final basicsRaw =
@@ -169,6 +292,8 @@ class RemoteStoryDraftRepository implements StoryDraftRepository {
       publishedMonoId: m['publishedMonoId'] as String?,
       readingOnlyPublishedAt: m['readingOnlyPublishedAt'] as String?,
       fullLearnPublishedAt: m['fullLearnPublishedAt'] as String?,
+      hasUnpublishedCoreChanges:
+          _parseOptionalBool(m['hasUnpublishedCoreChanges']),
       etag: m['etag'] as String?,
       basics: StoryDraftBasicsDto(
         storyId: (basicsRaw['storyId'] as String?) ??
@@ -226,77 +351,23 @@ class RemoteStoryDraftRepository implements StoryDraftRepository {
   // ---- DTO JSON helpers (minimal, only what's needed for the mapper) ----
 
   StorySentenceDto _sentenceDtoFromJson(Map<String, Object?> m) {
-    return StorySentenceDto(
-      id: (m['id'] as String?) ?? '',
-      storyId: (m['storyId'] as String?) ?? '',
-      orderIndex: (m['orderIndex'] as int?) ?? 0,
-      japaneseText: (m['japaneseText'] as String?) ?? '',
-      reading: m['reading'] as String?,
-      furiganaSpans: const [],
-      meanings: null,
-      audioStartMs: m['audioStartMs'] as int?,
-      audioEndMs: m['audioEndMs'] as int?,
-      provenance: null,
-    );
+    return storySentenceDtoFromWireJson(m);
   }
 
   VocabularyKanjiEntryDto _vocabDtoFromJson(Map<String, Object?> m) {
-    return VocabularyKanjiEntryDto(
-      id: (m['id'] as String?) ?? '',
-      termJapanese: (m['termJapanese'] as String?) ?? '',
-      type: (m['type'] as String?) ?? 'vocab',
-      reading: m['reading'] as String?,
-      glosses: null,
-      exampleSentence: m['exampleSentence'] as String?,
-      exampleMeanings: null,
-      examplePairs: const [],
-      provenance: null,
-    );
+    return vocabularyKanjiEntryDtoFromWireJson(m);
   }
 
   GrammarEntryDto _grammarDtoFromJson(Map<String, Object?> m) {
-    return GrammarEntryDto(
-      id: (m['id'] as String?) ?? '',
-      headline: (m['headline'] as String?) ?? '',
-      form: m['form'] as String?,
-      meanings: null,
-      usage: null,
-      examples: const [],
-      mistakeWrong: m['mistakeWrong'] as String?,
-      mistakeCorrect: m['mistakeCorrect'] as String?,
-      relatedNote: null,
-      provenance: null,
-    );
+    return grammarEntryDtoFromWireJson(m);
   }
 
   QuizEntryDto _quizDtoFromJson(Map<String, Object?> m) {
-    return QuizEntryDto(
-      id: (m['id'] as String?) ?? '',
-      category: (m['category'] as String?) ?? '',
-      prompt: (m['prompt'] as String?) ?? '',
-      options: [
-        for (final x in ((m['options'] as List?) ?? const []))
-          x is String ? x : x.toString(),
-      ],
-      correctIndex: (m['correctIndex'] as int?) ?? 0,
-      explanations: null,
-      sourceNote: m['sourceNote'] as String?,
-      provenance: null,
-    );
+    return quizEntryDtoFromWireJson(m);
   }
 
   StoryAudioDto _audioDtoFromJson(Map<String, Object?> m) {
-    return StoryAudioDto(
-      id: (m['id'] as String?) ?? '',
-      sourceUrl: m['sourceUrl'] as String?,
-      localFileName: m['localFileName'] as String?,
-      localPath: m['localPath'] as String?,
-      localSizeBytes: m['localSizeBytes'] as int?,
-      localExtension: m['localExtension'] as String?,
-      displayName: m['displayName'] as String?,
-      durationSeconds: m['durationSeconds'] as int?,
-      provenance: null,
-    );
+    return storyAudioDtoFromWireJson(m);
   }
 
   Map<String, Object?> _dtoToJsonMap(StoryDraftDto dto) {
@@ -339,66 +410,19 @@ class RemoteStoryDraftRepository implements StoryDraftRepository {
         'updatedAt': b.updatedAt,
       };
 
-  Map<String, Object?> _sentenceToJson(StorySentenceDto s) => {
-        'id': s.id,
-        'storyId': s.storyId,
-        'orderIndex': s.orderIndex,
-        'japaneseText': s.japaneseText,
-        'reading': s.reading,
-        'furiganaSpans': const [],
-        'meanings': null,
-        'audioStartMs': s.audioStartMs,
-        'audioEndMs': s.audioEndMs,
-        'provenance': null,
-      };
+  Map<String, Object?> _sentenceToJson(StorySentenceDto s) =>
+      storySentenceDtoToWireJson(s);
 
-  Map<String, Object?> _vocabToJson(VocabularyKanjiEntryDto e) => {
-        'id': e.id,
-        'termJapanese': e.termJapanese,
-        'type': e.type,
-        'reading': e.reading,
-        'glosses': null,
-        'exampleSentence': e.exampleSentence,
-        'exampleMeanings': null,
-        'examplePairs': const [],
-        'provenance': null,
-      };
+  Map<String, Object?> _vocabToJson(VocabularyKanjiEntryDto e) =>
+      vocabularyKanjiEntryDtoToWireJson(e);
 
-  Map<String, Object?> _grammarToJson(GrammarEntryDto e) => {
-        'id': e.id,
-        'headline': e.headline,
-        'form': e.form,
-        'meanings': null,
-        'usage': null,
-        'examples': const [],
-        'mistakeWrong': e.mistakeWrong,
-        'mistakeCorrect': e.mistakeCorrect,
-        'relatedNote': null,
-        'provenance': null,
-      };
+  Map<String, Object?> _grammarToJson(GrammarEntryDto e) =>
+      grammarEntryDtoToWireJson(e);
 
-  Map<String, Object?> _quizToJson(QuizEntryDto e) => {
-        'id': e.id,
-        'category': e.category,
-        'prompt': e.prompt,
-        'options': e.options,
-        'correctIndex': e.correctIndex,
-        'explanations': null,
-        'sourceNote': e.sourceNote,
-        'provenance': null,
-      };
+  Map<String, Object?> _quizToJson(QuizEntryDto e) => quizEntryDtoToWireJson(e);
 
-  Map<String, Object?> _audioToJson(StoryAudioDto a) => {
-        'id': a.id,
-        'sourceUrl': a.sourceUrl,
-        'localFileName': a.localFileName,
-        'localPath': a.localPath,
-        'localSizeBytes': a.localSizeBytes,
-        'localExtension': a.localExtension,
-        'displayName': a.displayName,
-        'durationSeconds': a.durationSeconds,
-        'provenance': null,
-      };
+  Map<String, Object?> _audioToJson(StoryAudioDto a) =>
+      storyAudioDtoToWireJson(a);
 
   // ---------------------------------------------------------------------------
   // StoryDraftRepository implementation
@@ -409,7 +433,7 @@ class RemoteStoryDraftRepository implements StoryDraftRepository {
     try {
       final resp = await _client.post(
         _u('/v1/story-drafts'),
-        headers: {'Content-Type': 'application/json'},
+        headers: await _mergeAuth({'Content-Type': 'application/json'}),
         body: jsonEncode({'schemaVersion': 1}),
       );
       await _throwIfNotOk(resp);
@@ -433,7 +457,10 @@ class RemoteStoryDraftRepository implements StoryDraftRepository {
     final id = draftId.trim();
     if (id.isEmpty) return null;
     try {
-      final resp = await _client.get(_u('/v1/story-drafts/$id'));
+      final resp = await _client.get(
+        _u('/v1/story-drafts/$id'),
+        headers: await _mergeAuth({}),
+      );
       await _throwIfNotOk(resp);
       final m = await _jsonObjectFromResponse(resp);
       final dto = _dtoFromJson(m);
@@ -461,7 +488,10 @@ class RemoteStoryDraftRepository implements StoryDraftRepository {
   @override
   Future<List<String>> listDraftIds() async {
     try {
-      final resp = await _client.get(_u('/v1/story-drafts'));
+      final resp = await _client.get(
+        _u('/v1/story-drafts'),
+        headers: await _mergeAuth({}),
+      );
       await _throwIfNotOk(resp);
       final m = await _jsonObjectFromResponse(resp);
       final items = (m['items'] as List?) ?? const [];
@@ -484,7 +514,7 @@ class RemoteStoryDraftRepository implements StoryDraftRepository {
       final uri = _u('/v1/story-drafts').replace(
         queryParameters: request.toQueryParameters(),
       );
-      final resp = await _client.get(uri);
+      final resp = await _client.get(uri, headers: await _mergeAuth({}));
       await _throwIfNotOk(resp);
       final m = await _jsonObjectFromResponse(resp);
       return DraftListPageDto.parseEnvelope(m);
@@ -501,7 +531,10 @@ class RemoteStoryDraftRepository implements StoryDraftRepository {
   Future<String?> _tryFetchRemoteEtag(String draftId) async {
     final id = draftId.trim();
     if (id.isEmpty) return null;
-    final resp = await _client.get(_u('/v1/story-drafts/$id'));
+    final resp = await _client.get(
+      _u('/v1/story-drafts/$id'),
+      headers: await _mergeAuth({}),
+    );
     if (_isMissingDraftResponse(resp)) {
       return null;
     }
@@ -538,7 +571,7 @@ class RemoteStoryDraftRepository implements StoryDraftRepository {
     };
     final resp = await _client.post(
       _u('/v1/story-drafts'),
-      headers: {'Content-Type': 'application/json'},
+      headers: await _mergeAuth({'Content-Type': 'application/json'}),
       body: jsonEncode(body),
     );
     await _throwIfNotOk(resp);
@@ -575,10 +608,13 @@ class RemoteStoryDraftRepository implements StoryDraftRepository {
     return out;
   }
 
-  /// Forces [StoryBasics.creatorOwnerId] to match [RemoteBackendConfig.devOwnerId] so Nest
-  /// `owner_mismatch` checks pass (backend uses `DEV_OWNER_ID` or default UUID).
+  /// Aligns [StoryBasics.creatorOwnerId] with the JWT user id (or dev fallback UUID).
   CreatorStoryV1 _normalizeDevOwnerForRemoteSave(CreatorStoryV1 story) {
-    final expected = RemoteBackendConfig.devOwnerId.trim();
+    final fn = _resolveRemoteOwnerId;
+    final fromResolver = fn != null ? fn().trim() : '';
+    final expected = fromResolver.isNotEmpty
+        ? fromResolver
+        : RemoteBackendConfig.devOwnerId.trim();
     final cur = story.basics.creatorOwnerId.trim();
     if (cur == expected) return story;
     developer.log(
@@ -591,7 +627,11 @@ class RemoteStoryDraftRepository implements StoryDraftRepository {
   }
 
   @override
-  Future<CreatorStoryV1> saveDraft(CreatorStoryV1 draft) async {
+  Future<CreatorStoryV1> saveDraft(
+    CreatorStoryV1 draft, {
+    StoryDraftRemotePublishIntent remotePublishAfterPut =
+        StoryDraftRemotePublishIntent.none,
+  }) async {
     // Keep local persist semantics intact (updatedAt bump).
     final locallySaved = await _local.saveDraft(draft);
 
@@ -611,27 +651,25 @@ class RemoteStoryDraftRepository implements StoryDraftRepository {
       final dto = StoryDraftMapper.fromDomainRemoteSafe(persisted);
       developer.log(
         'saveDraft remote draftId=$id outgoing dto.basics.ownerId="${dto.basics.ownerId}" '
+        'remotePublishAfterPut=$remotePublishAfterPut '
         'RemoteBackendConfig.devOwnerId="${RemoteBackendConfig.devOwnerId}"',
         name: 'RemoteStoryDraftRepository',
       );
-
-      // If the UI already flipped publishState, route through publish endpoints.
-      final desiredState = persisted.publishState.storageKey;
 
       // Resolve If-Match from GET (authoritative; avoids stale SharedPreferences etags).
       // If the backend has no row yet (local-only draft), POST create with client draftId, then PUT.
       final etag = await _resolveRemoteEtagForSave(id, dto);
 
-      final putPayload = _dtoToJsonMap(dto)
-        ..['publishState'] = 'draft'; // publish is done via publish endpoints
+      /// PUT updates StoryDraft only; [remotePublishAfterPut] triggers explicit publish POSTs.
+      final putPayload = _dtoToJsonMap(dto);
 
       var sentIfMatch = etag.trim();
       http.Response putResp = await _client.put(
         _u('/v1/story-drafts/$id'),
-        headers: {
+        headers: await _mergeAuth({
           'Content-Type': 'application/json',
           'If-Match': sentIfMatch,
-        },
+        }),
         body: jsonEncode(putPayload),
       );
       if (_isMissingDraftResponse(putResp)) {
@@ -651,10 +689,10 @@ class RemoteStoryDraftRepository implements StoryDraftRepository {
         sentIfMatch = retryEtag;
         putResp = await _client.put(
           _u('/v1/story-drafts/$id'),
-          headers: {
+          headers: await _mergeAuth({
             'Content-Type': 'application/json',
             'If-Match': sentIfMatch,
-          },
+          }),
           body: jsonEncode(putPayload),
         );
       }
@@ -665,12 +703,12 @@ class RemoteStoryDraftRepository implements StoryDraftRepository {
         operation: 'PUT draft content',
         firstResp: putResp,
         firstIfMatch: sentIfMatch,
-        sendWithIfMatch: (match) => _client.put(
+        sendWithIfMatch: (match) async => _client.put(
           _u('/v1/story-drafts/$id'),
-          headers: {
+          headers: await _mergeAuth({
             'Content-Type': 'application/json',
             'If-Match': match,
-          },
+          }),
           body: jsonEncode(putPayload),
         ),
       );
@@ -682,12 +720,25 @@ class RemoteStoryDraftRepository implements StoryDraftRepository {
       );
       final putDto = _dtoFromJson(await _jsonObjectFromResponse(putResp));
       await _saveEtag(id, putDto.etag);
+      if (kDebugMode) {
+        debugPrint(
+          '[remote_draft] PUT mapped draftId=$id '
+          'hasUnpublishedCoreChanges=${putDto.hasUnpublishedCoreChanges}',
+        );
+      }
 
-      if (desiredState == 'reading_only_published') {
+      if (remotePublishAfterPut == StoryDraftRemotePublishIntent.readOnly) {
         final roEtag = (putDto.etag != null && putDto.etag!.trim().isNotEmpty)
             ? putDto.etag!.trim()
             : await _tryFetchRemoteEtag(id);
         if (roEtag == null || roEtag.isEmpty) {
+          if (kDebugMode) {
+            developer.log(
+              'saveDraft: skipping POST publish/read-only (missing If-Match etag) '
+              'draftId=$id strictRemoteDrafts=$_strict',
+              name: 'RemoteStoryDraftRepository',
+            );
+          }
           if (_strict) {
             throw StateError(
               'RemoteStoryDraftRepository: missing If-Match before publishReadOnly for $id',
@@ -695,45 +746,24 @@ class RemoteStoryDraftRepository implements StoryDraftRepository {
           }
           return persisted;
         }
-        var roSent = roEtag.trim();
-        http.Response roResp = await _client.post(
-          _u('/v1/story-drafts/$id/publish/read-only'),
-          headers: {
-            'Content-Type': 'application/json',
-            'If-Match': roSent,
-          },
-          body: jsonEncode({}),
-        );
-        roResp = await _retryOnceOn409Conflict(
-          draftId: id,
-          operation: 'POST publish/read-only',
-          firstResp: roResp,
-          firstIfMatch: roSent,
-          sendWithIfMatch: (match) => _client.post(
-            _u('/v1/story-drafts/$id/publish/read-only'),
-            headers: {
-              'Content-Type': 'application/json',
-              'If-Match': match,
-            },
-            body: jsonEncode({}),
-          ),
-        );
-        await _throwIfNotOk(roResp);
-        developer.log(
-          'draftId=$id publish read-only succeeded httpStatus=${roResp.statusCode}',
-          name: 'RemoteStoryDraftRepository',
-        );
-        final roDto = _dtoFromJson(await _jsonObjectFromResponse(roResp));
+        final roDto = await _postPublishReadOnlyHttp(id, roEtag.trim());
         await _saveEtag(id, roDto.etag);
         final domain = StoryDraftMapper.toDomain(roDto);
         return await _local.saveDraft(domain);
       }
 
-      if (desiredState == 'full_learn_published') {
-        final flEtag = (putDto.etag != null && putDto.etag!.trim().isNotEmpty)
+      if (remotePublishAfterPut == StoryDraftRemotePublishIntent.fullLearn) {
+        var workEtag = (putDto.etag != null && putDto.etag!.trim().isNotEmpty)
             ? putDto.etag!.trim()
             : await _tryFetchRemoteEtag(id);
-        if (flEtag == null || flEtag.isEmpty) {
+        if (workEtag == null || workEtag.isEmpty) {
+          if (kDebugMode) {
+            developer.log(
+              'saveDraft: skipping publish/full-learn chain (missing If-Match etag) '
+              'draftId=$id strictRemoteDrafts=$_strict',
+              name: 'RemoteStoryDraftRepository',
+            );
+          }
           if (_strict) {
             throw StateError(
               'RemoteStoryDraftRepository: missing If-Match before publishFullLearn for $id',
@@ -741,36 +771,33 @@ class RemoteStoryDraftRepository implements StoryDraftRepository {
           }
           return persisted;
         }
-        var flSent = flEtag.trim();
-        http.Response flResp = await _client.post(
-          _u('/v1/story-drafts/$id/publish/full-learn'),
-          headers: {
-            'Content-Type': 'application/json',
-            'If-Match': flSent,
-          },
-          body: jsonEncode({}),
-        );
-        flResp = await _retryOnceOn409Conflict(
-          draftId: id,
-          operation: 'POST publish/full-learn',
-          firstResp: flResp,
-          firstIfMatch: flSent,
-          sendWithIfMatch: (match) => _client.post(
-            _u('/v1/story-drafts/$id/publish/full-learn'),
-            headers: {
-              'Content-Type': 'application/json',
-              'If-Match': match,
-            },
-            body: jsonEncode({}),
-          ),
-        );
-        await _throwIfNotOk(flResp);
-        developer.log(
-          'draftId=$id publish full-learn succeeded httpStatus=${flResp.statusCode}',
-          name: 'RemoteStoryDraftRepository',
-        );
-        final flDto = _dtoFromJson(await _jsonObjectFromResponse(flResp));
+        var serverDto = putDto;
+        if (_publishedMonoIdMissing(serverDto)) {
+          _onPublishProgress?.call('Publishing story…');
+          serverDto = await _postPublishReadOnlyHttp(id, workEtag.trim());
+          await _saveEtag(id, serverDto.etag);
+          final nextTag = serverDto.etag?.trim();
+          if (nextTag == null || nextTag.isEmpty) {
+            if (kDebugMode) {
+              developer.log(
+                'saveDraft: aborting publish/full-learn after read-only (missing etag) '
+                'draftId=$id strictRemoteDrafts=$_strict',
+                name: 'RemoteStoryDraftRepository',
+              );
+            }
+            if (_strict) {
+              throw StateError(
+                'RemoteStoryDraftRepository: missing If-Match after publishReadOnly for $id',
+              );
+            }
+            return persisted;
+          }
+          workEtag = nextTag;
+        }
+        _onPublishProgress?.call('Publishing learn modules…');
+        final flDto = await _postPublishFullLearnHttp(id, workEtag.trim());
         await _saveEtag(id, flDto.etag);
+        _onPublishProgress?.call(null);
         final domain = StoryDraftMapper.toDomain(flDto);
         return await _local.saveDraft(domain);
       }
@@ -779,6 +806,7 @@ class RemoteStoryDraftRepository implements StoryDraftRepository {
       final domain = StoryDraftMapper.toDomain(putDto);
       return await _local.saveDraft(domain);
     } catch (e, st) {
+      _onPublishProgress?.call(null);
       // In strict mode, fail loudly even though we already persisted locally.
       // This prevents remote/backend issues from being masked during development.
       return _fallbackOrThrow(e, st, () => persisted);
@@ -815,7 +843,10 @@ class RemoteStoryDraftRepository implements StoryDraftRepository {
     if (id.isEmpty) return;
 
     try {
-      final resp = await _client.delete(_u('/v1/story-drafts/$id'));
+      final resp = await _client.delete(
+        _u('/v1/story-drafts/$id'),
+        headers: await _mergeAuth({}),
+      );
       await _throwIfNotOk(resp);
       await _saveEtag(id, null);
       await _local.deleteDraft(id);

@@ -7,10 +7,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:nimon/features/create/creator_processing_copy.dart';
 import 'package:nimon/data/story_repo.dart';
-import 'package:nimon/features/create/creator_labels.dart';
 import 'package:nimon/features/create/creator_back_policy.dart';
 import 'package:nimon/features/create/creator_readiness.dart';
-import 'package:nimon/features/create/creator_read_only_publish_tracking.dart';
 import 'package:nimon/features/create/creator_resume_draft.dart';
 import 'package:nimon/features/create/data/dto/draft_list_summary_dto.dart';
 import 'package:nimon/features/create/data/remote_backend_config.dart';
@@ -18,11 +16,17 @@ import 'package:nimon/features/create/data/story_draft_repository_provider.dart'
 import 'package:nimon/features/create/story_creator_models.dart';
 import 'package:nimon/features/create/story_creator_provider.dart';
 import 'package:nimon/core/pagination/paginated_state.dart';
+import 'package:nimon/features/profile/data/published_mono_catalog_visibility_exception.dart';
 import 'package:nimon/features/profile/data/published_mono_display_contract.dart';
 import 'package:nimon/features/profile/data/published_mono_dto.dart';
+import 'package:nimon/features/profile/data/published_mono_id_sanitizer.dart';
 import 'package:nimon/features/profile/data/published_mono_reader_mapper.dart';
 import 'package:nimon/features/profile/data/remote_published_mono_repository.dart';
+import 'package:nimon/core/format_social_count.dart';
+import 'package:nimon/features/profile/data/profile_public_providers.dart';
+import 'package:nimon/features/profile/presentation/owner_profile_header_stats.dart';
 import 'package:nimon/features/profile/presentation/providers/profile_published_mono_pager.dart';
+import 'package:nimon/features/profile/presentation/providers/profile_saved_mono_pager.dart';
 import 'package:nimon/features/profile/presentation/providers/profile_workspace_draft_pager.dart';
 import 'package:nimon/features/mono/mono_reader_menu_origin.dart';
 import 'package:nimon/features/mono/mono_screen.dart'
@@ -31,8 +35,15 @@ import 'package:nimon/features/profile/profile_navigation_drawer.dart';
 import 'package:nimon/features/profile/profile_push_drawer_scope.dart';
 import 'package:nimon/features/profile/mono_story_list_row.dart';
 import 'package:nimon/features/profile/profile_processing_refresh.dart';
+import 'package:nimon/features/profile/saved_library_copy.dart';
 import 'package:nimon/features/profile/public_profile_widgets.dart';
+import 'package:nimon/features/profile/owner_creator_collection_detail_screen.dart';
 import 'package:nimon/ui/widgets/nimon_circle_nav_button.dart';
+import 'package:nimon/features/auth/auth_session_state.dart';
+import 'package:nimon/features/auth/auth_providers.dart';
+import 'package:nimon/features/profile/presentation/add_to_collection_sheet.dart';
+import 'package:nimon/features/profile/presentation/providers/my_creator_collections_notifier.dart';
+import 'package:nimon/features/mono/data/mono_feed_providers.dart';
 
 class _OneShortItem {
   final String id;
@@ -372,6 +383,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
   String? _pulseDraftId;
   Timer? _pulseTimer;
   ProviderSubscription<int>? _processingRefreshSub;
+  ProviderSubscription<int>? _savedRefreshSub;
 
   late final PageController _pageController;
   late final TabController _tabController;
@@ -418,39 +430,59 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
         }
       },
     );
-    unawaited(
-      ref.read(profileWorkspaceDraftPagerProvider.notifier).loadFirstPage(),
+
+    _savedRefreshSub = ref.listenManual<int>(
+      profileSavedListRefreshProvider,
+      (previous, next) {
+        if (!mounted) return;
+        if (!RemoteBackendConfig.useRemoteDrafts) return;
+        final session = ref.read(authSessionProvider);
+        if (session is! AuthSessionAuthenticated) return;
+        unawaited(ref.read(profileSavedMonoPagerProvider.notifier).refresh());
+      },
     );
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      unawaited(
+        ref.read(profileWorkspaceDraftPagerProvider.notifier).loadFirstPage(),
+      );
+    });
     if (!RemoteBackendConfig.useRemoteDrafts) {
       _debugLogPublishedLoad(
         stage: 'skip (useRemoteDrafts off)',
         willCallGet: false,
       );
     } else {
-      _debugLogPublishedLoad(
-        stage: 'before GET /v1/published-monos (pager)',
-        willCallGet: true,
-      );
-      unawaited(
-        ref
-            .read(profilePublishedMonoPagerProvider.notifier)
-            .loadFirstPage()
-            .then((_) {
-          if (!mounted) return;
-          final p = ref.read(profilePublishedMonoPagerProvider);
-          _debugLogPublishedLoad(
-            stage: 'after pager loadFirstPage',
-            willCallGet: true,
-            rawCount: p.items.length,
-            mappedCount: p.items.length,
-          );
-          if (!mounted) return;
-          setState(() {
-            _publishedLoadedRemote = true;
-            _uploadedFolders = const <_StoryFolder>[];
-          });
-        }),
-      );
+      // Defer published first load to the next frame so workspace [loadFirstPage] can
+      // own the first request epoch, reducing back-to-back races with [refresh] (tabs,
+      // [profileProcessingListRefreshProvider]) on cold open.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _debugLogPublishedLoad(
+          stage: 'before GET /v1/published-monos (pager)',
+          willCallGet: true,
+        );
+        unawaited(
+          ref
+              .read(profilePublishedMonoPagerProvider.notifier)
+              .loadFirstPage()
+              .then((_) {
+            if (!mounted) return;
+            final p = ref.read(profilePublishedMonoPagerProvider);
+            _debugLogPublishedLoad(
+              stage: 'after pager loadFirstPage',
+              willCallGet: true,
+              rawCount: p.items.length,
+              mappedCount: p.items.length,
+            );
+            if (!mounted) return;
+            setState(() {
+              _publishedLoadedRemote = true;
+              _uploadedFolders = const <_StoryFolder>[];
+            });
+          }),
+        );
+      });
     }
   }
 
@@ -665,6 +697,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
     _pulseTimer?.cancel();
     _processingRefreshSub?.close();
     _processingRefreshSub = null;
+    _savedRefreshSub?.close();
+    _savedRefreshSub = null;
     _profileDrawerController.removeListener(_syncProfileDrawerDockOcclusion);
     _obscuresDock?.value = false;
     _tabController.removeListener(_onTabChanged);
@@ -751,6 +785,69 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
 
   void _onProfileDrawerDragCancel() {
     _profileDrawerPanSession.value = false;
+  }
+
+  Future<bool> _publishedAddToCollectionLoose(Set<String> ids) async {
+    if (!RemoteBackendConfig.useRemoteDrafts) {
+      if (!mounted) return false;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Collections are coming soon.'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return false;
+    }
+    final safeIds = PublishedMonoIdSanitizer.sanitize(ids.toList());
+    if (safeIds.isEmpty) {
+      if (!mounted) return false;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Stories are still syncing. Please try again.'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return false;
+    }
+    final session = ref.read(authSessionProvider);
+    if (session is! AuthSessionAuthenticated) {
+      if (!mounted) return false;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Sign in required.'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return false;
+    }
+    return showAddToCollectionSheet(
+      context: context,
+      publishedMonoIds: safeIds,
+    );
+  }
+
+  Future<void> _createRemoteCreatorCollection() async {
+    if (!RemoteBackendConfig.useRemoteDrafts) return;
+    final session = ref.read(authSessionProvider);
+    if (session is! AuthSessionAuthenticated) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Sign in required.'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+    // Unify collection creation UX and POST wiring with the Add-to-collection sheet logic.
+    unawaited(
+      showAddToCollectionSheet(
+        context: context,
+        publishedMonoIds: const <String>[],
+        mode: AddToCollectionSheetMode.createOnly,
+        startInCreateMode: true,
+      ),
+    );
   }
 
   /// Horizontal pan to open/close the push drawer (shared by main layer + drawer panel).
@@ -853,6 +950,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
   }
 
   MonoFeedItem _asMonoFeedItem(_OneShortItem it) {
+    final d = it.description.trim();
+    final sid = it.sourceDraftId?.trim();
     return MonoFeedItem(
       id: 'profile-${it.id}',
       writerName: 'Just4withYou',
@@ -861,7 +960,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
       contentType: MonoContentType.story,
       title: it.title,
       bodyText: '${it.description}\n\n${it.description}',
+      storyDescription: d,
       coverImageUrl: it.thumbnailUrl,
+      sourceDraftId: (sid != null && sid.isNotEmpty) ? sid : null,
     );
   }
 
@@ -875,9 +976,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
       return;
     }
     try {
-      final repo = RemotePublishedMonoRepository(
-        apiBaseUrl: RemoteBackendConfig.apiBaseUrl,
-      );
+      final repo = ref.read(remotePublishedMonoRepositoryForProfileProvider);
       final d = await repo.get(it.id);
       if (!mounted) return;
       final feed = monoFeedItemFromPublishedMonoDetail(d);
@@ -891,8 +990,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
       );
     } catch (e) {
       if (!mounted) return;
+      final msg = e is PublishedMonoHiddenWhileEditingException
+          ? e.message
+          : 'Could not open story: $e';
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not open story: $e')),
+        SnackBar(content: Text(msg)),
       );
     }
   }
@@ -1091,10 +1193,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                         await CreatorDraftResumeFlow
                             .tryResumeFromPublishedSurface(
                           context,
-                          (item.sourceDraftId?.trim().isNotEmpty == true
-                                  ? item.sourceDraftId!
-                                  : item.id)
-                              .trim(),
+                          item.id.trim(),
+                          sourceDraftId: item.sourceDraftId,
                         );
                       },
                       style: OutlinedButton.styleFrom(
@@ -1367,6 +1467,55 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
     const double bottomNavHeight = 64.0; // Navigation bar height
     const double extraBottomPadding = 18.0; // Extra spacing to clear dock
 
+    final session = ref.watch(authSessionProvider);
+    final publicProfileAsync = ref.watch(currentUserPublicProfileProvider);
+    final publishedPagerState = ref.watch(profilePublishedMonoPagerProvider);
+
+    final String ownerDisplayName;
+    final String ownerHandleLine;
+    final String ownerBio;
+    final String? ownerAvatarUrl;
+    if (session is AuthSessionAuthenticated) {
+      final remote = publicProfileAsync.asData?.value;
+      if (remote != null) {
+        ownerDisplayName = remote.effectiveDisplayName;
+        ownerHandleLine = (remote.handle ?? '').trim();
+        final rb = (remote.bio ?? '').trim();
+        ownerBio =
+            rb.isNotEmpty ? rb : 'Japanese micro-stories • daily reading';
+        final au = (remote.avatarUrl ?? '').trim();
+        ownerAvatarUrl = au.isNotEmpty ? au : null;
+      } else {
+        final dn = (session.user.displayName ?? '').trim();
+        ownerDisplayName =
+            dn.isNotEmpty ? dn : (session.user.email ?? 'Creator');
+        ownerHandleLine = (session.user.handle ?? '').trim();
+        ownerBio = 'Japanese micro-stories • daily reading';
+        ownerAvatarUrl = null;
+      }
+    } else {
+      ownerDisplayName = 'Guest';
+      ownerHandleLine = '';
+      ownerBio = '';
+      ownerAvatarUrl = null;
+    }
+
+    final publishedStatLabel = publishedCountLabelForOwnerHeader(
+      useRemoteBackend: RemoteBackendConfig.useRemoteDrafts,
+      mockFallbackCount: _uploadedMock.length,
+      publishedState: publishedPagerState,
+    );
+
+    final followersStatLabel = RemoteBackendConfig.useRemoteDrafts &&
+            session is AuthSessionAuthenticated
+        ? socialMetricLabel(publicProfileAsync, (p) => p.followersCount)
+        : formatSocialCount(0);
+
+    final followingStatLabel = RemoteBackendConfig.useRemoteDrafts &&
+            session is AuthSessionAuthenticated
+        ? socialMetricLabel(publicProfileAsync, (p) => p.followingCount)
+        : formatSocialCount(0);
+
     final profileScaffold = Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
       body: SafeArea(
@@ -1379,12 +1528,13 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
               onMenu: _handleProfileMenu,
             ),
             _ProfileSummaryRow(
-              displayName: 'Just4withYou',
-              handle: '@just4withyou',
-              bio: 'Japanese micro-stories • daily reading',
-              uploadedCount: _uploadedMock.length.toString(),
-              followersCount: '2',
-              followingCount: '2',
+              displayName: ownerDisplayName,
+              handle: ownerHandleLine,
+              avatarUrl: ownerAvatarUrl,
+              bio: ownerBio,
+              uploadedCount: publishedStatLabel,
+              followersCount: followersStatLabel,
+              followingCount: followingStatLabel,
             ),
             const SizedBox(height: 8),
             const _PublicProfilePreviewCard(),
@@ -1421,22 +1571,25 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                                 'editing')
                               s.draftId.trim(),
                         };
-                        final filteredFolders = [
-                          for (final f in _uploadedFolders)
-                            _StoryFolder(
-                              id: f.id,
-                              name: f.name,
-                              isPrivate: f.isPrivate,
-                              items: [
-                                for (final it in f.items)
-                                  if (!_hidePublishedItemForWorkspaceEditing(
-                                    it,
-                                    editingIds,
-                                  ))
-                                    it,
-                              ],
-                            ),
-                        ];
+                        final filteredFolders =
+                            RemoteBackendConfig.useRemoteDrafts
+                                ? const <_StoryFolder>[]
+                                : [
+                                    for (final f in _uploadedFolders)
+                                      _StoryFolder(
+                                        id: f.id,
+                                        name: f.name,
+                                        isPrivate: f.isPrivate,
+                                        items: [
+                                          for (final it in f.items)
+                                            if (!_hidePublishedItemForWorkspaceEditing(
+                                              it,
+                                              editingIds,
+                                            ))
+                                              it,
+                                        ],
+                                      ),
+                                  ];
                         final publishedPager =
                             RemoteBackendConfig.useRemoteDrafts
                                 ? ref.watch(profilePublishedMonoPagerProvider)
@@ -1472,37 +1625,28 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                             unawaited(_openPublishedTabReader(list, idx));
                           },
                           onLooseItemDetail: _showUploadedLooseItemSheet,
-                          onCreateFolder: () => _openCreateFolderDialog(
-                            onCreate: (name) => setState(() {
-                              _uploadedFolders = [
-                                ..._uploadedFolders,
-                                _StoryFolder(
-                                  id: 'uf_${DateTime.now().millisecondsSinceEpoch}',
-                                  name: name,
-                                  items: const [],
-                                  isPrivate: false,
-                                ),
-                              ];
-                            }),
-                          ),
+                          onCreateFolder: RemoteBackendConfig.useRemoteDrafts
+                              ? () =>
+                                  unawaited(_createRemoteCreatorCollection())
+                              : () => _openCreateFolderDialog(
+                                    onCreate: (name) => setState(() {
+                                      _uploadedFolders = [
+                                        ..._uploadedFolders,
+                                        _StoryFolder(
+                                          id: 'uf_${DateTime.now().millisecondsSinceEpoch}',
+                                          name: name,
+                                          items: const [],
+                                          isPrivate: false,
+                                        ),
+                                      ];
+                                    }),
+                                  ),
                           onRenameFolder: (f) =>
                               _renameFolder(saved: false, folder: f),
                           onDeleteFolder: (f) =>
                               _deleteFolder(saved: false, folder: f),
-                          onBulkDeleteLoose: (ids) {
-                            if (RemoteBackendConfig.useRemoteDrafts) {
-                              ref
-                                  .read(profilePublishedMonoPagerProvider
-                                      .notifier)
-                                  .removeItemsByIds(ids);
-                            } else {
-                              setState(() {
-                                _uploadedLooseItems = _uploadedLooseItems
-                                    .where((e) => !ids.contains(e.id))
-                                    .toList();
-                              });
-                            }
-                          },
+                          onPublishedAddToCollection:
+                              _publishedAddToCollectionLoose,
                         );
                       }(),
                       _ProcessingDraftManagerTab(
@@ -1523,41 +1667,50 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                               .loadMore(),
                         ),
                       ),
-                      _FolderGroupList(
-                        title: 'Saved',
-                        folders: _savedFolders,
-                        looseItems: _savedLooseItems,
-                        bottomPadding: bottomNavHeight +
-                            bottomPadding +
-                            extraBottomPadding,
-                        trailingAction: _OneShortCardAction.bookmark,
-                        isSavedSection: true,
-                        onStoryTap: (list, idx) =>
-                            _openFolderAwareReader(list, idx, fromSaved: true),
-                        onLooseItemDetail: _showSavedLooseItemSheet,
-                        onCreateFolder: () => _openCreateFolderDialog(
-                          onCreate: (name) => setState(() {
-                            _savedFolders = [
-                              ..._savedFolders,
-                              _StoryFolder(
-                                id: 'sf_${DateTime.now().millisecondsSinceEpoch}',
-                                name: name,
-                                items: const [],
-                                isPrivate: false,
+                      RemoteBackendConfig.useRemoteDrafts
+                          ? _ProfileSavedRemoteTab(
+                              bottomPadding: bottomNavHeight +
+                                  bottomPadding +
+                                  extraBottomPadding,
+                            )
+                          : _FolderGroupList(
+                              title: 'Saved',
+                              folders: _savedFolders,
+                              looseItems: _savedLooseItems,
+                              bottomPadding: bottomNavHeight +
+                                  bottomPadding +
+                                  extraBottomPadding,
+                              trailingAction: _OneShortCardAction.bookmark,
+                              isSavedSection: true,
+                              onStoryTap: (list, idx) => _openFolderAwareReader(
+                                list,
+                                idx,
+                                fromSaved: true,
                               ),
-                            ];
-                          }),
-                        ),
-                        onRenameFolder: (f) =>
-                            _renameFolder(saved: true, folder: f),
-                        onDeleteFolder: (f) =>
-                            _deleteFolder(saved: true, folder: f),
-                        onBulkUnsaveLoose: (ids) => setState(() {
-                          _savedLooseItems = _savedLooseItems
-                              .where((e) => !ids.contains(e.id))
-                              .toList();
-                        }),
-                      ),
+                              onLooseItemDetail: _showSavedLooseItemSheet,
+                              onCreateFolder: () => _openCreateFolderDialog(
+                                onCreate: (name) => setState(() {
+                                  _savedFolders = [
+                                    ..._savedFolders,
+                                    _StoryFolder(
+                                      id: 'sf_${DateTime.now().millisecondsSinceEpoch}',
+                                      name: name,
+                                      items: const [],
+                                      isPrivate: false,
+                                    ),
+                                  ];
+                                }),
+                              ),
+                              onRenameFolder: (f) =>
+                                  _renameFolder(saved: true, folder: f),
+                              onDeleteFolder: (f) =>
+                                  _deleteFolder(saved: true, folder: f),
+                              onBulkUnsaveLoose: (ids) => setState(() {
+                                _savedLooseItems = _savedLooseItems
+                                    .where((e) => !ids.contains(e.id))
+                                    .toList();
+                              }),
+                            ),
                     ],
                   );
                 },
@@ -1708,8 +1861,10 @@ class _FolderGroupList extends StatefulWidget {
   final VoidCallback? onCreateFolder;
   final void Function(_StoryFolder folder)? onRenameFolder;
   final void Function(_StoryFolder folder)? onDeleteFolder;
-  final void Function(Set<String> ids)? onBulkDeleteLoose;
   final void Function(Set<String> ids)? onBulkUnsaveLoose;
+
+  /// Remote Published: open Add to collection sheet; mock/offline uses placeholder snackbar when null.
+  final Future<bool> Function(Set<String> ids)? onPublishedAddToCollection;
 
   /// Published-tab infinite scroll hook (monos filter only); safe no-op when null.
   final VoidCallback? onLooseListNearEnd;
@@ -1726,8 +1881,8 @@ class _FolderGroupList extends StatefulWidget {
     this.onCreateFolder,
     this.onRenameFolder,
     this.onDeleteFolder,
-    this.onBulkDeleteLoose,
     this.onBulkUnsaveLoose,
+    this.onPublishedAddToCollection,
     this.onLooseListNearEnd,
   });
 
@@ -1735,12 +1890,255 @@ class _FolderGroupList extends StatefulWidget {
   State<_FolderGroupList> createState() => _FolderGroupListState();
 }
 
+class _ProfileSavedRemoteTab extends ConsumerStatefulWidget {
+  const _ProfileSavedRemoteTab({required this.bottomPadding});
+
+  final double bottomPadding;
+
+  @override
+  ConsumerState<_ProfileSavedRemoteTab> createState() =>
+      _ProfileSavedRemoteTabState();
+}
+
+class _ProfileSavedRemoteTabState
+    extends ConsumerState<_ProfileSavedRemoteTab> {
+  bool _booted = false;
+
+  void _ensureLoaded() {
+    if (_booted) return;
+    _booted = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      unawaited(
+          ref.read(profileSavedMonoPagerProvider.notifier).loadFirstPage());
+    });
+  }
+
+  Future<void> _openReader(List<MonoFeedItem> list, int idx) async {
+    final safe = idx.clamp(0, list.length - 1);
+    if (!context.mounted) return;
+    context.push(
+      '/mono-reader',
+      extra: <String, Object?>{
+        'items': list,
+        'initialIndex': safe,
+        'readerMenuOrigin': MonoReaderMenuOrigin.profileSaved,
+        'onUnsavedMonoFeedItemId': (String monoId) {
+          ref
+              .read(profileSavedMonoPagerProvider.notifier)
+              .removeItemsByIds({monoId});
+        },
+      },
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final session = ref.watch(authSessionProvider);
+
+    if (session is! AuthSessionAuthenticated) {
+      return ColoredBox(
+        color: const Color(0xFFF5F5F5),
+        child: Center(
+          child: Padding(
+            padding: EdgeInsets.only(bottom: widget.bottomPadding),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  SavedLibraryCopy.guestTitle,
+                  style: theme.textTheme.titleMedium
+                      ?.copyWith(fontWeight: FontWeight.w800),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  SavedLibraryCopy.guestBody,
+                  style: theme.textTheme.bodyMedium,
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    _ensureLoaded();
+
+    final ps = ref.watch(profileSavedMonoPagerProvider);
+    final items = ps.items;
+
+    if (items.isEmpty && ps.isInitialLoading && ps.error == null) {
+      return ColoredBox(
+        color: const Color(0xFFF5F5F5),
+        child: Center(
+          child: Padding(
+            padding: EdgeInsets.only(bottom: widget.bottomPadding),
+            child: const CircularProgressIndicator(),
+          ),
+        ),
+      );
+    }
+
+    if (items.isEmpty && ps.error != null && !ps.isInitialLoading) {
+      return ColoredBox(
+        color: const Color(0xFFF5F5F5),
+        child: Center(
+          child: Padding(
+            padding: EdgeInsets.only(bottom: widget.bottomPadding),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'Could not load saved stories.',
+                  style: theme.textTheme.titleMedium
+                      ?.copyWith(fontWeight: FontWeight.w800),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  '${ps.error}',
+                  style: theme.textTheme.bodySmall,
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 14),
+                FilledButton(
+                  onPressed: () => unawaited(
+                    ref
+                        .read(profileSavedMonoPagerProvider.notifier)
+                        .loadFirstPage(),
+                  ),
+                  child: const Text('Retry'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    if (items.isEmpty && ps.error == null && !ps.isInitialLoading) {
+      return ColoredBox(
+        color: const Color(0xFFF5F5F5),
+        child: Center(
+          child: Padding(
+            padding: EdgeInsets.only(bottom: widget.bottomPadding),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  SavedLibraryCopy.emptyTitle,
+                  style: theme.textTheme.titleMedium
+                      ?.copyWith(fontWeight: FontWeight.w800),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  SavedLibraryCopy.emptyBody,
+                  style: theme.textTheme.bodyMedium,
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    return ColoredBox(
+      color: const Color(0xFFF5F5F5),
+      child: RefreshIndicator(
+        onRefresh: () =>
+            ref.read(profileSavedMonoPagerProvider.notifier).refresh(),
+        child: ListView.builder(
+          padding: EdgeInsets.fromLTRB(16, 14, 16, widget.bottomPadding),
+          itemCount: items.length + (ps.canLoadMore ? 1 : 0),
+          itemBuilder: (ctx, i) {
+            if (i >= items.length) {
+              unawaited(
+                  ref.read(profileSavedMonoPagerProvider.notifier).loadMore());
+              return const Padding(
+                padding: EdgeInsets.symmetric(vertical: 16),
+                child: Center(child: CircularProgressIndicator()),
+              );
+            }
+            final it = items[i];
+            final title =
+                (it.title ?? '').trim().isNotEmpty ? it.title! : 'Mono';
+            final subtitle = it.storyDescription.trim();
+            return Card(
+              child: ListTile(
+                onTap: () => unawaited(_openReader(items, i)),
+                title: Text(title),
+                subtitle: subtitle.isEmpty
+                    ? null
+                    : Text(
+                        subtitle,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                trailing: IconButton(
+                  tooltip: SavedLibraryCopy.removeFromSavedTooltip,
+                  icon: const Icon(Icons.bookmark_remove_outlined),
+                  onPressed: () async {
+                    try {
+                      await ref
+                          .read(remoteMonoSocialRepositoryProvider)
+                          .unbookmarkMono(it.monoIdForLearnRoutes);
+                      ref
+                          .read(profileSavedMonoPagerProvider.notifier)
+                          .removeItemsByIds({it.id});
+                      bumpProfileSavedListRefresh(
+                        ProviderScope.containerOf(context, listen: false),
+                      );
+                    } catch (e) {
+                      if (!context.mounted) return;
+                      final msg = e is StateError ? e.message : '$e';
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text(msg)),
+                      );
+                    }
+                  },
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+}
+
 class _FolderGroupListState extends State<_FolderGroupList> {
   _ProfileFolderFilter _filter = _ProfileFolderFilter.monos;
   bool _selecting = false;
   final Set<String> _selectedIds = <String>{};
+  bool _bootedRemoteCreatorCollections = false;
+
+  void _ensureRemoteCreatorCollectionsLoaded() {
+    if (_bootedRemoteCreatorCollections) return;
+    _bootedRemoteCreatorCollections = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      // Loads owner creator collections from backend (M8f3).
+      final container = ProviderScope.containerOf(context, listen: false);
+      unawaited(
+        container.read(myCreatorCollectionsNotifierProvider.notifier).load(),
+      );
+    });
+  }
 
   void _toggleSelect(_OneShortItem it) {
+    if (RemoteBackendConfig.useRemoteDrafts &&
+        !widget.isSavedSection &&
+        !it.isBackendPublished) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Stories are still syncing.'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
     setState(() {
       if (_selectedIds.contains(it.id)) {
         _selectedIds.remove(it.id);
@@ -1807,16 +2205,33 @@ class _FolderGroupListState extends State<_FolderGroupList> {
       return;
     }
     if (action == 'add_folder') {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Add to collection - Coming soon')),
-      );
+      if (widget.isSavedSection) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Collections are coming soon.')),
+        );
+      } else if (RemoteBackendConfig.useRemoteDrafts &&
+          !it.isBackendPublished) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Stories are still syncing. Please try again.'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      } else if (widget.onPublishedAddToCollection != null) {
+        unawaited(
+            widget.onPublishedAddToCollection!(Set<String>.from({it.id})));
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Collections are coming soon.')),
+        );
+      }
     }
   }
 
   Widget _buildFilterOrSelectionBar() {
     if (_selecting && _filter == _ProfileFolderFilter.monos) {
       final count = _selectedIds.length;
-      final bulkLabel = widget.isSavedSection ? 'Unsave' : 'Delete';
+      final bulkLabel = widget.isSavedSection ? 'Unsave' : 'Add to collection';
       final canBulk = count > 0;
       return Padding(
         padding: const EdgeInsets.only(bottom: 10),
@@ -1824,7 +2239,9 @@ class _FolderGroupListState extends State<_FolderGroupList> {
           decoration: BoxDecoration(
             color: Colors.grey.shade100,
             borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: Colors.black.withOpacity(0.06)),
+            border: Border.all(
+              color: Colors.black.withValues(alpha: 0.06),
+            ),
           ),
           child: Padding(
             padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
@@ -1849,17 +2266,39 @@ class _FolderGroupListState extends State<_FolderGroupList> {
                 FilledButton(
                   onPressed: !canBulk
                       ? null
-                      : () {
-                          final ids = Set<String>.from(_selectedIds);
+                      : () async {
                           if (widget.isSavedSection) {
-                            widget.onBulkUnsaveLoose?.call(ids);
+                            widget.onBulkUnsaveLoose?.call(
+                              Set<String>.from(_selectedIds),
+                            );
+                            setState(() {
+                              _selecting = false;
+                              _selectedIds.clear();
+                            });
                           } else {
-                            widget.onBulkDeleteLoose?.call(ids);
+                            final fn = widget.onPublishedAddToCollection;
+                            if (fn != null) {
+                              final ok =
+                                  await fn(Set<String>.from(_selectedIds));
+                              if (mounted && ok) {
+                                setState(() {
+                                  _selecting = false;
+                                  _selectedIds.clear();
+                                });
+                              }
+                            } else {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Collections are coming soon.'),
+                                  behavior: SnackBarBehavior.floating,
+                                ),
+                              );
+                              setState(() {
+                                _selecting = false;
+                                _selectedIds.clear();
+                              });
+                            }
                           }
-                          setState(() {
-                            _selecting = false;
-                            _selectedIds.clear();
-                          });
                         },
                   child: Text(bulkLabel),
                 ),
@@ -1887,7 +2326,306 @@ class _FolderGroupListState extends State<_FolderGroupList> {
 
   @override
   Widget build(BuildContext context) {
+    if (_filter == _ProfileFolderFilter.collections &&
+        !widget.isSavedSection &&
+        RemoteBackendConfig.useRemoteDrafts) {
+      _ensureRemoteCreatorCollectionsLoaded();
+    }
     if (_filter == _ProfileFolderFilter.collections) {
+      if (!widget.isSavedSection && RemoteBackendConfig.useRemoteDrafts) {
+        return Padding(
+          padding: EdgeInsets.fromLTRB(16, 12, 16, widget.bottomPadding),
+          child: Consumer(
+            builder: (context, ref, _) {
+              final state = ref.watch(myCreatorCollectionsNotifierProvider);
+              Widget body() {
+                if (state.isLoading && state.collections.isEmpty) {
+                  return const Expanded(
+                    child: Center(child: CircularProgressIndicator()),
+                  );
+                }
+                if (state.error != null && state.collections.isEmpty) {
+                  return Expanded(
+                    child: Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            '${state.error}',
+                            textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: 12),
+                          FilledButton(
+                            onPressed: () => unawaited(
+                              ref
+                                  .read(myCreatorCollectionsNotifierProvider
+                                      .notifier)
+                                  .load(),
+                            ),
+                            child: const Text('Retry'),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                }
+                if (state.collections.isEmpty) {
+                  return const Expanded(
+                    child: Center(child: Text('No collections yet.')),
+                  );
+                }
+                return Expanded(
+                  child: ListView.separated(
+                    itemCount: state.collections.length,
+                    separatorBuilder: (_, __) => const Divider(height: 1),
+                    itemBuilder: (context, i) {
+                      final c = state.collections[i];
+                      final countLabel =
+                          '${c.itemCount} stor${c.itemCount == 1 ? 'y' : 'ies'}';
+                      return Material(
+                        color: Colors.transparent,
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(12),
+                          onTap: () {
+                            context.push(
+                              '/profile/creator-collections/detail',
+                              extra: OwnerCreatorCollectionDetailArgs(
+                                collection: c,
+                              ),
+                            );
+                          },
+                          child: CollectionListRow(
+                            title: c.title.trim().isEmpty
+                                ? 'Untitled'
+                                : c.title.trim(),
+                            countLabel: countLabel,
+                            description: (c.description ?? '').trim().isEmpty
+                                ? null
+                                : c.description!.trim(),
+                            coverImageUrl: c.coverImageUrl,
+                            trailing: IconButton(
+                              icon:
+                                  const Icon(Icons.more_vert_rounded, size: 22),
+                              onPressed: () {
+                                unawaited(
+                                  showModalBottomSheet<void>(
+                                    context: context,
+                                    showDragHandle: true,
+                                    builder: (ctx) {
+                                      return SafeArea(
+                                        child: Column(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            ListTile(
+                                              leading: const Icon(
+                                                  Icons.edit_outlined),
+                                              title: const Text('Rename'),
+                                              onTap: () async {
+                                                Navigator.of(ctx).pop();
+                                                final controller =
+                                                    TextEditingController(
+                                                  text: c.title,
+                                                );
+                                                final newTitle =
+                                                    await showDialog<String>(
+                                                  context: context,
+                                                  builder: (dctx) =>
+                                                      AlertDialog(
+                                                    title: const Text(
+                                                        'Rename collection'),
+                                                    content: TextField(
+                                                      controller: controller,
+                                                      autofocus: true,
+                                                      decoration:
+                                                          const InputDecoration(
+                                                        labelText: 'Title',
+                                                        border:
+                                                            OutlineInputBorder(),
+                                                      ),
+                                                    ),
+                                                    actions: [
+                                                      TextButton(
+                                                        onPressed: () =>
+                                                            Navigator.of(dctx)
+                                                                .pop(),
+                                                        child: const Text(
+                                                            'Cancel'),
+                                                      ),
+                                                      FilledButton(
+                                                        onPressed: () =>
+                                                            Navigator.of(dctx)
+                                                                .pop(controller
+                                                                    .text),
+                                                        child:
+                                                            const Text('Save'),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                );
+                                                final t =
+                                                    (newTitle ?? '').trim();
+                                                if (t.isEmpty) {
+                                                  if (!context.mounted) return;
+                                                  ScaffoldMessenger.of(context)
+                                                      .showSnackBar(
+                                                    const SnackBar(
+                                                      content: Text(
+                                                          'Title is required.'),
+                                                      behavior: SnackBarBehavior
+                                                          .floating,
+                                                    ),
+                                                  );
+                                                  return;
+                                                }
+                                                try {
+                                                  await ref
+                                                      .read(
+                                                        myCreatorCollectionsNotifierProvider
+                                                            .notifier,
+                                                      )
+                                                      .renameCollection(
+                                                        collectionId: c.id,
+                                                        title: t,
+                                                      );
+                                                } catch (e) {
+                                                  if (!context.mounted) return;
+                                                  ScaffoldMessenger.of(context)
+                                                      .showSnackBar(
+                                                    SnackBar(
+                                                      content: Text('$e'),
+                                                      behavior: SnackBarBehavior
+                                                          .floating,
+                                                    ),
+                                                  );
+                                                }
+                                              },
+                                            ),
+                                            ListTile(
+                                              enabled: c.itemCount == 0,
+                                              leading: Icon(
+                                                Icons.delete_outline,
+                                                color: c.itemCount == 0
+                                                    ? Theme.of(context)
+                                                        .colorScheme
+                                                        .error
+                                                    : null,
+                                              ),
+                                              title: Text(
+                                                'Delete',
+                                                style: TextStyle(
+                                                  color: c.itemCount == 0
+                                                      ? Theme.of(context)
+                                                          .colorScheme
+                                                          .error
+                                                      : null,
+                                                ),
+                                              ),
+                                              subtitle: c.itemCount == 0
+                                                  ? null
+                                                  : const Text(
+                                                      'Remove all stories before deleting.',
+                                                    ),
+                                              onTap: c.itemCount == 0
+                                                  ? () async {
+                                                      Navigator.of(ctx).pop();
+                                                      final ok =
+                                                          await showDialog<
+                                                              bool>(
+                                                        context: context,
+                                                        builder: (dctx) =>
+                                                            AlertDialog(
+                                                          title: const Text(
+                                                              'Delete collection?'),
+                                                          content: const Text(
+                                                            'This deletes the collection only. Stories are not deleted.',
+                                                          ),
+                                                          actions: [
+                                                            TextButton(
+                                                              onPressed: () =>
+                                                                  Navigator.of(
+                                                                          dctx)
+                                                                      .pop(
+                                                                          false),
+                                                              child: const Text(
+                                                                  'Cancel'),
+                                                            ),
+                                                            FilledButton(
+                                                              onPressed: () =>
+                                                                  Navigator.of(
+                                                                          dctx)
+                                                                      .pop(
+                                                                          true),
+                                                              child: const Text(
+                                                                  'Delete'),
+                                                            ),
+                                                          ],
+                                                        ),
+                                                      );
+                                                      if (ok != true) return;
+                                                      try {
+                                                        await ref
+                                                            .read(
+                                                              myCreatorCollectionsNotifierProvider
+                                                                  .notifier,
+                                                            )
+                                                            .deleteCollection(
+                                                                c.id);
+                                                      } catch (e) {
+                                                        if (!context.mounted)
+                                                          return;
+                                                        ScaffoldMessenger.of(
+                                                                context)
+                                                            .showSnackBar(
+                                                          SnackBar(
+                                                            content: Text('$e'),
+                                                            behavior:
+                                                                SnackBarBehavior
+                                                                    .floating,
+                                                          ),
+                                                        );
+                                                      }
+                                                    }
+                                                  : null,
+                                            ),
+                                            const SizedBox(height: 8),
+                                          ],
+                                        ),
+                                      );
+                                    },
+                                  ),
+                                );
+                              },
+                              tooltip: 'Collection actions',
+                              padding: EdgeInsets.zero,
+                              constraints: const BoxConstraints(
+                                minWidth: 36,
+                                minHeight: 36,
+                              ),
+                              visualDensity: VisualDensity.compact,
+                              style: IconButton.styleFrom(
+                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              ),
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                );
+              }
+
+              // Important: keep the filter row + Add button visible even when empty/loading/error.
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _buildFilterOrSelectionBar(),
+                  body(),
+                ],
+              );
+            },
+          ),
+        );
+      }
       final folderCount = widget.folders.length;
       final total = 1 + folderCount;
       final dividerColor =
@@ -2605,10 +3343,60 @@ class _ProfileTopHeaderBar extends StatelessWidget {
   }
 }
 
+/// Owner header avatar — uses live public-profile URL when present (M9f).
+class _OwnerProfileAvatar extends StatelessWidget {
+  const _OwnerProfileAvatar({this.url, required this.radius});
+
+  final String? url;
+  final double radius;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final u = (url ?? '').trim();
+    final dim = radius * 2;
+    if (u.isEmpty) {
+      return CircleAvatar(
+        radius: radius,
+        backgroundColor: scheme.surfaceContainerHighest,
+        child: Icon(
+          Icons.person_rounded,
+          size: radius * 0.87,
+          color: scheme.onSurfaceVariant,
+        ),
+      );
+    }
+    return ClipOval(
+      child: Image.network(
+        u,
+        width: dim,
+        height: dim,
+        fit: BoxFit.cover,
+        gaplessPlayback: true,
+        filterQuality: FilterQuality.low,
+        errorBuilder: (_, __, ___) => Container(
+          width: dim,
+          height: dim,
+          color: scheme.surfaceContainerHighest,
+          alignment: Alignment.center,
+          child: Icon(
+            Icons.person_rounded,
+            size: radius * 0.87,
+            color: scheme.onSurfaceVariant,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 /// Owner profile header: two-column block (avatar | name + handle + stats), then bio (M3).
 class _ProfileSummaryRow extends StatelessWidget {
   final String displayName;
   final String handle;
+
+  /// Public avatar from `GET /v1/users/:me/public-profile` after edit (M9f).
+  final String? avatarUrl;
 
   /// Short line under the handle (e.g. role); omit when null/empty.
   final String? tagline;
@@ -2620,6 +3408,7 @@ class _ProfileSummaryRow extends StatelessWidget {
   const _ProfileSummaryRow({
     required this.displayName,
     required this.handle,
+    this.avatarUrl,
     this.tagline,
     required this.bio,
     required this.uploadedCount,
@@ -2643,14 +3432,9 @@ class _ProfileSummaryRow extends StatelessWidget {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              CircleAvatar(
+              _OwnerProfileAvatar(
+                url: avatarUrl,
                 radius: 46,
-                backgroundColor: scheme.surfaceContainerHighest,
-                child: Icon(
-                  Icons.person_rounded,
-                  size: 40,
-                  color: scheme.onSurfaceVariant,
-                ),
               ),
               const SizedBox(width: 18),
               Expanded(
@@ -2668,16 +3452,18 @@ class _ProfileSummaryRow extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 5),
-                    Text(
-                      handle,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: scheme.onSurfaceVariant,
-                        fontWeight: FontWeight.w600,
-                        height: 1.2,
+                    if (handle.trim().isNotEmpty) ...[
+                      Text(
+                        handle,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: scheme.onSurfaceVariant,
+                          fontWeight: FontWeight.w600,
+                          height: 1.2,
+                        ),
                       ),
-                    ),
+                    ],
                     if (tag.isNotEmpty) ...[
                       const SizedBox(height: 6),
                       Text(
@@ -2829,13 +3615,14 @@ class _CompactStat extends StatelessWidget {
 }
 
 /// Opens the learner-facing public profile preview ([PublicProfileScreen]).
-class _PublicProfilePreviewCard extends StatelessWidget {
+class _PublicProfilePreviewCard extends ConsumerWidget {
   const _PublicProfilePreviewCard();
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
+    final session = ref.watch(authSessionProvider);
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(14, 0, 14, 10),
@@ -2851,7 +3638,14 @@ class _PublicProfilePreviewCard extends StatelessWidget {
         ),
         clipBehavior: Clip.antiAlias,
         child: InkWell(
-          onTap: () => context.push('/profile/public?from=owner'),
+          onTap: () {
+            if (session is AuthSessionAuthenticated) {
+              final id = Uri.encodeQueryComponent(session.user.id);
+              context.push('/profile/public?from=owner&userId=$id');
+            } else {
+              context.push('/profile/public?from=owner');
+            }
+          },
           child: Padding(
             padding: const EdgeInsets.fromLTRB(14, 12, 8, 12),
             child: Row(

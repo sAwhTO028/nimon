@@ -21,4 +21,3 @@ class NimonBreakpoints {
   static NimonWidthClass of(BuildContext context) =>
       ofWidth(MediaQuery.sizeOf(context).width);
 }
-

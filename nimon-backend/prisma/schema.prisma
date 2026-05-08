@@ -23,13 +23,72 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  /// optional for V1; auth is not implemented yet
+  /// Nullable for legacy/dev rows (e.g. dev owner without email). Email/password users set this.
   email String? @unique
+
+  /// bcrypt hash; null for rows created before auth or dev-only users without password login
+  passwordHash String?
 
   storyDrafts    StoryDraft[]
   publishedMonos PublishedMono[]
+  monoBookmarks  MonoBookmark[]
+  monoReactions  MonoReaction[]
+  following      UserFollow[] @relation("followingEdges")
+  followers      UserFollow[] @relation("followerEdges")
+  profile        UserProfile?
+  refreshTokens  RefreshToken[]
+  creatorMonoCollections CreatorMonoCollection[]
 
   @@map("users")
+}
+
+model UserFollow {
+  followerId String @db.Uuid
+  follower   User   @relation("followingEdges", fields: [followerId], references: [id], onDelete: Cascade)
+
+  followingId String @db.Uuid
+  following   User   @relation("followerEdges", fields: [followingId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@id([followerId, followingId])
+  @@index([followerId, createdAt])
+  @@index([followingId, createdAt])
+  @@map("user_follows")
+}
+
+model UserProfile {
+  userId String @id @db.Uuid
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  displayName String?
+  handle      String? @unique
+  avatarUrl   String?
+  coverImageUrl String?
+  bio         String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("user_profiles")
+}
+
+model RefreshToken {
+  id String @id @default(uuid()) @db.Uuid
+
+  userId String @db.Uuid
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// SHA-256 hex of the opaque refresh token (never store plaintext token)
+  tokenHash String @unique
+
+  expiresAt DateTime
+  revokedAt DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@map("refresh_tokens")
 }
 
 model StoryDraft {
@@ -171,8 +230,82 @@ model PublishedMono {
 
   content Json @default("{}")
 
+  /// P1 Trash: when set, mono is hidden from catalog/feed and default owner published list.
+  trashedAt DateTime?
+
   drafts StoryDraft[]
+  monoBookmarks MonoBookmark[]
+  monoReactions MonoReaction[]
+  creatorMonoCollectionItems CreatorMonoCollectionItem[]
 
   @@index([ownerId, updatedAt])
+  @@index([ownerId, trashedAt])
   @@map("published_monos")
+}
+
+model MonoBookmark {
+  id String @id @default(uuid()) @db.Uuid
+
+  userId String @db.Uuid
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  publishedMonoId String       @db.Uuid
+  publishedMono   PublishedMono @relation(fields: [publishedMonoId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([userId, publishedMonoId])
+  @@index([userId, createdAt])
+  @@index([publishedMonoId])
+  @@map("mono_bookmarks")
+}
+
+model MonoReaction {
+  id String @id @default(uuid()) @db.Uuid
+
+  userId String @db.Uuid
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  publishedMonoId String       @db.Uuid
+  publishedMono   PublishedMono @relation(fields: [publishedMonoId], references: [id], onDelete: Cascade)
+
+  kind      String   @default("heart")
+  createdAt DateTime @default(now())
+
+  @@unique([userId, publishedMonoId])
+  @@index([publishedMonoId])
+  @@map("mono_reactions")
+}
+
+model CreatorMonoCollection {
+  id              String   @id @default(uuid()) @db.Uuid
+  ownerId         String   @db.Uuid
+  owner           User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  title           String
+  description     String?
+  coverImageUrl   String?
+  visibility      String   @default("public")
+  sortOrder       Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  items CreatorMonoCollectionItem[]
+
+  @@index([ownerId, sortOrder, createdAt])
+  @@map("creator_mono_collections")
+}
+
+model CreatorMonoCollectionItem {
+  id              String   @id @default(uuid()) @db.Uuid
+  collectionId    String   @db.Uuid
+  collection      CreatorMonoCollection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+  publishedMonoId String   @db.Uuid
+  publishedMono   PublishedMono @relation(fields: [publishedMonoId], references: [id], onDelete: Cascade)
+  sortOrder       Int      @default(0)
+  createdAt       DateTime @default(now())
+
+  /// Product rule (M8f): a published mono can belong to only one creator collection.
+  @@unique([publishedMonoId])
+  @@index([publishedMonoId])
+  @@map("creator_mono_collection_items")
 }

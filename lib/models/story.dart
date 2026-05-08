@@ -37,7 +37,9 @@ class Episode {
   String get preview {
     if (blocks.isEmpty) return '';
     final first = blocks.first;
-    return first.text.length > 80 ? '${first.text.substring(0, 80)}…' : first.text;
+    return first.text.length > 80
+        ? '${first.text.substring(0, 80)}…'
+        : first.text;
   }
 
   Episode copyWith({
@@ -88,4 +90,3 @@ enum StorySourceType {
   manual, // Created manually by user
   ai, // Generated from YouTube URL via AI
 }
-

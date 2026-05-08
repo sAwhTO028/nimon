@@ -189,7 +189,7 @@ abstract final class StoryCreatorDraftStorage {
   // ---------------------------------------------------------------------------
 
   static Map<String, Object?> _toJson(CreatorStoryV1 s) {
-    return {
+    final out = <String, Object?>{
       'basics': _toJsonBasics(s.basics),
       'sentences': [for (final x in s.sentences) _toJsonSentence(x)],
       'vocabularyKanji': _toJsonVocabLayer(s.vocabularyKanji),
@@ -202,6 +202,14 @@ abstract final class StoryCreatorDraftStorage {
           e.key.storageKey: e.value.storageKey,
       },
     };
+    final pm = s.publishedMonoId?.trim();
+    if (pm != null && pm.isNotEmpty) {
+      out['publishedMonoId'] = pm;
+    }
+    if (s.hasUnpublishedCoreChanges != null) {
+      out['hasUnpublishedCoreChanges'] = s.hasUnpublishedCoreChanges!;
+    }
+    return out;
   }
 
   static Map<String, Object?> _toJsonBasics(StoryBasics b) {
@@ -278,7 +286,8 @@ abstract final class StoryCreatorDraftStorage {
             'exampleMeanings': e.exampleMeanings == null
                 ? null
                 : _toJsonMeanings(e.exampleMeanings!),
-            'provenance': e.provenance == null ? null : _toJsonProv(e.provenance!),
+            'provenance':
+                e.provenance == null ? null : _toJsonProv(e.provenance!),
           },
       ],
     };
@@ -292,21 +301,24 @@ abstract final class StoryCreatorDraftStorage {
             'id': e.id,
             'headline': e.headline,
             'form': e.form,
-            'meanings': e.meanings == null ? null : _toJsonMeanings(e.meanings!),
+            'meanings':
+                e.meanings == null ? null : _toJsonMeanings(e.meanings!),
             'usage': e.usage == null ? null : _toJsonMeanings(e.usage!),
             'examples': [
               for (final ex in e.examples)
                 {
                   'japanese': ex.japanese,
-                  'meanings':
-                      ex.meanings == null ? null : _toJsonMeanings(ex.meanings!),
+                  'meanings': ex.meanings == null
+                      ? null
+                      : _toJsonMeanings(ex.meanings!),
                 },
             ],
             'mistakeWrong': e.mistakeWrong,
             'mistakeCorrect': e.mistakeCorrect,
             'relatedNote':
                 e.relatedNote == null ? null : _toJsonMeanings(e.relatedNote!),
-            'provenance': e.provenance == null ? null : _toJsonProv(e.provenance!),
+            'provenance':
+                e.provenance == null ? null : _toJsonProv(e.provenance!),
           },
       ],
     };
@@ -326,7 +338,8 @@ abstract final class StoryCreatorDraftStorage {
                 ? null
                 : _toJsonMeanings(e.explanations!),
             'sourceNote': e.sourceNote,
-            'provenance': e.provenance == null ? null : _toJsonProv(e.provenance!),
+            'provenance':
+                e.provenance == null ? null : _toJsonProv(e.provenance!),
           },
       ],
     };
@@ -353,10 +366,12 @@ abstract final class StoryCreatorDraftStorage {
   }
 
   static CreatorStoryV1 _fromJsonCreatorStoryV1(Map<String, Object?> m) {
-    final basics = _fromJsonBasics((m['basics'] as Map).cast<String, Object?>());
+    final basics =
+        _fromJsonBasics((m['basics'] as Map).cast<String, Object?>());
 
     final moduleStatusesRaw =
-        (m['moduleWorkflowStatuses'] as Map?)?.cast<String, Object?>() ?? const {};
+        (m['moduleWorkflowStatuses'] as Map?)?.cast<String, Object?>() ??
+            const {};
     final moduleStatuses = <LearnModuleId, LearnModuleTaskStatus>{
       for (final id in LearnModuleId.values)
         id: _taskStatusFromKey(
@@ -384,6 +399,7 @@ abstract final class StoryCreatorDraftStorage {
       (m['audio'] as Map?)?.cast<String, Object?>(),
     );
 
+    final pmRaw = (m['publishedMonoId'] as String?)?.trim();
     return CreatorStoryV1(
       basics: basics,
       sentences: sentences,
@@ -393,7 +409,21 @@ abstract final class StoryCreatorDraftStorage {
       audio: audio,
       publishState: publish,
       moduleWorkflowStatuses: moduleStatuses,
+      publishedMonoId: (pmRaw == null || pmRaw.isEmpty) ? null : pmRaw,
+      hasUnpublishedCoreChanges:
+          _draftOptionalBoolFromJson(m['hasUnpublishedCoreChanges']),
     );
+  }
+
+  static bool? _draftOptionalBoolFromJson(Object? v) {
+    if (v == null) return null;
+    if (v is bool) return v;
+    if (v is String) {
+      final s = v.toLowerCase().trim();
+      if (s == 'true') return true;
+      if (s == 'false') return false;
+    }
+    return null;
   }
 
   static StoryBasics _fromJsonBasics(Map<String, Object?> m) {
@@ -409,10 +439,10 @@ abstract final class StoryCreatorDraftStorage {
       level: (m['level'] as String?) ?? '',
       description: (m['description'] as String?) ?? '',
       promptSourceNote: (m['promptSourceNote'] as String?) ?? '',
-      targetDurationBandKey: (m['targetDurationBandKey'] as String?)?.trim().isEmpty ==
-              true
-          ? null
-          : (m['targetDurationBandKey'] as String?),
+      targetDurationBandKey:
+          (m['targetDurationBandKey'] as String?)?.trim().isEmpty == true
+              ? null
+              : (m['targetDurationBandKey'] as String?),
       coverImageUrl: (m['coverImageUrl'] as String?)?.trim().isEmpty == true
           ? null
           : (m['coverImageUrl'] as String?),
@@ -463,7 +493,9 @@ abstract final class StoryCreatorDraftStorage {
         if ((e.value as String?)?.trim().isNotEmpty == true)
           e.key: (e.value as String).trim(),
     };
-    if ((en == null || en.isEmpty) && (my == null || my.isEmpty) && byStr.isEmpty) {
+    if ((en == null || en.isEmpty) &&
+        (my == null || my.isEmpty) &&
+        byStr.isEmpty) {
       return null;
     }
     return LocalizedMeanings(
@@ -539,10 +571,10 @@ abstract final class StoryCreatorDraftStorage {
                 ? null
                 : (e['reading'] as String?),
             glosses: _fromJsonMeanings(e['glosses']),
-            exampleSentence: (e['exampleSentence'] as String?)?.trim().isEmpty ==
-                    true
-                ? null
-                : (e['exampleSentence'] as String?),
+            exampleSentence:
+                (e['exampleSentence'] as String?)?.trim().isEmpty == true
+                    ? null
+                    : (e['exampleSentence'] as String?),
             exampleMeanings: _fromJsonMeanings(e['exampleMeanings']),
             examplePairs: _vocabExamplePairsFromMap(e),
             provenance: _fromJsonProv(e['provenance']),
@@ -768,7 +800,8 @@ class CreatorDraftResumeMeta {
     };
   }
 
-  static CreatorDraftResumeMeta? fromJson(Object? raw, {required String draftId}) {
+  static CreatorDraftResumeMeta? fromJson(Object? raw,
+      {required String draftId}) {
     if (raw is! Map) return null;
     final m = raw.cast<String, Object?>();
     DateTime parseDt(Object? v) {
@@ -779,10 +812,10 @@ class CreatorDraftResumeMeta {
     return CreatorDraftResumeMeta(
       draftId: draftId,
       lastActiveModule: _moduleFromKey(m['lastActiveModule'] as String?),
-      lastActiveSubPage: (m['lastActiveSubPage'] as String?)?.trim().isEmpty ==
-              true
-          ? null
-          : (m['lastActiveSubPage'] as String?),
+      lastActiveSubPage:
+          (m['lastActiveSubPage'] as String?)?.trim().isEmpty == true
+              ? null
+              : (m['lastActiveSubPage'] as String?),
       lastEnteredAtUtc: parseDt(m['lastEnteredAtUtc']),
       lastEditedAtUtc: parseDt(m['lastEditedAtUtc']),
     );
@@ -844,9 +877,11 @@ abstract final class StoryCreatorDraftResumeStorage {
     if (!exists) return;
     final now = DateTime.now().toUtc();
     final existing = await loadMeta(id);
-    final next = (existing ?? CreatorDraftResumeMeta.initial(draftId: id)).copyWith(
+    final next =
+        (existing ?? CreatorDraftResumeMeta.initial(draftId: id)).copyWith(
       lastActiveModule: module,
-      lastActiveSubPage: subPage?.trim().isEmpty == true ? null : subPage?.trim(),
+      lastActiveSubPage:
+          subPage?.trim().isEmpty == true ? null : subPage?.trim(),
       clearSubPage: subPage == null,
       lastEnteredAtUtc: now,
     );
@@ -861,10 +896,10 @@ abstract final class StoryCreatorDraftResumeStorage {
     if (id.isEmpty) return;
     final now = (atUtc ?? DateTime.now().toUtc());
     final existing = await loadMeta(id);
-    final next = (existing ?? CreatorDraftResumeMeta.initial(draftId: id)).copyWith(
+    final next =
+        (existing ?? CreatorDraftResumeMeta.initial(draftId: id)).copyWith(
       lastEditedAtUtc: now,
     );
     await saveMeta(next);
   }
 }
-

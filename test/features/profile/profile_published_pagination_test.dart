@@ -238,6 +238,38 @@ void main() {
       expect(calls, 2);
     });
 
+    test(
+        'stale loadFirstPage does not leave isInitialLoading true after refresh',
+        () async {
+      final hold = Completer<void>();
+      var calls = 0;
+      final stub = _StubPublishedMonoRepository((_) async {
+        calls++;
+        if (calls == 1) {
+          await hold.future;
+          return PageResult<PublishedMonoListItemDto>(
+            items: const [],
+            nextCursor: null,
+            hasMore: false,
+          );
+        }
+        return PageResult<PublishedMonoListItemDto>(
+          items: [_minimalDto],
+          nextCursor: null,
+          hasMore: false,
+        );
+      });
+      final n = ProfilePublishedMonoPager(stub);
+      final slowFirst = n.loadFirstPage();
+      await n.refresh();
+      hold.complete();
+      await slowFirst;
+      await pumpEventQueue();
+      expect(n.state.isInitialLoading, isFalse);
+      expect(n.state.isRefreshing, isFalse);
+      expect(n.state.items, hasLength(1));
+    });
+
     test('stale loadMore result ignored after refresh bumps epoch', () async {
       final hold = Completer<void>();
       var calls = 0;

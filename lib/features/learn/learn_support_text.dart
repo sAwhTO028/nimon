@@ -23,8 +23,7 @@ String? pickSupportText(
         if (t(e.value) != null) e.key: e.value.trim(),
   };
 
-  final primaryKey =
-      language == LearnExplanationLanguage.myanmar ? 'my' : 'en';
+  final primaryKey = language == LearnExplanationLanguage.myanmar ? 'my' : 'en';
   final secondaryKey =
       language == LearnExplanationLanguage.myanmar ? 'en' : 'my';
 

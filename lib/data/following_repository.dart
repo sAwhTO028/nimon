@@ -41,4 +41,3 @@ class FollowingRepository {
 
 /// Singleton instance for FollowingRepository
 final followingRepo = FollowingRepository();
-

@@ -5,7 +5,8 @@ import 'package:flutter/material.dart';
 /// Use this instead of `ScaffoldMessenger.of(context)` for async flows where the
 /// originating page can be popped/deactivated before the feedback is shown.
 final GlobalKey<ScaffoldMessengerState> nimonRootScaffoldMessengerKey =
-    GlobalKey<ScaffoldMessengerState>(debugLabel: 'nimon_root_scaffold_messenger');
+    GlobalKey<ScaffoldMessengerState>(
+        debugLabel: 'nimon_root_scaffold_messenger');
 
 void nimonShowRootSnackBar(SnackBar snackBar) {
   final state = nimonRootScaffoldMessengerKey.currentState;
@@ -43,4 +44,3 @@ void nimonShowRootSnackBarAfterRouteSettles(
 
   attempt();
 }
-

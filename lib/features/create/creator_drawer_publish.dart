@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:nimon/features/create/creator_back_policy.dart';
+import 'package:nimon/features/create/creator_publish_status_provider.dart';
 import 'package:nimon/features/create/story_creator_provider.dart';
 import 'package:nimon/features/create/story_creator_review_display.dart';
 import 'package:nimon/features/profile/profile_navigation_helpers.dart';
@@ -99,7 +100,8 @@ Future<void> performCreatorDrawerPublish({
             children: [
               Text('Full Learn published', style: titleStyle),
               const SizedBox(height: 4),
-              Text('Your full learning version is now ready.', style: bodyStyle),
+              Text('Your full learning version is now ready.',
+                  style: bodyStyle),
             ],
           ),
         );
@@ -128,5 +130,6 @@ Future<void> performCreatorDrawerPublish({
     }
   } finally {
     publishing.state = false;
+    ref.read(creatorPublishStatusTextProvider.notifier).state = null;
   }
 }

@@ -18,7 +18,8 @@ void main() {
       repo = RemoteStoryDraftRepository(apiBaseUrl: 'http://localhost:3000');
     });
 
-    test('create -> save -> list -> publish RO -> publish FL (etag enforced)', () async {
+    test('create -> save -> list -> publish RO -> publish FL (etag enforced)',
+        () async {
       // Confirm remote mode is reachable (create should return server-shaped draftId)
       final created = await repo.createNewDraft();
       expect(created.id.trim(), isNotEmpty);
@@ -75,9 +76,9 @@ void main() {
       expect(flSaved.publishState, StoryPublishState.fullLearnPublished);
 
       // Confirm local copy still exists (resume-meta is local-only; draft storage should hold it).
-      final localLoaded = await StoryCreatorDraftStorage.load(draftId: created.id);
+      final localLoaded =
+          await StoryCreatorDraftStorage.load(draftId: created.id);
       expect(localLoaded, isNotNull);
     });
   });
 }
-

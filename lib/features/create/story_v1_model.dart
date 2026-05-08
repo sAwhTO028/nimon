@@ -77,6 +77,7 @@ class ContentProvenance {
   });
 
   final ContentSourceMode sourceMode;
+
   /// False when creator has not yet reviewed an AI-generated block.
   final bool lastReviewedByCreator;
 
@@ -143,7 +144,8 @@ class LocalizedMeanings {
   }) {
     final en = enRaw.trim();
     final my = myRaw.trim();
-    final extra = Map<String, String>.from(preserveExtrasFrom?.byLanguage ?? {});
+    final extra =
+        Map<String, String>.from(preserveExtrasFrom?.byLanguage ?? {});
     if (en.isEmpty && my.isEmpty && extra.isEmpty) return null;
     return LocalizedMeanings(
       en: en.isEmpty ? null : en,
@@ -252,8 +254,7 @@ class FuriganaSpan {
   final int end;
   final String reading;
 
-  bool get isValid =>
-      start >= 0 && end > start && reading.trim().isNotEmpty;
+  bool get isValid => start >= 0 && end > start && reading.trim().isNotEmpty;
 }
 
 /// V1: optional reading for a vocab pick from story text — only when unambiguous.
@@ -409,10 +410,12 @@ class VocabularyKanjiEntry {
       type: type ?? this.type,
       reading: clearReading ? null : (reading ?? this.reading),
       glosses: clearGlosses ? null : (glosses ?? this.glosses),
-      exampleSentence:
-          clearExampleSentence ? null : (exampleSentence ?? this.exampleSentence),
-      exampleMeanings:
-          clearExampleMeanings ? null : (exampleMeanings ?? this.exampleMeanings),
+      exampleSentence: clearExampleSentence
+          ? null
+          : (exampleSentence ?? this.exampleSentence),
+      exampleMeanings: clearExampleMeanings
+          ? null
+          : (exampleMeanings ?? this.exampleMeanings),
       examplePairs: examplePairs ?? this.examplePairs,
       provenance: provenance ?? this.provenance,
     );
@@ -484,7 +487,8 @@ class GrammarEntry {
       meanings: clearMeanings ? null : (meanings ?? this.meanings),
       usage: clearUsage ? null : (usage ?? this.usage),
       examples: examples ?? List.from(this.examples),
-      mistakeWrong: clearMistakeWrong ? null : (mistakeWrong ?? this.mistakeWrong),
+      mistakeWrong:
+          clearMistakeWrong ? null : (mistakeWrong ?? this.mistakeWrong),
       mistakeCorrect:
           clearMistakeCorrect ? null : (mistakeCorrect ?? this.mistakeCorrect),
       relatedNote: clearRelatedNote ? null : (relatedNote ?? this.relatedNote),
@@ -565,7 +569,8 @@ class QuizEntry {
       prompt: prompt ?? this.prompt,
       options: options ?? List.from(this.options),
       correctIndex: correctIndex ?? this.correctIndex,
-      explanations: clearExplanations ? null : (explanations ?? this.explanations),
+      explanations:
+          clearExplanations ? null : (explanations ?? this.explanations),
       sourceNote: clearSourceNote ? null : (sourceNote ?? this.sourceNote),
       provenance: provenance ?? this.provenance,
     );
@@ -619,6 +624,7 @@ class StoryAudioAsset {
 
   final String id;
   final String? sourceUrl;
+
   /// Creator-picked local file metadata for V1 upload-first flow.
   ///
   /// - [localFileName] is the primary creator-visible identifier.
@@ -673,8 +679,7 @@ class StoryAudioAsset {
           clearLocalSizeBytes ? null : (localSizeBytes ?? this.localSizeBytes),
       localExtension:
           clearLocalExtension ? null : (localExtension ?? this.localExtension),
-      displayName:
-          clearDisplayName ? null : (displayName ?? this.displayName),
+      displayName: clearDisplayName ? null : (displayName ?? this.displayName),
       durationSeconds: clearDurationSeconds
           ? null
           : (durationSeconds ?? this.durationSeconds),
@@ -733,6 +738,7 @@ class StoryBasics {
   final String level;
   final String description;
   final String promptSourceNote;
+
   /// V1 intended duration band storage key (e.g. `3_5`, `5_7`, `7_9`).
   ///
   /// This is the canonical duration signal for completion/readiness thresholds.
@@ -793,8 +799,10 @@ class CreatorStoryV1 {
     required this.audio,
     required this.publishState,
     required Map<LearnModuleId, LearnModuleTaskStatus> moduleWorkflowStatuses,
-  }) : moduleWorkflowStatuses =
-            Map<LearnModuleId, LearnModuleTaskStatus>.from(moduleWorkflowStatuses);
+    this.publishedMonoId,
+    this.hasUnpublishedCoreChanges,
+  }) : moduleWorkflowStatuses = Map<LearnModuleId, LearnModuleTaskStatus>.from(
+            moduleWorkflowStatuses);
 
   final StoryBasics basics;
   final List<StorySentenceItem> sentences;
@@ -804,6 +812,12 @@ class CreatorStoryV1 {
   final AudioLayer audio;
   final StoryPublishState publishState;
   final Map<LearnModuleId, LearnModuleTaskStatus> moduleWorkflowStatuses;
+
+  /// Server linkage when this draft backs a published mono (remote drafts).
+  final String? publishedMonoId;
+
+  /// From remote draft row: core differs from last published snapshot (`null` = unknown / local-only).
+  final bool? hasUnpublishedCoreChanges;
 
   static final _uuid = Uuid();
 
@@ -833,6 +847,8 @@ class CreatorStoryV1 {
       audio: const AudioLayer(),
       publishState: StoryPublishState.draft,
       moduleWorkflowStatuses: modules,
+      publishedMonoId: null,
+      hasUnpublishedCoreChanges: null,
     );
   }
 
@@ -882,6 +898,9 @@ class CreatorStoryV1 {
     AudioLayer? audio,
     StoryPublishState? publishState,
     Map<LearnModuleId, LearnModuleTaskStatus>? moduleWorkflowStatuses,
+    String? publishedMonoId,
+    bool? hasUnpublishedCoreChanges,
+    bool clearPublishedLinkageFields = false,
   }) {
     return CreatorStoryV1(
       basics: basics ?? this.basics,
@@ -893,6 +912,12 @@ class CreatorStoryV1 {
       publishState: publishState ?? this.publishState,
       moduleWorkflowStatuses:
           moduleWorkflowStatuses ?? Map.from(this.moduleWorkflowStatuses),
+      publishedMonoId: clearPublishedLinkageFields
+          ? null
+          : (publishedMonoId ?? this.publishedMonoId),
+      hasUnpublishedCoreChanges: clearPublishedLinkageFields
+          ? null
+          : (hasUnpublishedCoreChanges ?? this.hasUnpublishedCoreChanges),
     );
   }
 }

@@ -10,7 +10,11 @@ class QuizScreen extends StatefulWidget {
 class _QuizScreenState extends State<QuizScreen> {
   int i = 0, score = 0;
   final qs = const [
-    {'q': '四千', 'ops': ['よん', 'しはんき', 'よんせん', 'よっつ'], 'a': 2},
+    {
+      'q': '四千',
+      'ops': ['よん', 'しはんき', 'よんせん', 'よっつ'],
+      'a': 2
+    },
   ];
 
   @override
@@ -21,18 +25,26 @@ class _QuizScreenState extends State<QuizScreen> {
       appBar: AppBar(
         title: const Text('Quiz'),
         leading: const NimonBackButton(),
-        actions: [Center(child: Padding(padding: const EdgeInsets.only(right: 12), child: Text('1/10')))],
+        actions: [
+          Center(
+              child: Padding(
+                  padding: const EdgeInsets.only(right: 12),
+                  child: Text('1/10')))
+        ],
       ),
       body: Padding(
         padding: const EdgeInsets.all(16),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        child:
+            Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
           Expanded(
             child: Center(
               child: Card(
                 child: SizedBox(
                   height: 160,
                   width: 220,
-                  child: Center(child: Text(q['q'] as String, style: const TextStyle(fontSize: 36))),
+                  child: Center(
+                      child: Text(q['q'] as String,
+                          style: const TextStyle(fontSize: 36))),
                 ),
               ),
             ),

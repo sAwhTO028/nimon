@@ -8,8 +8,8 @@ class RealBook3DCover extends StatelessWidget {
     required this.image,
     this.width = 180,
     this.height = 260,
-    this.thickness = 0,      // spine/page thickness - set to 0 to disable page edge
-    this.tiltDegrees = -18,  // Y-rotate
+    this.thickness = 0, // spine/page thickness - set to 0 to disable page edge
+    this.tiltDegrees = -18, // Y-rotate
     this.perspective = 0.0012,
     this.borderRadius = 16,
     this.overlayTitle,
@@ -176,7 +176,8 @@ class _BookBody extends StatelessWidget {
                 child: BackdropFilter(
                   filter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                     color: Colors.black.withOpacity(0.45),
                     child: Text(
                       overlayTitle!,
@@ -197,4 +198,3 @@ class _BookBody extends StatelessWidget {
     );
   }
 }
-

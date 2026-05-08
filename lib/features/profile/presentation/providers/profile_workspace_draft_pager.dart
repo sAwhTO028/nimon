@@ -28,6 +28,7 @@ class ProfileWorkspaceDraftPager
     state = state.copyWith(
       requestEpoch: myEpoch,
       isInitialLoading: true,
+      isRefreshing: false,
       isLoadingMore: false,
       error: null,
     );
@@ -49,6 +50,10 @@ class ProfileWorkspaceDraftPager
         isInitialLoading: false,
         error: e,
       );
+    } finally {
+      if (state.requestEpoch == myEpoch) {
+        state = state.copyWith(isInitialLoading: false);
+      }
     }
   }
 
@@ -57,6 +62,7 @@ class ProfileWorkspaceDraftPager
     state = state.copyWith(
       requestEpoch: myEpoch,
       isRefreshing: true,
+      isInitialLoading: false,
       isLoadingMore: false,
       nextCursor: null,
       error: null,
@@ -79,6 +85,10 @@ class ProfileWorkspaceDraftPager
         isRefreshing: false,
         error: e,
       );
+    } finally {
+      if (state.requestEpoch == myEpoch) {
+        state = state.copyWith(isRefreshing: false);
+      }
     }
   }
 
@@ -105,7 +115,9 @@ class ProfileWorkspaceDraftPager
       if (state.requestEpoch != myEpoch) return;
       state = state.copyWith(error: e);
     } finally {
-      state = state.copyWith(isLoadingMore: false);
+      if (state.requestEpoch == myEpoch) {
+        state = state.copyWith(isLoadingMore: false);
+      }
     }
   }
 

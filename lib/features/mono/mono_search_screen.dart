@@ -24,9 +24,10 @@ class MonoSearchScreen extends StatelessWidget {
           padding: const EdgeInsets.only(top: 28),
           child: Text(
             'Search across the Mono feed will be available in a future update.',
-            style: theme.type.storyCardSummary(theme, context.widthClass).copyWith(
-                  color: scheme.onSurfaceVariant,
-                ),
+            style:
+                theme.type.storyCardSummary(theme, context.widthClass).copyWith(
+                      color: scheme.onSurfaceVariant,
+                    ),
             textAlign: TextAlign.start,
           ),
         ),

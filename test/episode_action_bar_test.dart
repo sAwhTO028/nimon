@@ -22,7 +22,8 @@ void main() {
       );
     });
 
-    testWidgets('EpisodeActionBar displays all three buttons correctly', (WidgetTester tester) async {
+    testWidgets('EpisodeActionBar displays all three buttons correctly',
+        (WidgetTester tester) async {
       bool saveCalled = false;
       bool shareCalled = false;
       bool startCalled = false;
@@ -85,7 +86,9 @@ void main() {
       expect(startCalled, isTrue);
     });
 
-    testWidgets('Responsive layout - share button has fixed size, others are flexible', (WidgetTester tester) async {
+    testWidgets(
+        'Responsive layout - share button has fixed size, others are flexible',
+        (WidgetTester tester) async {
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
@@ -127,7 +130,8 @@ void main() {
       expect(startExpandedWidget.flex, equals(2));
     });
 
-    testWidgets('Three button layout works correctly', (WidgetTester tester) async {
+    testWidgets('Three button layout works correctly',
+        (WidgetTester tester) async {
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
@@ -144,7 +148,8 @@ void main() {
       );
 
       // Verify all three buttons are present
-      expect(find.byIcon(Icons.ios_share_rounded), findsOneWidget); // Share icon
+      expect(
+          find.byIcon(Icons.ios_share_rounded), findsOneWidget); // Share icon
       expect(find.text('Save for Later'), findsOneWidget);
       expect(find.text('Start Reading'), findsOneWidget);
 
@@ -158,7 +163,8 @@ void main() {
       expect(startButton, findsOneWidget);
     });
 
-    testWidgets('Share button is icon-only and compact', (WidgetTester tester) async {
+    testWidgets('Share button is icon-only and compact',
+        (WidgetTester tester) async {
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
@@ -178,21 +184,26 @@ void main() {
       );
 
       expect(shareButton, findsOneWidget);
-      
+
       // Verify it's icon-only (no text)
-      expect(find.descendant(
-        of: shareButton,
-        matching: find.byType(Text),
-      ), findsNothing);
-      
+      expect(
+          find.descendant(
+            of: shareButton,
+            matching: find.byType(Text),
+          ),
+          findsNothing);
+
       // Verify it has the share icon
-      expect(find.descendant(
-        of: shareButton,
-        matching: find.byIcon(Icons.ios_share_rounded),
-      ), findsOneWidget);
+      expect(
+          find.descendant(
+            of: shareButton,
+            matching: find.byIcon(Icons.ios_share_rounded),
+          ),
+          findsOneWidget);
     });
 
-    testWidgets('Accessibility semantics are correct', (WidgetTester tester) async {
+    testWidgets('Accessibility semantics are correct',
+        (WidgetTester tester) async {
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
@@ -212,7 +223,8 @@ void main() {
       expect(find.bySemanticsLabel('Episode actions'), findsOneWidget);
     });
 
-    testWidgets('Loading state disables buttons correctly', (WidgetTester tester) async {
+    testWidgets('Loading state disables buttons correctly',
+        (WidgetTester tester) async {
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
@@ -244,7 +256,8 @@ void main() {
       expect(startButtonWidget.onPressed, isNull);
     });
 
-    testWidgets('Built-in sharing works when no onShare callback provided', (WidgetTester tester) async {
+    testWidgets('Built-in sharing works when no onShare callback provided',
+        (WidgetTester tester) async {
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
@@ -263,7 +276,8 @@ void main() {
       await tester.pump(const Duration(milliseconds: 250));
     });
 
-    testWidgets('Landscape orientation maintains proportions', (WidgetTester tester) async {
+    testWidgets('Landscape orientation maintains proportions',
+        (WidgetTester tester) async {
       // Set landscape orientation
       tester.view.physicalSize = const Size(800, 400);
       tester.view.devicePixelRatio = 1.0;
@@ -299,7 +313,7 @@ void main() {
         of: find.text('Start Reading'),
         matching: find.byType(Expanded),
       );
-      
+
       expect(saveExpanded, findsOneWidget);
       expect(startExpanded, findsOneWidget);
 

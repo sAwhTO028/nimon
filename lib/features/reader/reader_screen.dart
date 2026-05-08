@@ -17,7 +17,7 @@ class ReaderScreen extends StatelessWidget {
         leading: const NimonBackButton(),
       ),
       body: ListView.builder(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 24), 
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
         itemCount: episode.blocks.length,
         itemBuilder: (ctx, i) => _tile(ctx, episode.blocks[i], i),
       ),
@@ -37,27 +37,30 @@ class ReaderScreen extends StatelessWidget {
 
     final align = switch (pos) {
       'right' => MainAxisAlignment.end,
-      'mid'   => MainAxisAlignment.center,
-      _       => MainAxisAlignment.start,
+      'mid' => MainAxisAlignment.center,
+      _ => MainAxisAlignment.start,
     };
     final bubbleColor = switch (color) {
-      'pink'  => Colors.pink.shade100,
+      'pink' => Colors.pink.shade100,
       'green' => Colors.green.shade100,
-      _       => Colors.blue.shade100,
+      _ => Colors.blue.shade100,
     };
     Widget content = isDialog
         ? Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (spk.isNotEmpty)
-            Text('$spk:', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.black54)),
-          Text(text),
-        ],
-      )
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (spk.isNotEmpty)
+                Text('$spk:',
+                    style: const TextStyle(
+                        fontWeight: FontWeight.bold, color: Colors.black54)),
+              Text(text),
+            ],
+          )
         : Text(text);
 
     final bubble = Container(
-      constraints: BoxConstraints(maxWidth: MediaQuery.sizeOf(ctx).width * (isDialog ? 0.85 : 0.95)),
+      constraints: BoxConstraints(
+          maxWidth: MediaQuery.sizeOf(ctx).width * (isDialog ? 0.85 : 0.95)),
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(

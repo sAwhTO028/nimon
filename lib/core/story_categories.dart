@@ -17,14 +17,16 @@ class StoryCategories {
   /// Get the asset path for a category's thumbnail/icon
   /// Returns null if no asset exists yet
   static String? getCategoryImagePath(String category) {
-    final categoryLower = category.toLowerCase().replaceAll(' ', '_').replaceAll('/', '_');
+    final categoryLower =
+        category.toLowerCase().replaceAll(' ', '_').replaceAll('/', '_');
     return 'assets/images/$categoryLower.png';
   }
 
   /// Get episode thumbnail path based on category and episode number
   /// Format: assets/images/{category}_{episodeNumber}.png
   static String? getEpisodeThumbnailPath(String category, int episodeNumber) {
-    final categoryLower = category.toLowerCase().replaceAll(' ', '_').replaceAll('/', '_');
+    final categoryLower =
+        category.toLowerCase().replaceAll(' ', '_').replaceAll('/', '_');
     return 'assets/images/${categoryLower}_$episodeNumber.png';
   }
 
@@ -38,5 +40,3 @@ class StoryCategories {
     return 'assets/images/writer.png'; // Use existing asset as placeholder
   }
 }
-
-

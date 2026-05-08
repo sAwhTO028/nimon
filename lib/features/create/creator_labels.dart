@@ -34,4 +34,3 @@ abstract final class CreatorLabels {
     };
   }
 }
-

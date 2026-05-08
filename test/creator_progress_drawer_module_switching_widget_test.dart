@@ -401,7 +401,7 @@ void main() {
       await tester.pump();
       await _assertLocalActionDoesNotNavigate(
         tester,
-        tapTarget: find.widgetWithText(FilledButton, 'Upload audio'),
+        tapTarget: find.widgetWithText(FilledButton, 'Choose audio file'),
       );
     });
   });

@@ -58,4 +58,3 @@ abstract final class ProfileNavigation {
     router.go(Uri(path: '/more', queryParameters: q).toString());
   }
 }
-

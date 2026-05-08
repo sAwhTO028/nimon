@@ -19,6 +19,10 @@ export type PublishedMonoListItemDto = {
   createdAt: string;
   updatedAt: string;
   contentSummary: unknown | null;
+  /** Live UserProfile for [ownerId]; null when profile row missing. */
+  writerDisplayName: string | null;
+  writerHandle: string | null;
+  writerAvatarUrl: string | null;
 };
 
 export type PublishedMonoListResponseDto = {
@@ -29,5 +33,22 @@ export type PublishedMonoListResponseDto = {
 export type PublishedMonoDetailDto = PublishedMonoListItemDto & {
   /** Full JSON blob: core, learn, publishKind, sourceDraftId, etc. */
   content: unknown;
+};
+
+/** Response for `POST .../trash` — `trashedAt` is ISO-8601 when in Trash. */
+export type PublishedMonoTrashResponseDto = {
+  id: string;
+  trashedAt: string;
+};
+
+/** Response for `POST .../restore` — `trashedAt` is always JSON `null`. */
+export type PublishedMonoRestoreResponseDto = {
+  id: string;
+  trashedAt: null;
+};
+
+/** Request body for `DELETE .../permanent` — requires explicit confirmation phrase. */
+export type PublishedMonoPermanentDeleteRequestDto = {
+  confirm: string;
 };
 

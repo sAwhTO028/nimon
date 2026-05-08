@@ -19,7 +19,8 @@ final Expando<String> _nimonCreatorPendingPostFrameSig =
 /// Stable route identity for sync dedupe (hand-built [Uri] vs [GoRouter.state.uri]).
 String _creatorRouteDedupeUriKey(Uri uri) {
   final path = uri.path;
-  if (path != '/create/story/sentences' && !path.startsWith('/create/story/sentences/')) {
+  if (path != '/create/story/sentences' &&
+      !path.startsWith('/create/story/sentences/')) {
     return uri.toString();
   }
   final draft = (uri.queryParameters['draftId'] ?? '').trim();
@@ -35,7 +36,8 @@ String _creatorRouteDedupeUriKey(Uri uri) {
 
 bool _sentencesUriShowsLearnEmbed(Uri u) {
   if (!u.path.startsWith('/create/story/sentences')) return false;
-  return creatorWorkspaceStepForSentencesPanel(u.queryParameters['panel']) != null;
+  return creatorWorkspaceStepForSentencesPanel(u.queryParameters['panel']) !=
+      null;
 }
 
 String _creatorSyncSig({
@@ -63,7 +65,8 @@ void _reconcileDraftIdWithRouter(WidgetRef ref, Uri locationUri) {
 void _recordResumeFromLocationUri(WidgetRef ref, Uri fresh) {
   final qp = fresh.queryParameters;
   final fromQ = (qp['draftId'] ?? '').trim();
-  final draftId = fromQ.isNotEmpty ? fromQ : ref.read(storyCreatorDraftDataProvider).id;
+  final draftId =
+      fromQ.isNotEmpty ? fromQ : ref.read(storyCreatorDraftDataProvider).id;
   if (draftId.trim().isEmpty) return;
 
   final path = fresh.path;
@@ -122,8 +125,9 @@ void syncCreatorDrawerSessionForResolvedLocation(
       ? '/create/story/sentences'
       : router.state.matchedLocation;
   final fromQ = (locationUri.queryParameters['draftId'] ?? '').trim();
-  final draftIdForSig =
-      fromQ.isNotEmpty ? fromQ : ref.read(storyCreatorDraftDataProvider).id.trim();
+  final draftIdForSig = fromQ.isNotEmpty
+      ? fromQ
+      : ref.read(storyCreatorDraftDataProvider).id.trim();
   final learnNow = ref.read(creatorDrawerSessionProvider).learnModeEnabled;
   final sig = _creatorSyncSig(
     uri: locationUri,
@@ -162,8 +166,9 @@ void syncCreatorDrawerSessionForRouter(GoRouter router, WidgetRef ref) {
   final uriNow = router.state.uri;
   final matchedNow = router.state.matchedLocation;
   final fromQ = (uriNow.queryParameters['draftId'] ?? '').trim();
-  final draftIdForSig =
-      fromQ.isNotEmpty ? fromQ : ref.read(storyCreatorDraftDataProvider).id.trim();
+  final draftIdForSig = fromQ.isNotEmpty
+      ? fromQ
+      : ref.read(storyCreatorDraftDataProvider).id.trim();
   final learnNow = ref.read(creatorDrawerSessionProvider).learnModeEnabled;
   final sig = _creatorSyncSig(
     uri: uriNow,
@@ -178,7 +183,7 @@ void syncCreatorDrawerSessionForRouter(GoRouter router, WidgetRef ref) {
   creatorNavDebug(
     'route_sync',
     'router uri=${router.state.uri} matchedLocation=${router.state.matchedLocation} '
-    'panel=${router.state.uri.queryParameters['panel']}',
+        'panel=${router.state.uri.queryParameters['panel']}',
   );
   final notifier = ref.read(creatorDrawerSessionProvider.notifier);
 
@@ -199,11 +204,13 @@ void syncCreatorDrawerSessionForRouter(GoRouter router, WidgetRef ref) {
         return;
       }
       final fresh = router.state.uri;
-      if (_sentencesUriShowsLearnEmbed(uriNow) && !_sentencesUriShowsLearnEmbed(fresh)) {
+      if (_sentencesUriShowsLearnEmbed(uriNow) &&
+          !_sentencesUriShowsLearnEmbed(fresh)) {
         // [router.state.uri] can lag the delegate notification that scheduled this
         // callback; retry once after microtasks instead of applying a stale main host.
         unawaited(
-          Future<void>.microtask(() => syncCreatorDrawerSessionForRouter(router, ref)),
+          Future<void>.microtask(
+              () => syncCreatorDrawerSessionForRouter(router, ref)),
         );
         return;
       }

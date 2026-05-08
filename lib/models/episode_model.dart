@@ -30,12 +30,14 @@ class EpisodeModel {
   factory EpisodeModel.fromEpisodeMeta(EpisodeMeta meta) {
     // Parse read time from string (e.g., "5 min" -> Duration(minutes: 5))
     final readTimeMatch = RegExp(r'(\d+)').firstMatch(meta.readTime);
-    final minutes = readTimeMatch != null ? int.parse(readTimeMatch.group(1)!) : 5;
-    
+    final minutes =
+        readTimeMatch != null ? int.parse(readTimeMatch.group(1)!) : 5;
+
     // Parse episode number from episodeNo (e.g., "Episode 7" -> 7)
     final episodeMatch = RegExp(r'(\d+)').firstMatch(meta.episodeNo);
-    final episodeNumber = episodeMatch != null ? int.parse(episodeMatch.group(1)!) : 1;
-    
+    final episodeNumber =
+        episodeMatch != null ? int.parse(episodeMatch.group(1)!) : 1;
+
     return EpisodeModel(
       title: meta.title,
       number: episodeNumber,

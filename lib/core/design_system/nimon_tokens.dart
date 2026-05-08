@@ -111,4 +111,3 @@ extension NimonThemeTokensX on ThemeData {
   NimonSpacing get space => extension<NimonSpacing>() ?? NimonSpacing.standard;
   NimonRadii get radii => extension<NimonRadii>() ?? NimonRadii.standard;
 }
-

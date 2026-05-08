@@ -11,16 +11,15 @@ import 'package:just_audio/just_audio.dart';
 import 'package:nimon/features/create/creator_back_policy.dart';
 import 'package:nimon/features/create/creator_drawer_session.dart';
 import 'package:nimon/features/create/creator_navigation_debug.dart';
-import 'package:nimon/features/create/creator_quiz_ui_state.dart';
 import 'package:nimon/features/create/creator_reorder_handle.dart';
 import 'package:nimon/features/create/creator_drawer_publish.dart';
+import 'package:nimon/features/create/creator_drawer_publish_labels.dart';
 import 'package:nimon/features/create/creator_learn_mode_sync.dart';
 import 'package:nimon/features/create/creator_progress_drawer.dart';
 import 'package:nimon/features/create/creator_route_sync.dart';
 import 'package:nimon/features/create/creator_route_sync_listener.dart';
 import 'package:nimon/features/create/creator_workspace_module_placeholder.dart';
 import 'package:nimon/features/create/creator_workspace_step.dart';
-import 'package:nimon/features/create/creator_read_only_publish_tracking.dart';
 import 'package:nimon/features/create/story_creator_models.dart';
 import 'package:nimon/features/create/story_creator_provider.dart';
 import 'package:nimon/features/create/story_creator_review_display.dart';
@@ -73,6 +72,7 @@ class _StoryCreatorSentencesScreenState
   Timer? _draftSyncDebounce;
 
   static const _hPad = 16.0;
+
   /// Rhythm: list ↔ composer and between sentence cards.
   static const _listBottomPad = 12.0;
   static const _cardGap = 12.0;
@@ -924,18 +924,13 @@ class _StoryCreatorSentencesScreenState
               ),
               const SizedBox(height: 10),
               Text(
-                'Attach one full-story audio file for listening practice.\n\n'
+                'Upload story audio for listening practice in Full Learn.\n\n'
                 'How to add audio:\n'
-                '1. Tap “Upload audio”\n'
-                '2. Choose one file (mp3, m4a, wav)\n'
-                '3. Optionally set a display name\n'
-                '4. Optionally set duration (seconds)\n\n'
-                'Manage it anytime:\n'
-                '- Replace: choose a new file\n'
-                '- Remove: clears the attachment\n\n'
-                'Notes:\n'
-                '- Audio is optional for Reading Only\n'
-                '- Full Learn completion may require audio (V1 rule)',
+                '1. Tap “Choose audio file”\n'
+                '2. Pick mp3, m4a, or wav (sign in to save online)\n'
+                '3. After upload, tap “Add audio to story” to attach it to this draft\n\n'
+                'Optional display name or length: expand “Optional details” on the success screen.\n\n'
+                'You can Replace audio or Remove audio anytime.',
                 style: theme.textTheme.bodyMedium?.copyWith(
                   color: cs.onSurfaceVariant,
                   height: 1.4,
@@ -1304,23 +1299,34 @@ class _StoryCreatorSentencesScreenState
     final isEditing = _editingSentenceIndex != null;
 
     final session = ref.watch(creatorDrawerSessionProvider);
-    final routePanelStep =
-        creatorWorkspaceStepForSentencesPanel(qp['panel']);
+    final routePanelStep = creatorWorkspaceStepForSentencesPanel(qp['panel']);
     // V1: on this host, router `?panel=` (or absence = main storytelling) is canonical
     // for the embedded module; session is reconciled from the same URI in [syncCreatorDrawerSessionForRouter].
-    final effectiveStep =
-        routePanelStep ?? CreatorWorkspaceStep.storySentences;
+    final effectiveStep = routePanelStep ?? CreatorWorkspaceStep.storySentences;
     final progress = buildCreatorDrawerProgressModel(draft: draft);
     final publishModel = buildStoryReviewDisplayModel(draft);
     final draftState = ref.watch(storyCreatorDraftProvider);
     final roSig = draftState.readOnlyPublishedCoreSig;
-    final roExists =
-        roSig != null || draft.publishState != StoryPublishState.draft;
-    final roDirty = roSig != null &&
-        computeReadOnlyPublishedCoreSignature(draft) != roSig;
-    final flExists =
-        draft.publishState == StoryPublishState.fullLearnPublished;
-    final flDirty = draftState.dirty;
+    final roBaseline = draftState.publishedEditReadOnlyBaselineSig;
+    final flBaseline = draftState.publishedEditFullLearnBaselineSig;
+    final roExists = computeReadOnlyPublishedExists(
+      draft: draft,
+      readOnlyPublishedCoreSig: roSig,
+    );
+    final roDirty = computeReadOnlyHasUnpublishedChanges(
+      draft: draft,
+      readOnlyPublishedCoreSig: roSig,
+      dirty: draftState.dirty,
+      publishedEditReadOnlyBaselineSig: roBaseline,
+    );
+    final flExists = draft.publishState == StoryPublishState.fullLearnPublished;
+    final flDirty = computeFullLearnHasUnpublishedChanges(
+      draft: draft,
+      readOnlyPublishedCoreSig: roSig,
+      dirty: draftState.dirty,
+      publishedEditReadOnlyBaselineSig: roBaseline,
+      publishedEditFullLearnBaselineSig: flBaseline,
+    );
     final showSentencesWorkspace =
         effectiveStep == CreatorWorkspaceStep.storySentences;
     final inVocabularyModule = effectiveStep == CreatorWorkspaceStep.vocabulary;
@@ -1338,8 +1344,7 @@ class _StoryCreatorSentencesScreenState
     // glass header cluster (cards should feel like they slide underneath it).
     final listTopPad = (mq.padding.top + 56 + 22).clamp(82, 128).toDouble();
 
-    final listBottomPad =
-        _listBottomPad + (mq.padding.bottom > 0 ? 4.0 : 0.0);
+    final listBottomPad = _listBottomPad + (mq.padding.bottom > 0 ? 4.0 : 0.0);
 
     // Visible title lives in the floating glass header (premium chat-style).
 
@@ -1420,9 +1425,10 @@ class _StoryCreatorSentencesScreenState
                                       final label = i < supportLabels.length
                                           ? supportLabels[i]
                                           : null;
-                                      final s = i < sentenceRowMergePreview.length
-                                          ? sentenceRowMergePreview[i]
-                                          : null;
+                                      final s =
+                                          i < sentenceRowMergePreview.length
+                                              ? sentenceRowMergePreview[i]
+                                              : null;
                                       final spans = (s != null &&
                                               s.japaneseText == lines[i])
                                           ? s.furiganaSpans
@@ -1463,7 +1469,8 @@ class _StoryCreatorSentencesScreenState
                                             index: i,
                                             child: CreatorReorderHandle(
                                               theme: theme,
-                                              semanticsLabel: 'Reorder sentence',
+                                              semanticsLabel:
+                                                  'Reorder sentence',
                                             ),
                                           ),
                                         ),
@@ -1638,62 +1645,37 @@ class _StoryCreatorSentencesScreenState
                 animation: _progressDrawerController,
                 child: basePage,
                 builder: (context, child) {
-                final t = _progressDrawerController.value;
-                final showDrawer = t > 0.001 || _drawerPanSession.value;
-                final enableDrawerDrag = showDrawer;
-                final drawerDx = drawerW * (1.0 - t);
-                final pageDx = -drawerW * t;
+                  final t = _progressDrawerController.value;
+                  final showDrawer = t > 0.001 || _drawerPanSession.value;
+                  final enableDrawerDrag = showDrawer;
+                  final drawerDx = drawerW * (1.0 - t);
+                  final pageDx = -drawerW * t;
 
-                return Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    // Background behind the pushed page (prevents default black showing).
-                    Positioned.fill(
-                      child: ColoredBox(
-                        color: theme.colorScheme.surfaceContainerLow,
-                      ),
-                    ),
-
-                    // Story page (pushes left while the drawer opens).
-                    Transform.translate(
-                      offset: Offset(pageDx, 0),
-                      child: IgnorePointer(
-                        ignoring: showDrawer,
-                        child: child!,
-                      ),
-                    ),
-
-                    // Backdrop blocks underlying page while open and supports tap-to-close.
-                    if (showDrawer)
+                  return Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      // Background behind the pushed page (prevents default black showing).
                       Positioned.fill(
-                        child: GestureDetector(
-                          behavior: HitTestBehavior.opaque,
-                          onTap: () => unawaited(_closeProgressDrawer()),
-                          onHorizontalDragStart:
-                              enableDrawerDrag ? (_) => _onDrawerDragStart() : null,
-                          onHorizontalDragUpdate: enableDrawerDrag
-                              ? (d) => _onDrawerDragUpdate(drawerW, d)
-                              : null,
-                          onHorizontalDragEnd: enableDrawerDrag
-                              ? (d) => _snapDrawerAfterDrag(drawerW, d)
-                              : null,
-                          onHorizontalDragCancel: enableDrawerDrag
-                              ? () => _drawerPanSession.value = false
-                              : null,
+                        child: ColoredBox(
+                          color: theme.colorScheme.surfaceContainerLow,
                         ),
                       ),
 
-                    // Side drawer panel slides over the page.
-                    if (showDrawer)
-                      Positioned(
-                        right: 0,
-                        top: 0,
-                        bottom: 0,
-                        width: drawerW,
-                        child: Transform.translate(
-                          offset: Offset(drawerDx, 0),
+                      // Story page (pushes left while the drawer opens).
+                      Transform.translate(
+                        offset: Offset(pageDx, 0),
+                        child: IgnorePointer(
+                          ignoring: showDrawer,
+                          child: child!,
+                        ),
+                      ),
+
+                      // Backdrop blocks underlying page while open and supports tap-to-close.
+                      if (showDrawer)
+                        Positioned.fill(
                           child: GestureDetector(
-                            behavior: HitTestBehavior.translucent,
+                            behavior: HitTestBehavior.opaque,
+                            onTap: () => unawaited(_closeProgressDrawer()),
                             onHorizontalDragStart: enableDrawerDrag
                                 ? (_) => _onDrawerDragStart()
                                 : null,
@@ -1706,138 +1688,174 @@ class _StoryCreatorSentencesScreenState
                             onHorizontalDragCancel: enableDrawerDrag
                                 ? () => _drawerPanSession.value = false
                                 : null,
-                            child: Material(
-                              color: theme.colorScheme.surfaceContainerLow,
-                              child: SafeArea(
-                                bottom: true,
-                                top: true,
-                                left: false,
-                                right: true,
-                                child: SizedBox.expand(
-                                  child: CreatorProgressDrawer(
-                                    drawerKeySlot:
-                                        kCreatorProgressDrawerKeySentences,
-                                    coreItems: progress.coreItems,
-                                    learnItems: progress.learnItems,
-                                    publishModel: publishModel,
-                                    readOnlyPublishedExists: roExists,
-                                    readOnlyHasUnpublishedChanges: roDirty,
-                                    fullLearnPublishedExists: flExists,
-                                    fullLearnHasUnpublishedChanges: flDirty,
-                                    learnModeEnabled: session.learnModeEnabled,
-                                    currentStepId:
-                                        creatorEffectiveActiveStep(session),
-                                    onLearnModeChanged: (v) {
-                                      applyCreatorLearnMode(
-                                        context: context,
-                                        ref: ref,
-                                        learnModeEnabled: v,
-                                        closeDrawerOnTurnOff: () =>
-                                            unawaited(_closeProgressDrawer()),
-                                      );
-                                    },
-                                    onOpenStep: (route) {
-                                              final draftId = ref
-                                                  .read(
-                                                      storyCreatorDraftDataProvider)
-                                                  .id;
-                                              final beforeUri = () {
-                                                try {
-                                                  return GoRouterState.of(context)
-                                                      .uri
-                                                      .toString();
-                                                } catch (_) {
-                                                  return '(no_go_router)';
-                                                }
-                                              }();
-                                              final beforeSession = ref.read(
-                                                  creatorDrawerSessionProvider);
-                                              creatorNavDebug(
-                                                'drawer_module_tap',
-                                                'tap route=$route | beforeUri=$beforeUri | '
-                                                'before activeModule=${beforeSession.activeModule} '
-                                                'before step=${beforeSession.sentencesMainStep}',
-                                              );
-                                              final step =
-                                                  creatorWorkspaceStepForDrawerRoute(
-                                                      route);
-                                              if (step ==
-                                                  CreatorWorkspaceStep.storyBasics) {
-                                                context.push('$route?draftId=$draftId');
-                                                creatorNavDebug(
-                                                  'drawer_module_tap',
-                                                  'nav PUSH basics route=$route',
-                                                );
-                                                unawaited(_closeProgressDrawer());
-                                                return;
-                                              }
-                                              if (step != null) {
-                                                _prepareWorkspaceNavigation();
-                                                // Router is canonical; mirror the exact `go` target into session
-                                                // immediately and again post-frame (see [_goStorySentencesFromDrawerUri]).
-                                                final panel =
-                                                    _panelParamForStep(step);
-                                                if (panel != null) {
-                                                  _goStorySentencesFromDrawerUri(
-                                                    _sentencesHostDrawerUri(
-                                                      draftId: draftId,
-                                                      panel: panel,
-                                                    ),
-                                                  );
-                                                  creatorNavDebug(
-                                                    'drawer_module_tap',
-                                                    'nav URL_SYNC panel=$panel',
-                                                  );
-                                                } else if (step ==
-                                                    CreatorWorkspaceStep.storySentences) {
-                                                  _goStorySentencesFromDrawerUri(
-                                                    _sentencesHostDrawerUri(
-                                                      draftId: draftId,
-                                                    ),
-                                                  );
-                                                  creatorNavDebug(
-                                                    'drawer_module_tap',
-                                                    'nav URL_SYNC panel=(none)',
-                                                  );
-                                                }
-                                                final afterSession = ref.read(
-                                                    creatorDrawerSessionProvider);
-                                                creatorNavDebug(
-                                                  'drawer_module_tap',
-                                                  'nav EMBED step=$step | after activeModule=${afterSession.activeModule} '
-                                                  'after step=${afterSession.sentencesMainStep}',
-                                                );
-                                                unawaited(_closeProgressDrawer());
-                                                return;
-                                              }
-                                              context.push(route);
-                                              creatorNavDebug(
-                                                'drawer_module_tap',
-                                                'nav PUSH fallback route=$route',
-                                              );
-                                              unawaited(_closeProgressDrawer());
-                                            },
-                                            onSaveDraft: () {
-                                              unawaited(_closeProgressDrawer());
-                                              _saveDraft();
-                                            },
-                                            onPublish: (mode) async {
-                                              unawaited(_closeProgressDrawer());
-                                              await performCreatorDrawerPublish(
-                                                ref: ref,
-                                                context: context,
-                                                mode: mode,
-                                              );
-                                            },
-                                          ),
-                                        ),
-                                      ),
+                          ),
+                        ),
+
+                      // Side drawer panel slides over the page.
+                      if (showDrawer)
+                        Positioned(
+                          right: 0,
+                          top: 0,
+                          bottom: 0,
+                          width: drawerW,
+                          child: Transform.translate(
+                            offset: Offset(drawerDx, 0),
+                            child: GestureDetector(
+                              behavior: HitTestBehavior.translucent,
+                              onHorizontalDragStart: enableDrawerDrag
+                                  ? (_) => _onDrawerDragStart()
+                                  : null,
+                              onHorizontalDragUpdate: enableDrawerDrag
+                                  ? (d) => _onDrawerDragUpdate(drawerW, d)
+                                  : null,
+                              onHorizontalDragEnd: enableDrawerDrag
+                                  ? (d) => _snapDrawerAfterDrag(drawerW, d)
+                                  : null,
+                              onHorizontalDragCancel: enableDrawerDrag
+                                  ? () => _drawerPanSession.value = false
+                                  : null,
+                              child: Material(
+                                color: theme.colorScheme.surfaceContainerLow,
+                                child: SafeArea(
+                                  bottom: true,
+                                  top: true,
+                                  left: false,
+                                  right: true,
+                                  child: SizedBox.expand(
+                                    child: CreatorProgressDrawer(
+                                      drawerKeySlot:
+                                          kCreatorProgressDrawerKeySentences,
+                                      coreItems: progress.coreItems,
+                                      learnItems: progress.learnItems,
+                                      publishModel: publishModel,
+                                      creatorDraft: ref
+                                          .watch(storyCreatorDraftDataProvider),
+                                      localDraftDirty: draftState.dirty,
+                                      readOnlyPublishedCoreSig: roSig,
+                                      publishedEditReadOnlyBaselineSig:
+                                          roBaseline,
+                                      publishedEditFullLearnBaselineSig:
+                                          flBaseline,
+                                      readOnlyPublishedExists: roExists,
+                                      readOnlyHasUnpublishedChanges: roDirty,
+                                      fullLearnPublishedExists: flExists,
+                                      fullLearnHasUnpublishedChanges: flDirty,
+                                      learnModeEnabled:
+                                          session.learnModeEnabled,
+                                      currentStepId:
+                                          creatorEffectiveActiveStep(session),
+                                      onLearnModeChanged: (v) {
+                                        applyCreatorLearnMode(
+                                          context: context,
+                                          ref: ref,
+                                          learnModeEnabled: v,
+                                          closeDrawerOnTurnOff: () =>
+                                              unawaited(_closeProgressDrawer()),
+                                        );
+                                      },
+                                      onOpenStep: (route) {
+                                        final draftId = ref
+                                            .read(storyCreatorDraftDataProvider)
+                                            .id;
+                                        final beforeUri = () {
+                                          try {
+                                            return GoRouterState.of(context)
+                                                .uri
+                                                .toString();
+                                          } catch (_) {
+                                            return '(no_go_router)';
+                                          }
+                                        }();
+                                        final beforeSession = ref
+                                            .read(creatorDrawerSessionProvider);
+                                        creatorNavDebug(
+                                          'drawer_module_tap',
+                                          'tap route=$route | beforeUri=$beforeUri | '
+                                              'before activeModule=${beforeSession.activeModule} '
+                                              'before step=${beforeSession.sentencesMainStep}',
+                                        );
+                                        final step =
+                                            creatorWorkspaceStepForDrawerRoute(
+                                                route);
+                                        if (step ==
+                                            CreatorWorkspaceStep.storyBasics) {
+                                          context
+                                              .push('$route?draftId=$draftId');
+                                          creatorNavDebug(
+                                            'drawer_module_tap',
+                                            'nav PUSH basics route=$route',
+                                          );
+                                          unawaited(_closeProgressDrawer());
+                                          return;
+                                        }
+                                        if (step != null) {
+                                          _prepareWorkspaceNavigation();
+                                          // Router is canonical; mirror the exact `go` target into session
+                                          // immediately and again post-frame (see [_goStorySentencesFromDrawerUri]).
+                                          final panel =
+                                              _panelParamForStep(step);
+                                          if (panel != null) {
+                                            _goStorySentencesFromDrawerUri(
+                                              _sentencesHostDrawerUri(
+                                                draftId: draftId,
+                                                panel: panel,
+                                              ),
+                                            );
+                                            creatorNavDebug(
+                                              'drawer_module_tap',
+                                              'nav URL_SYNC panel=$panel',
+                                            );
+                                          } else if (step ==
+                                              CreatorWorkspaceStep
+                                                  .storySentences) {
+                                            _goStorySentencesFromDrawerUri(
+                                              _sentencesHostDrawerUri(
+                                                draftId: draftId,
+                                              ),
+                                            );
+                                            creatorNavDebug(
+                                              'drawer_module_tap',
+                                              'nav URL_SYNC panel=(none)',
+                                            );
+                                          }
+                                          final afterSession = ref.read(
+                                              creatorDrawerSessionProvider);
+                                          creatorNavDebug(
+                                            'drawer_module_tap',
+                                            'nav EMBED step=$step | after activeModule=${afterSession.activeModule} '
+                                                'after step=${afterSession.sentencesMainStep}',
+                                          );
+                                          unawaited(_closeProgressDrawer());
+                                          return;
+                                        }
+                                        context.push(route);
+                                        creatorNavDebug(
+                                          'drawer_module_tap',
+                                          'nav PUSH fallback route=$route',
+                                        );
+                                        unawaited(_closeProgressDrawer());
+                                      },
+                                      onSaveDraft: () {
+                                        unawaited(_closeProgressDrawer());
+                                        _saveDraft();
+                                      },
+                                      onPublish: (mode) async {
+                                        unawaited(_closeProgressDrawer());
+                                        await performCreatorDrawerPublish(
+                                          ref: ref,
+                                          context: context,
+                                          mode: mode,
+                                        );
+                                      },
                                     ),
                                   ),
                                 ),
                               ),
-                  ],
-                );
+                            ),
+                          ),
+                        ),
+                    ],
+                  );
                 },
               );
             },

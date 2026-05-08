@@ -24,12 +24,14 @@ void main() {
 
     tearDown(() => container.dispose());
 
-    test('reportRoute: subtree matchedLocation + panel URI keeps vocabulary', () {
+    test('reportRoute: subtree matchedLocation + panel URI keeps vocabulary',
+        () {
       goVocabEmbed();
       final s = container.read(creatorDrawerSessionProvider);
       expect(s.sentencesMainStep, CreatorWorkspaceStep.vocabulary);
       expect(s.activeModule, CreatorModule.vocabulary);
-      expect(s.sentencesMainStep == CreatorWorkspaceStep.storySentences, isFalse);
+      expect(
+          s.sentencesMainStep == CreatorWorkspaceStep.storySentences, isFalse);
     });
 
     test(
@@ -45,7 +47,9 @@ void main() {
       expect(s.activeModule, CreatorModule.storySentences);
     });
 
-    test('reportRoute: leaving sentences host resets embedded step to story sentences', () {
+    test(
+        'reportRoute: leaving sentences host resets embedded step to story sentences',
+        () {
       goVocabEmbed();
       n.reportRoute(
         '/create/story/basics',
@@ -57,7 +61,9 @@ void main() {
       );
     });
 
-    test('retainSentencesHostEmbeddedStep restores vocabulary after story list step', () {
+    test(
+        'retainSentencesHostEmbeddedStep restores vocabulary after story list step',
+        () {
       goVocabEmbed();
       n.setSentencesMainStep(CreatorWorkspaceStep.storySentences);
       expect(
@@ -73,7 +79,9 @@ void main() {
       expect(s.activeModule, CreatorModule.vocabulary);
     });
 
-    test('vocabulary action ids: retain after drift never leaves vocabulary embed', () {
+    test(
+        'vocabulary action ids: retain after drift never leaves vocabulary embed',
+        () {
       goVocabEmbed();
       const actions = <String>[
         'vocab_add_from_story',
@@ -95,7 +103,8 @@ void main() {
           CreatorWorkspaceStep.vocabulary,
           reason: 'after retain simulating $a',
         );
-        expect(s.sentencesMainStep == CreatorWorkspaceStep.storySentences, isFalse);
+        expect(s.sentencesMainStep == CreatorWorkspaceStep.storySentences,
+            isFalse);
         expect(s.activeModule, CreatorModule.vocabulary);
       }
     });

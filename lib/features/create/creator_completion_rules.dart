@@ -135,9 +135,11 @@ int _validVocabCount(CreatorStoryV1 d) =>
 int _validGrammarCount(CreatorStoryV1 d) =>
     d.grammar.entries.where((e) => e.isValidV1).length;
 
-int _validQuizCount(CreatorStoryV1 d) => d.quiz.entries.where((e) => e.isValidV1).length;
+int _validQuizCount(CreatorStoryV1 d) =>
+    d.quiz.entries.where((e) => e.isValidV1).length;
 
-int _validAudioCount(CreatorStoryV1 d) => (d.audio.storyAudio?.isValidV1 == true) ? 1 : 0;
+int _validAudioCount(CreatorStoryV1 d) =>
+    (d.audio.storyAudio?.isValidV1 == true) ? 1 : 0;
 
 // -----------------------------------------------------------------------------
 // Count-based task status (drawer chips + publish alignment)
@@ -165,7 +167,8 @@ LearnModuleTaskStatus learnModuleTaskStatusFromCountThreshold({
 }
 
 /// Story basics: five required fields (title, description, level, category, duration band).
-LearnModuleTaskStatus learnModuleTaskStatusFromStoryBasics(CreatorStoryV1 draft) {
+LearnModuleTaskStatus learnModuleTaskStatusFromStoryBasics(
+    CreatorStoryV1 draft) {
   final resolved = resolveV1ThresholdsForDraft(draft);
   final hasDuration = resolved != null;
   final hasTitle = draft.title.trim().isNotEmpty;
@@ -181,7 +184,8 @@ LearnModuleTaskStatus learnModuleTaskStatusFromStoryBasics(CreatorStoryV1 draft)
   );
 }
 
-LearnModuleTaskStatus learnModuleTaskStatusFromStorySentences(CreatorStoryV1 draft) {
+LearnModuleTaskStatus learnModuleTaskStatusFromStorySentences(
+    CreatorStoryV1 draft) {
   final count = _validSentencesCount(draft);
   final resolved = resolveV1ThresholdsForDraft(draft);
   final min = resolved?.minStorySentences;
@@ -464,7 +468,8 @@ CreatorProgressSnapshot computeCreatorProgressSnapshot(
     CreatorModuleCompletion base,
     CreatorStepId step,
   ) {
-    if (activeStep == step) return base.withState(CreatorCompletionState.current);
+    if (activeStep == step)
+      return base.withState(CreatorCompletionState.current);
     return base;
   }
 
@@ -502,11 +507,15 @@ CreatorProgressSnapshot computeCreatorProgressSnapshot(
     );
     debugPrint('[creator_status] activeModule=$activeStep');
     debugPrint('[creator_status] basics=${basics.state} ${basics.countLabel}');
-    debugPrint('[creator_status] sentences=${sentences.state} ${sentences.countLabel}');
-    debugPrint('[creator_status] vocabulary=${vocab.state} ${vocab.countLabel}');
-    debugPrint('[creator_status] grammar=${grammar.state} ${grammar.countLabel}');
+    debugPrint(
+        '[creator_status] sentences=${sentences.state} ${sentences.countLabel}');
+    debugPrint(
+        '[creator_status] vocabulary=${vocab.state} ${vocab.countLabel}');
+    debugPrint(
+        '[creator_status] grammar=${grammar.state} ${grammar.countLabel}');
     debugPrint('[creator_status] quiz=${quiz.state} ${quiz.countLabel}');
-    debugPrint('[creator_status] listening=${listening.state} ${listening.countLabel}');
+    debugPrint(
+        '[creator_status] listening=${listening.state} ${listening.countLabel}');
     debugPrint('[creator_status] snapshot_ready');
   }
 

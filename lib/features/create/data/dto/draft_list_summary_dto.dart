@@ -140,7 +140,8 @@ class DraftListSummaryDto {
       completionPercent: completion,
       workspaceState: ps == StoryPublishState.draft ? 'draft' : 'editing',
       lastEditingStep: lastEditingModuleHeuristic(modMap),
-      hasUnpublishedCoreChanges: ps == StoryPublishState.draft ? false : true,
+      hasUnpublishedCoreChanges: story.hasUnpublishedCoreChanges ??
+          (ps == StoryPublishState.draft ? false : true),
     );
   }
 

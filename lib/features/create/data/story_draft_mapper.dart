@@ -63,6 +63,8 @@ abstract final class StoryDraftMapper {
         for (final e in story.moduleWorkflowStatuses.entries)
           e.key.storageKey: e.value.storageKey,
       },
+      publishedMonoId: story.publishedMonoId,
+      hasUnpublishedCoreChanges: story.hasUnpublishedCoreChanges,
     );
   }
 
@@ -119,6 +121,7 @@ abstract final class StoryDraftMapper {
         ),
     };
 
+    final publishedMono = dto.publishedMonoId?.trim();
     return CreatorStoryV1(
       basics: basics,
       sentences: sentences,
@@ -128,6 +131,10 @@ abstract final class StoryDraftMapper {
       audio: audio,
       publishState: _publishStateFromKey(dto.publishState),
       moduleWorkflowStatuses: moduleStatuses,
+      publishedMonoId: (publishedMono == null || publishedMono.isEmpty)
+          ? null
+          : publishedMono,
+      hasUnpublishedCoreChanges: dto.hasUnpublishedCoreChanges,
     );
   }
 
@@ -352,14 +359,13 @@ abstract final class StoryDraftMapper {
     );
   }
 
-  static StoryAudioDto? _audioToDto(StoryAudioAsset? a, {required bool stripLocal}) {
+  static StoryAudioDto? _audioToDto(StoryAudioAsset? a,
+      {required bool stripLocal}) {
     if (a == null) return null;
     final remoteUrl = _remoteSourceUrl(a.sourceUrl);
     return StoryAudioDto(
       id: a.id,
-      sourceUrl: stripLocal
-          ? remoteUrl
-          : a.sourceUrl,
+      sourceUrl: stripLocal ? remoteUrl : a.sourceUrl,
       localFileName: stripLocal ? null : a.localFileName,
       localPath: stripLocal ? null : a.localPath,
       localSizeBytes: stripLocal ? null : a.localSizeBytes,

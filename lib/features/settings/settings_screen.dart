@@ -4,6 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:nimon/features/learn/learn_explanation_language.dart';
 import 'package:nimon/features/learn/learn_explanation_language_provider.dart';
+import 'package:nimon/features/auth/auth_providers.dart';
+import 'package:nimon/features/auth/auth_session_state.dart';
 import 'package:nimon/features/settings/settings_providers.dart';
 import 'package:nimon/core/design_system/nimon_layout.dart';
 import 'package:nimon/core/design_system/nimon_tokens.dart';
@@ -26,8 +28,7 @@ class SettingsScreen extends ConsumerWidget {
     return 'English';
   }
 
-  static String _learnLanguageLabel(LearnExplanationLanguage v) =>
-      switch (v) {
+  static String _learnLanguageLabel(LearnExplanationLanguage v) => switch (v) {
         LearnExplanationLanguage.english => 'English',
         LearnExplanationLanguage.myanmar => 'Myanmar',
       };
@@ -53,6 +54,7 @@ class SettingsScreen extends ConsumerWidget {
             ? 'large'
             : 'standard';
     final learnLang = ref.watch(learnExplanationLanguageProvider);
+    final authSession = ref.watch(authSessionProvider);
 
     return Scaffold(
       appBar: AppBar(
@@ -63,87 +65,124 @@ class SettingsScreen extends ConsumerWidget {
         context,
         ListView(
           children: [
-          _SectionHeader(title: 'General'),
-          ListTile(
-            title: const Text('App language'),
-            subtitle: Text(_localeLabel(appLocale)),
-            trailing: Icon(
-              Icons.chevron_right_rounded,
-              color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
+            _SectionHeader(title: 'General'),
+            ListTile(
+              title: const Text('Account'),
+              subtitle: Text(
+                switch (authSession) {
+                  AuthSessionAuthenticated(:final user) =>
+                    user.email ?? user.id,
+                  _ => 'Not signed in',
+                },
+              ),
+              leading: Icon(
+                Icons.account_circle_outlined,
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
             ),
-            onTap: () => _pickAppLanguage(context, ref),
-          ),
-          ListTile(
-            title: const Text('Theme'),
-            subtitle: Text(_themeLabel(themeMode)),
-            trailing: Icon(
-              Icons.chevron_right_rounded,
-              color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
+            ListTile(
+              title: const Text('App language'),
+              subtitle: Text(_localeLabel(appLocale)),
+              trailing: Icon(
+                Icons.chevron_right_rounded,
+                color:
+                    theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
+              ),
+              onTap: () => _pickAppLanguage(context, ref),
             ),
-            onTap: () => _pickTheme(context, ref),
-          ),
-          SwitchListTile.adaptive(
-            value: notificationsEnabled,
-            onChanged: (v) {
-              ref.read(notificationsEnabledSettingProvider.notifier).setEnabled(v);
-            },
-            title: const Text('Push notifications'),
-            subtitle: const Text('Turn push notifications on or off'),
-            contentPadding: EdgeInsets.symmetric(horizontal: s.x4, vertical: 2),
-          ),
-          SizedBox(height: s.x2),
-          _SectionHeader(title: 'Learning'),
-          ListTile(
-            title: const Text('Learn language'),
-            subtitle: Text(
-              'Explanations and support text: ${_learnLanguageLabel(learnLang)}',
+            ListTile(
+              title: const Text('Theme'),
+              subtitle: Text(_themeLabel(themeMode)),
+              trailing: Icon(
+                Icons.chevron_right_rounded,
+                color:
+                    theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
+              ),
+              onTap: () => _pickTheme(context, ref),
             ),
-            trailing: Icon(
-              Icons.chevron_right_rounded,
-              color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
+            SwitchListTile.adaptive(
+              value: notificationsEnabled,
+              onChanged: (v) {
+                ref
+                    .read(notificationsEnabledSettingProvider.notifier)
+                    .setEnabled(v);
+              },
+              title: const Text('Push notifications'),
+              subtitle: const Text('Turn push notifications on or off'),
+              contentPadding:
+                  EdgeInsets.symmetric(horizontal: s.x4, vertical: 2),
             ),
-            onTap: () => _pickLearnLanguage(context, ref),
-          ),
-          ListTile(
-            title: const Text('Reading text size'),
-            subtitle: Text(
-              'Applies across reading surfaces: ${_readingLabel(readingId)}',
+            SizedBox(height: s.x2),
+            _SectionHeader(title: 'Learning'),
+            ListTile(
+              title: const Text('Learn language'),
+              subtitle: Text(
+                'Explanations and support text: ${_learnLanguageLabel(learnLang)}',
+              ),
+              trailing: Icon(
+                Icons.chevron_right_rounded,
+                color:
+                    theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
+              ),
+              onTap: () => _pickLearnLanguage(context, ref),
             ),
-            trailing: Icon(
-              Icons.chevron_right_rounded,
-              color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
+            ListTile(
+              title: const Text('Reading text size'),
+              subtitle: Text(
+                'Applies across reading surfaces: ${_readingLabel(readingId)}',
+              ),
+              trailing: Icon(
+                Icons.chevron_right_rounded,
+                color:
+                    theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
+              ),
+              onTap: () => _pickReadingSize(context, ref),
             ),
-            onTap: () => _pickReadingSize(context, ref),
-          ),
-          SwitchListTile.adaptive(
-            value: ref.watch(monoExplanationEnabledSettingProvider),
-            onChanged: (v) {
-              ref
-                  .read(monoExplanationEnabledSettingProvider.notifier)
-                  .setEnabled(v);
-            },
-            title: const Text('Listening explanation sentence'),
-            subtitle: const Text(
-              'Show explanation lines in Listening / Pronunciation',
+            SwitchListTile.adaptive(
+              value: ref.watch(monoExplanationEnabledSettingProvider),
+              onChanged: (v) {
+                ref
+                    .read(monoExplanationEnabledSettingProvider.notifier)
+                    .setEnabled(v);
+              },
+              title: const Text('Listening explanation sentence'),
+              subtitle: const Text(
+                'Show explanation lines in Listening / Pronunciation',
+              ),
+              contentPadding:
+                  EdgeInsets.symmetric(horizontal: s.x4, vertical: 2),
             ),
-            contentPadding: EdgeInsets.symmetric(horizontal: s.x4, vertical: 2),
-          ),
-          SizedBox(height: s.x2),
-          _SectionHeader(title: 'Support'),
-          ListTile(
-            leading: Icon(
-              Icons.help_outline_rounded,
-              color: theme.colorScheme.onSurfaceVariant,
+            SwitchListTile.adaptive(
+              value: ref.watch(monoReaderTranslationEnabledProvider),
+              onChanged: (v) {
+                ref
+                    .read(monoReaderTranslationEnabledProvider.notifier)
+                    .setEnabled(v);
+              },
+              title: const Text('Show Mono translations'),
+              subtitle: const Text(
+                'Show source and English meanings under each Japanese line on the Mono reader',
+              ),
+              contentPadding:
+                  EdgeInsets.symmetric(horizontal: s.x4, vertical: 2),
             ),
-            title: const Text('Help / Feedback'),
-            trailing: Icon(
-              Icons.chevron_right_rounded,
-              color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
+            SizedBox(height: s.x2),
+            _SectionHeader(title: 'Support'),
+            ListTile(
+              leading: Icon(
+                Icons.help_outline_rounded,
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+              title: const Text('Help / Feedback'),
+              trailing: Icon(
+                Icons.chevron_right_rounded,
+                color:
+                    theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
+              ),
+              onTap: () => context.push('/settings/help'),
             ),
-            onTap: () => context.push('/settings/help'),
-          ),
-          SizedBox(height: wc == NimonWidthClass.compact ? s.x6 : s.x8),
-        ],
+            SizedBox(height: wc == NimonWidthClass.compact ? s.x6 : s.x8),
+          ],
         ),
       ),
     );
@@ -262,7 +301,9 @@ class SettingsScreen extends ConsumerWidget {
       },
     );
     if (picked != null) {
-      await ref.read(learnExplanationLanguageProvider.notifier).setLanguage(picked);
+      await ref
+          .read(learnExplanationLanguageProvider.notifier)
+          .setLanguage(picked);
     }
   }
 
@@ -302,7 +343,9 @@ class SettingsScreen extends ConsumerWidget {
       },
     );
     if (picked != null) {
-      await ref.read(readingTextScaleSettingProvider.notifier).setFromSizeId(picked);
+      await ref
+          .read(readingTextScaleSettingProvider.notifier)
+          .setFromSizeId(picked);
     }
   }
 }

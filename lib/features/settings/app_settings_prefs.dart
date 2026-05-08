@@ -10,6 +10,8 @@ abstract final class AppSettingsPrefs {
   static const _readingKey = 'nimon_reading_text_size';
   static const _notificationsEnabledKey = 'nimon_app_notifications_enabled';
   static const _monoExplanationEnabledKey = 'nimon_mono_explanation_enabled';
+  static const _monoReaderTranslationEnabledKey =
+      'nimon_mono_reader_translation_enabled';
 
   static Future<ThemeMode> loadThemeMode() async {
     final p = await SharedPreferences.getInstance();
@@ -90,5 +92,17 @@ abstract final class AppSettingsPrefs {
   static Future<void> saveMonoExplanationEnabled(bool enabled) async {
     final p = await SharedPreferences.getInstance();
     await p.setBool(_monoExplanationEnabledKey, enabled);
+  }
+
+  /// Mono reader (Home): show per-line source / English meanings under Japanese.
+  /// Default off (`false`) when unset — conservative.
+  static Future<bool> loadMonoReaderTranslationEnabled() async {
+    final p = await SharedPreferences.getInstance();
+    return p.getBool(_monoReaderTranslationEnabledKey) ?? false;
+  }
+
+  static Future<void> saveMonoReaderTranslationEnabled(bool enabled) async {
+    final p = await SharedPreferences.getInstance();
+    await p.setBool(_monoReaderTranslationEnabledKey, enabled);
   }
 }

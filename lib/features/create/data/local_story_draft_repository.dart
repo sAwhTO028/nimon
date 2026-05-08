@@ -77,7 +77,11 @@ class LocalStoryDraftRepository implements StoryDraftRepository {
   }
 
   @override
-  Future<CreatorStoryV1> saveDraft(CreatorStoryV1 draft) async {
+  Future<CreatorStoryV1> saveDraft(
+    CreatorStoryV1 draft, {
+    StoryDraftRemotePublishIntent remotePublishAfterPut =
+        StoryDraftRemotePublishIntent.none,
+  }) async {
     final now = DateTime.now();
     final next = draft.copyWith(
       basics: draft.basics.copyWith(updatedAt: now),

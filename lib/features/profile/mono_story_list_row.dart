@@ -101,7 +101,8 @@ class MonoStoryListRow extends StatelessWidget {
                     ],
                   ],
                 ),
-                if (publishBadgeText != null && publishBadgeText!.trim().isNotEmpty) ...[
+                if (publishBadgeText != null &&
+                    publishBadgeText!.trim().isNotEmpty) ...[
                   const SizedBox(height: 4),
                   Align(
                     alignment: Alignment.centerLeft,
@@ -132,13 +133,16 @@ class MonoStoryListRow extends StatelessWidget {
                   ),
                 ],
                 if ((categoryText != null && categoryText!.trim().isNotEmpty) ||
-                    (durationText != null && durationText!.trim().isNotEmpty)) ...[
+                    (durationText != null &&
+                        durationText!.trim().isNotEmpty)) ...[
                   const SizedBox(height: 4),
                   Text(
                     [
-                      if (categoryText != null && categoryText!.trim().isNotEmpty)
+                      if (categoryText != null &&
+                          categoryText!.trim().isNotEmpty)
                         categoryText!.trim(),
-                      if (durationText != null && durationText!.trim().isNotEmpty)
+                      if (durationText != null &&
+                          durationText!.trim().isNotEmpty)
                         durationText!.trim(),
                     ].join(' · '),
                     maxLines: 1,

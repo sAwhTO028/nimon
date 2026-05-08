@@ -2,9 +2,10 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart' show kDebugMode, debugPrint;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:nimon/features/auth/dev_current_user_provider.dart';
+import 'package:nimon/features/auth/current_user_id_provider.dart';
 import 'package:nimon/features/create/creator_readiness.dart';
 import 'package:nimon/features/create/data/remote_backend_config.dart';
+import 'package:nimon/features/create/creator_published_edit_baseline.dart';
 import 'package:nimon/features/create/creator_read_only_publish_tracking.dart';
 import 'package:nimon/features/create/data/story_draft_repository.dart';
 import 'package:nimon/features/create/data/story_draft_repository_provider.dart';
@@ -12,7 +13,19 @@ import 'package:nimon/features/profile/profile_processing_refresh.dart';
 import 'package:nimon/features/create/story_creator_draft_storage.dart'
     show CreatorDraftResumeMeta, CreatorLastActiveModule;
 import 'package:nimon/features/create/story_creator_models.dart';
+import 'package:nimon/features/create/story_creator_public_audio_url.dart';
 import 'package:uuid/uuid.dart';
+
+StoryDraftRemotePublishIntent _remotePublishIntentForSaveReason(String reason) {
+  switch (reason) {
+    case 'publish_reading_only':
+      return StoryDraftRemotePublishIntent.readOnly;
+    case 'publish_full_learn':
+      return StoryDraftRemotePublishIntent.fullLearn;
+    default:
+      return StoryDraftRemotePublishIntent.none;
+  }
+}
 
 List<VocabularyExamplePair> _normalizeVocabExamplePairs(
   List<VocabularyExamplePair> raw,
@@ -56,6 +69,8 @@ class StoryCreatorDraftState {
     required this.lastSavedAt,
     required this.lastSaveError,
     required this.readOnlyPublishedCoreSig,
+    required this.publishedEditReadOnlyBaselineSig,
+    required this.publishedEditFullLearnBaselineSig,
   });
 
   final CreatorStoryV1 draft;
@@ -63,8 +78,15 @@ class StoryCreatorDraftState {
   final CreatorDraftSaveStatus saveStatus;
   final DateTime? lastSavedAt;
   final String? lastSaveError;
+
   /// Stored signature of the last successfully **Read Only** published story core.
   final String? readOnlyPublishedCoreSig;
+
+  /// Last published **read-only** snapshot (v2: basics + sentences detail). Updated on publish only.
+  final String? publishedEditReadOnlyBaselineSig;
+
+  /// Last published **full learn** snapshot. Updated on full-learn publish; cleared for RO-only.
+  final String? publishedEditFullLearnBaselineSig;
 
   factory StoryCreatorDraftState.initial({required String creatorOwnerId}) =>
       StoryCreatorDraftState(
@@ -74,6 +96,8 @@ class StoryCreatorDraftState {
         lastSavedAt: null,
         lastSaveError: null,
         readOnlyPublishedCoreSig: null,
+        publishedEditReadOnlyBaselineSig: null,
+        publishedEditFullLearnBaselineSig: null,
       );
 
   StoryCreatorDraftState copyWith({
@@ -85,6 +109,9 @@ class StoryCreatorDraftState {
     bool clearLastSaveError = false,
     String? readOnlyPublishedCoreSig,
     bool clearReadOnlyPublishedCoreSig = false,
+    String? publishedEditReadOnlyBaselineSig,
+    String? publishedEditFullLearnBaselineSig,
+    bool clearPublishedEditBaselines = false,
   }) {
     return StoryCreatorDraftState(
       draft: draft ?? this.draft,
@@ -96,6 +123,14 @@ class StoryCreatorDraftState {
       readOnlyPublishedCoreSig: clearReadOnlyPublishedCoreSig
           ? null
           : (readOnlyPublishedCoreSig ?? this.readOnlyPublishedCoreSig),
+      publishedEditReadOnlyBaselineSig: clearPublishedEditBaselines
+          ? null
+          : (publishedEditReadOnlyBaselineSig ??
+              this.publishedEditReadOnlyBaselineSig),
+      publishedEditFullLearnBaselineSig: clearPublishedEditBaselines
+          ? null
+          : (publishedEditFullLearnBaselineSig ??
+              this.publishedEditFullLearnBaselineSig),
     );
   }
 }
@@ -160,7 +195,7 @@ class StoryCreatorDraftNotifier extends StateNotifier<StoryCreatorDraftState> {
           'remote=${RemoteBackendConfig.useRemoteDrafts} '
           'was="${loaded.basics.creatorOwnerId}" '
           'expected_dev_owner="${RemoteBackendConfig.devOwnerId}" '
-          'notifier_dev="${_devOwnerId}"',
+          'notifier_dev=$_devOwnerId',
         );
       }
       loaded = loaded.copyWith(
@@ -175,6 +210,7 @@ class StoryCreatorDraftNotifier extends StateNotifier<StoryCreatorDraftState> {
       clearLastSaveError: true,
     );
     unawaited(_hydrateReadOnlyPublishSig(id));
+    unawaited(_hydratePublishedEditBaselines(id));
     if (needsOwnerBackfill) {
       await persistLocalNow(reason: 'owner_backfill');
     }
@@ -186,6 +222,60 @@ class StoryCreatorDraftNotifier extends StateNotifier<StoryCreatorDraftState> {
     final sig = await loadReadOnlyPublishedCoreSignature(id);
     if (state.draft.id != id) return;
     state = state.copyWith(readOnlyPublishedCoreSig: sig);
+  }
+
+  Future<void> _hydratePublishedEditBaselines(String draftId) async {
+    final id = draftId.trim();
+    if (id.isEmpty) return;
+    var ro = await loadPublishedEditReadOnlyBaseline(id);
+    var fl = await loadPublishedEditFullLearnBaseline(id);
+    if (state.draft.id.trim() != id) return;
+    final draft = state.draft;
+    final linked = draft.publishedMonoId?.trim().isNotEmpty == true ||
+        draft.publishState != StoryPublishState.draft;
+    if (!linked) {
+      state = state.copyWith(clearPublishedEditBaselines: true);
+      return;
+    }
+
+    final clean = draft.hasUnpublishedCoreChanges != true;
+    if (ro == null && clean) {
+      ro = computeReadOnlyEditBaselineSignature(draft);
+      await savePublishedEditReadOnlyBaseline(id, ro);
+    }
+    if (draft.publishState == StoryPublishState.fullLearnPublished &&
+        fl == null &&
+        clean) {
+      fl = computeFullLearnEditBaselineSignature(draft);
+      await savePublishedEditFullLearnBaseline(id, fl);
+    }
+
+    if (state.draft.id.trim() != id) return;
+    state = state.copyWith(
+      publishedEditReadOnlyBaselineSig: ro,
+      publishedEditFullLearnBaselineSig: fl,
+    );
+  }
+
+  Future<void> _persistPublishedEditBaselinesAfterSuccessfulPublish() async {
+    final id = state.draft.id.trim();
+    if (id.isEmpty) return;
+    final d = state.draft;
+    final ro = computeReadOnlyEditBaselineSignature(d);
+    await savePublishedEditReadOnlyBaseline(id, ro);
+    String? flSig;
+    if (d.publishState == StoryPublishState.fullLearnPublished) {
+      flSig = computeFullLearnEditBaselineSignature(d);
+      await savePublishedEditFullLearnBaseline(id, flSig);
+    } else {
+      await clearPublishedEditFullLearnBaseline(id);
+      flSig = null;
+    }
+    if (state.draft.id.trim() != id) return;
+    state = state.copyWith(
+      publishedEditReadOnlyBaselineSig: ro,
+      publishedEditFullLearnBaselineSig: flSig,
+    );
   }
 
   /// Start a brand-new local draft session (empty, new id) and persist immediately.
@@ -234,7 +324,10 @@ class StoryCreatorDraftNotifier extends StateNotifier<StoryCreatorDraftState> {
     );
     try {
       // Save incomplete drafts too; keep publish state + module statuses.
-      final nextDraft = await _drafts.saveDraft(state.draft);
+      final nextDraft = await _drafts.saveDraft(
+        state.draft,
+        remotePublishAfterPut: _remotePublishIntentForSaveReason(reason),
+      );
       state = state.copyWith(
         draft: nextDraft,
         dirty: false,
@@ -242,7 +335,17 @@ class StoryCreatorDraftNotifier extends StateNotifier<StoryCreatorDraftState> {
         lastSavedAt: DateTime.now(),
         clearLastSaveError: true,
       );
-      if (kDebugMode) debugPrint('[creator_draft] saved_ok');
+      if (kDebugMode) {
+        debugPrint(
+          '[creator_draft] saved_ok draftId=${state.draft.id.trim()} '
+          'publishState=${state.draft.publishState.storageKey} '
+          'hasUnpublishedCoreChanges=${state.draft.hasUnpublishedCoreChanges}',
+        );
+      }
+      if (RemoteBackendConfig.useRemoteDrafts &&
+          state.draft.publishState != StoryPublishState.draft) {
+        _bumpProfileProcessingListRefresh();
+      }
     } catch (e) {
       state = state.copyWith(
         dirty: true,
@@ -379,6 +482,7 @@ class StoryCreatorDraftNotifier extends StateNotifier<StoryCreatorDraftState> {
       lastSavedAt: DateTime.now(),
       clearLastSaveError: true,
     );
+    unawaited(_hydratePublishedEditBaselines(persisted.id));
   }
 
   void reset() => state = state.copyWith(
@@ -390,6 +494,7 @@ class StoryCreatorDraftNotifier extends StateNotifier<StoryCreatorDraftState> {
         lastSavedAt: null,
         clearLastSaveError: true,
         clearReadOnlyPublishedCoreSig: true,
+        clearPublishedEditBaselines: true,
       );
 
   void applyBasics({
@@ -521,10 +626,7 @@ class StoryCreatorDraftNotifier extends StateNotifier<StoryCreatorDraftState> {
     final cleaned = spans.where((f) => f.isValid).toList();
     final list = <StorySentenceItem>[
       for (final s in state.draft.sentences)
-        if (s.id == sentenceId)
-          s.copyWith(furiganaSpans: cleaned)
-        else
-          s,
+        if (s.id == sentenceId) s.copyWith(furiganaSpans: cleaned) else s,
     ];
     _setDraft(
       state.draft.copyWith(
@@ -619,8 +721,10 @@ class StoryCreatorDraftNotifier extends StateNotifier<StoryCreatorDraftState> {
     await persistLocalNow(reason: 'publish_reading_only');
     if (state.saveStatus == CreatorDraftSaveStatus.saved) {
       final sig = computeReadOnlyPublishedCoreSignature(state.draft);
-      await saveReadOnlyPublishedCoreSignature(draftId: state.draft.id, signature: sig);
+      await saveReadOnlyPublishedCoreSignature(
+          draftId: state.draft.id, signature: sig);
       state = state.copyWith(readOnlyPublishedCoreSig: sig);
+      await _persistPublishedEditBaselinesAfterSuccessfulPublish();
       _bumpProfileProcessingListRefresh();
     }
     return state.saveStatus == CreatorDraftSaveStatus.saved;
@@ -638,8 +742,10 @@ class StoryCreatorDraftNotifier extends StateNotifier<StoryCreatorDraftState> {
     if (state.saveStatus == CreatorDraftSaveStatus.saved) {
       // Full Learn implies a Read Only published baseline exists for the story core.
       final sig = computeReadOnlyPublishedCoreSignature(state.draft);
-      await saveReadOnlyPublishedCoreSignature(draftId: state.draft.id, signature: sig);
+      await saveReadOnlyPublishedCoreSignature(
+          draftId: state.draft.id, signature: sig);
       state = state.copyWith(readOnlyPublishedCoreSig: sig);
+      await _persistPublishedEditBaselinesAfterSuccessfulPublish();
       _bumpProfileProcessingListRefresh();
     }
     return state.saveStatus == CreatorDraftSaveStatus.saved;
@@ -1075,7 +1181,7 @@ class StoryCreatorDraftNotifier extends StateNotifier<StoryCreatorDraftState> {
     required int? durationSeconds,
   }) {
     final url = sourceUrlRaw.trim();
-    if (url.isEmpty) return;
+    if (!isPublicHttpAudioSourceUrl(url)) return;
     final name = displayNameRaw.trim();
     final now = DateTime.now();
     final asset = StoryAudioAsset(
@@ -1159,7 +1265,7 @@ final storyCreatorDraftProvider =
         (ref) {
   return StoryCreatorDraftNotifier(
     ref.watch(storyDraftRepositoryProvider),
-    ref.watch(devCurrentUserProvider).userId,
+    ref.watch(currentUserIdProvider),
     onProfileProcessingListChanged: () {
       final c = ref.read(profileProcessingListRefreshProvider.notifier);
       c.state = c.state + 1;

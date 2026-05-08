@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:nimon/ui/widgets/nimon_circle_nav_button.dart';
 import 'package:go_router/go_router.dart';
+import 'package:nimon/features/profile/creator_profile_location.dart';
 
 enum NotificationKind { follow, contentActivity, publish, processing, system }
 
@@ -12,6 +13,9 @@ class AppNotificationV1 {
     required this.message,
     required this.whenLabel,
     this.unread = true,
+
+    /// When set, profile navigation uses `/profile/public?userId=` (canonical).
+    this.actorUserId,
     this.actorHandle,
     this.storyTitle,
   });
@@ -23,7 +27,10 @@ class AppNotificationV1 {
   final String whenLabel;
   final bool unread;
 
-  /// For follow/content activity (V1 routing).
+  /// Backend `users.id` when the mock notification represents a real follower.
+  final String? actorUserId;
+
+  /// V1 mock-only fallback when [actorUserId] is absent (debug legacy route).
   final String? actorHandle;
 
   /// For content-related items (V1 placeholder routing).
@@ -36,6 +43,7 @@ class AppNotificationV1 {
         message: message,
         whenLabel: whenLabel,
         unread: unread ?? this.unread,
+        actorUserId: actorUserId,
         actorHandle: actorHandle,
         storyTitle: storyTitle,
       );
@@ -106,7 +114,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
   void _markAllAsRead() {
     setState(() {
-      _items = _items.map((e) => e.unread ? e.copyWith(unread: false) : e).toList();
+      _items =
+          _items.map((e) => e.unread ? e.copyWith(unread: false) : e).toList();
     });
   }
 
@@ -133,10 +142,29 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           .toList();
     });
 
-    // V1 routing: keep sensible but lightweight.
-    if (n.kind == NotificationKind.follow && (n.actorHandle ?? '').isNotEmpty) {
-      final q = Uri.encodeComponent(n.actorHandle!.trim());
-      context.push('/profile/public?creator=$q');
+    // V1 mock notifications: prefer userId when present; else handle + allowLegacyHandle.
+    if (n.kind == NotificationKind.follow) {
+      final uid = (n.actorUserId ?? '').trim();
+      final ah = (n.actorHandle ?? '').trim();
+      if (uid.isEmpty && ah.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Open: ${n.title} — coming soon'),
+            behavior: SnackBarBehavior.floating,
+            margin: const EdgeInsets.all(16),
+            duration: const Duration(seconds: 2),
+          ),
+        );
+        return;
+      }
+      final loc = creatorProfileLocation(
+        userId: uid.isNotEmpty ? uid : null,
+        handle: ah.isNotEmpty ? ah : null,
+        allowLegacyHandle: true,
+      );
+      if (loc != null) {
+        context.push(loc);
+      }
       return;
     }
 
@@ -252,8 +280,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                                     const SizedBox(width: 10),
                                     Text(
                                       n.whenLabel,
-                                      style: theme.textTheme.labelSmall
-                                          ?.copyWith(
+                                      style:
+                                          theme.textTheme.labelSmall?.copyWith(
                                         color: scheme.onSurfaceVariant,
                                         fontWeight: FontWeight.w700,
                                       ),
@@ -325,4 +353,3 @@ class _EmptyState extends StatelessWidget {
     );
   }
 }
-

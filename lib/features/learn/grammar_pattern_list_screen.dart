@@ -2,12 +2,16 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:nimon/features/learn/grammar_pattern.dart';
+import 'package:nimon/features/learn/learn_catalog_content_gate.dart';
 import 'package:nimon/features/learn/learn_explanation_language_provider.dart';
+import 'package:nimon/features/learn/learn_published_snapshot_mappers.dart';
+import 'package:nimon/features/learn/learn_published_snapshot_providers.dart';
+import 'package:nimon/features/profile/data/published_mono_catalog_visibility_exception.dart';
 import 'package:nimon/features/learn/learn_support_text.dart';
 import 'package:nimon/ui/widgets/nimon_circle_nav_button.dart';
 
-/// V1: scrollable list of grammar patterns for a story ([contentId]).
-class GrammarPatternListScreen extends StatelessWidget {
+/// Scrollable list of grammar patterns for a story ([contentId] = catalog mono id).
+class GrammarPatternListScreen extends ConsumerWidget {
   const GrammarPatternListScreen({
     super.key,
     required this.contentId,
@@ -18,7 +22,7 @@ class GrammarPatternListScreen extends StatelessWidget {
   static const _bg = Color(0xFFF6F3EA);
   static const _ink = Color(0xFF1A1917);
 
-  /// V1 mock patterns (later: load per story).
+  /// Dev-only demo patterns when [contentId] is not a catalog UUID.
   static const List<GrammarPattern> mockPatterns = [
     GrammarPattern(
       id: 'ni-tsuite',
@@ -26,10 +30,8 @@ class GrammarPatternListScreen extends StatelessWidget {
       meaning: '…အကြောင်း / …နဲ့ပတ်သက်ပြီး',
       meaningEn: 'about; regarding (a topic)',
       form: 'N + について',
-      whenToUse:
-          'Topic တစ်ခုကို subject လုပ်ပြီး ပြောတဲ့အခါ သုံးတယ်',
-      whenToUseEn:
-          'Used when you make something the topic and talk about it.',
+      whenToUse: 'Topic တစ်ခုကို subject လုပ်ပြီး ပြောတဲ့အခါ သုံးတယ်',
+      whenToUseEn: 'Used when you make something the topic and talk about it.',
       usageHint: '話題を広げるときに使う',
       examples: [
         GrammarPatternExample(
@@ -118,8 +120,7 @@ class GrammarPatternListScreen extends StatelessWidget {
       meaning: '…ဖြစ်လာသည် / （決まり）…ことに',
       meaningEn: 'It is decided or arranged that…; come to (a result).',
       form: '普通形 + ことになる',
-      whenToUse:
-          'အစီအစဉ်၊ စည်းမျဉ်း၊ သဘာဝကျရလဒ်တွေကို ပြောတဲ့အခါ သုံးတယ်။',
+      whenToUse: 'အစီအစဉ်၊ စည်းမျဉ်း၊ သဘာဝကျရလဒ်တွေကို ပြောတဲ့အခါ သုံးတယ်။',
       whenToUseEn:
           'Used for plans, rules, and natural outcomes that “become the case”.',
       usageHint: '決定・自然の帰結',
@@ -144,10 +145,91 @@ class GrammarPatternListScreen extends StatelessWidget {
   ];
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
-    final bottomInset = MediaQuery.paddingOf(context).bottom;
+    if (learnDemoMocksAllowed(contentId)) {
+      return _buildScaffold(
+        context,
+        theme,
+        body: _buildPatternList(context, mockPatterns),
+      );
+    }
 
+    final detailAsync =
+        ref.watch(catalogPublishedMonoDetailProvider(contentId));
+    final snapAsync = ref.watch(learnPublishedSnapshotProvider(contentId));
+
+    return detailAsync.when(
+      loading: () => _buildScaffold(
+        context,
+        theme,
+        body: const Center(child: CircularProgressIndicator()),
+      ),
+      error: (err, _) => _buildScaffold(
+        context,
+        theme,
+        body: _GrammarErrorBody(
+          message: publishedMonoCatalogDetailErrorTitle(err),
+          detail: publishedMonoCatalogDetailErrorBody(err),
+          onRetry: () =>
+              ref.invalidate(catalogPublishedMonoDetailProvider(contentId)),
+        ),
+      ),
+      data: (detail) {
+        return snapAsync.when(
+          loading: () => _buildScaffold(
+            context,
+            theme,
+            body: const Center(child: CircularProgressIndicator()),
+          ),
+          error: (err, _) => _buildScaffold(
+            context,
+            theme,
+            body: _GrammarErrorBody(
+              message: 'Could not load learning content.',
+              detail: err.toString(),
+              onRetry: () =>
+                  ref.invalidate(catalogPublishedMonoDetailProvider(contentId)),
+            ),
+          ),
+          data: (snap) {
+            final useLearn =
+                shouldUsePublishedLearnSnapshot(detail.publishKind, snap);
+            final patterns = useLearn && snap != null
+                ? snap.grammarEntries
+                    .map(grammarPatternFromPublishedEntry)
+                    .toList()
+                : <GrammarPattern>[];
+
+            if (!useLearn || patterns.isEmpty) {
+              final msg = !useLearn
+                  ? 'Published grammar isn’t available for this story yet. '
+                      'Stories published as read-only don’t include learning modules '
+                      'until you publish full learn.'
+                  : 'No grammar patterns for this story yet.';
+              return _buildScaffold(
+                context,
+                theme,
+                body: _GrammarEmptyBody(message: msg),
+              );
+            }
+
+            return _buildScaffold(
+              context,
+              theme,
+              body: _buildPatternList(context, patterns),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildScaffold(
+    BuildContext context,
+    ThemeData theme, {
+    required Widget body,
+  }) {
     return Scaffold(
       backgroundColor: _bg,
       appBar: AppBar(
@@ -164,19 +246,105 @@ class GrammarPatternListScreen extends StatelessWidget {
         ),
         centerTitle: false,
       ),
-      body: ListView.builder(
-        padding: EdgeInsets.fromLTRB(18, 8, 18, bottomInset + 18),
-        itemCount: mockPatterns.length,
-        itemBuilder: (context, index) {
-          final p = mockPatterns[index];
-          return Padding(
-            padding: const EdgeInsets.only(bottom: 12),
-            child: _GrammarPatternCard(
-              pattern: p,
-              contentId: contentId,
+      body: body,
+    );
+  }
+
+  Widget _buildPatternList(
+      BuildContext context, List<GrammarPattern> patterns) {
+    final bottomInset = MediaQuery.paddingOf(context).bottom;
+    return ListView.builder(
+      padding: EdgeInsets.fromLTRB(18, 8, 18, bottomInset + 18),
+      itemCount: patterns.length,
+      itemBuilder: (context, index) {
+        final p = patterns[index];
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 12),
+          child: _GrammarPatternCard(
+            pattern: p,
+            contentId: contentId,
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _GrammarEmptyBody extends StatelessWidget {
+  const _GrammarEmptyBody({required this.message});
+
+  final String message;
+
+  static const _ink = Color(0xFF1A1917);
+  static const _inkMuted = Color(0xFF5C5A55);
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final bottomInset = MediaQuery.paddingOf(context).bottom;
+    return Padding(
+      padding: EdgeInsets.fromLTRB(24, 24, 24, bottomInset + 24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            message,
+            style: theme.textTheme.bodyLarge?.copyWith(
+              color: _ink,
+              height: 1.45,
             ),
-          );
-        },
+          ),
+          const SizedBox(height: 12),
+          Text(
+            'Publish Full Learn from the creator workspace to sync grammar to readers.',
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: _inkMuted,
+              height: 1.4,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _GrammarErrorBody extends StatelessWidget {
+  const _GrammarErrorBody({
+    required this.message,
+    required this.detail,
+    required this.onRetry,
+  });
+
+  final String message;
+  final String detail;
+  final VoidCallback onRetry;
+
+  static const _ink = Color(0xFF1A1917);
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final bottomInset = MediaQuery.paddingOf(context).bottom;
+    return Padding(
+      padding: EdgeInsets.fromLTRB(24, 24, 24, bottomInset + 24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            message,
+            style: theme.textTheme.titleMedium?.copyWith(
+              color: _ink,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            detail,
+            style: theme.textTheme.bodySmall?.copyWith(color: _ink),
+          ),
+          const SizedBox(height: 16),
+          TextButton(onPressed: onRetry, child: const Text('Retry')),
+        ],
       ),
     );
   }

@@ -165,10 +165,8 @@ class _ChecklistRow extends StatelessWidget {
             children: [
               Icon(
                 switch (status) {
-                  LearnModuleTaskStatus.completed =>
-                    Icons.check_circle_rounded,
-                  LearnModuleTaskStatus.inProgress =>
-                    Icons.timelapse_rounded,
+                  LearnModuleTaskStatus.completed => Icons.check_circle_rounded,
+                  LearnModuleTaskStatus.inProgress => Icons.timelapse_rounded,
                   LearnModuleTaskStatus.notStarted =>
                     Icons.radio_button_unchecked_rounded,
                 },
@@ -188,7 +186,8 @@ class _ChecklistRow extends StatelessWidget {
               ),
               const SizedBox(width: 8),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
                   color: bg,
                   borderRadius: BorderRadius.circular(999),

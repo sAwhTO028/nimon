@@ -32,64 +32,64 @@ class OneShotBadgedCard extends StatelessWidget {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
           ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                 // Image area with overlays (reduced by 6%: 75% -> 70.5%)
-                 Expanded(
-                   flex: 71, // 75 - 6% = 70.5%, rounded to 71
-                  child: Stack(
-                    children: [
-                     // Cover image - fills entire image space (sharp and clear)
-                     ClipRRect(
-                       borderRadius: const BorderRadius.only(
-                         topLeft: Radius.circular(12),
-                         topRight: Radius.circular(12),
-                       ),
-                       child: oneShot.coverUrl != null
-                           ? Image.network(
-                               oneShot.coverUrl!,
-                               width: double.infinity,
-                               height: double.infinity,
-                               fit: BoxFit.cover,
-                               errorBuilder: (context, error, stackTrace) =>
-                                   _buildPlaceholder(context),
-                             )
-                           : _buildPlaceholder(context),
-                     ),
-                      
-                      // Top-left badge
-                      Positioned(
-                        top: 8,
-                        left: 8,
-                        child: _buildTypeBadge(context, 'One-Short'),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // Image area with overlays (reduced by 6%: 75% -> 70.5%)
+              Expanded(
+                flex: 71, // 75 - 6% = 70.5%, rounded to 71
+                child: Stack(
+                  children: [
+                    // Cover image - fills entire image space (sharp and clear)
+                    ClipRRect(
+                      borderRadius: const BorderRadius.only(
+                        topLeft: Radius.circular(12),
+                        topRight: Radius.circular(12),
                       ),
-                      
-                      // Top-right JLPT chip
-                      Positioned(
-                        top: 8,
-                        right: 8,
-                        child: _buildJLPTChip(context, oneShot.jlpt),
-                      ),
-                      
-                      // Blur title band overlay (reduced by 2% but remains as overlay)
-                      _buildTitleBandWithBlur(context, oneShot),
-                    ],
-                  ),
+                      child: oneShot.coverUrl != null
+                          ? Image.network(
+                              oneShot.coverUrl!,
+                              width: double.infinity,
+                              height: double.infinity,
+                              fit: BoxFit.cover,
+                              errorBuilder: (context, error, stackTrace) =>
+                                  _buildPlaceholder(context),
+                            )
+                          : _buildPlaceholder(context),
+                    ),
+
+                    // Top-left badge
+                    Positioned(
+                      top: 8,
+                      left: 8,
+                      child: _buildTypeBadge(context, 'One-Short'),
+                    ),
+
+                    // Top-right JLPT chip
+                    Positioned(
+                      top: 8,
+                      right: 8,
+                      child: _buildJLPTChip(context, oneShot.jlpt),
+                    ),
+
+                    // Blur title band overlay (reduced by 2% but remains as overlay)
+                    _buildTitleBandWithBlur(context, oneShot),
+                  ],
                 ),
-                
-                 // Footer/Base Card (reduced by 2%: 25% -> 24.5%)
-                 Expanded(
-                   flex: 25, // 25 - 2% = 24.5%, rounded to 25
-                   child: Container(
-                     padding: const EdgeInsets.all(12),
-                     decoration: BoxDecoration(
-                       color: colorScheme.surface,
-                       borderRadius: const BorderRadius.only(
-                         bottomLeft: Radius.circular(12),
-                         bottomRight: Radius.circular(12),
-                       ),
-                     ),
+              ),
+
+              // Footer/Base Card (reduced by 2%: 25% -> 24.5%)
+              Expanded(
+                flex: 25, // 25 - 2% = 24.5%, rounded to 25
+                child: Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: colorScheme.surface,
+                    borderRadius: const BorderRadius.only(
+                      bottomLeft: Radius.circular(12),
+                      bottomRight: Radius.circular(12),
+                    ),
+                  ),
                   child: Row(
                     children: [
                       // Writer avatar
@@ -97,7 +97,7 @@ class OneShotBadgedCard extends StatelessWidget {
                         radius: 14,
                         backgroundColor: colorScheme.primary,
                         child: Text(
-                          oneShot.writerName.isNotEmpty 
+                          oneShot.writerName.isNotEmpty
                               ? oneShot.writerName[0].toUpperCase()
                               : 'W',
                           style: TextStyle(
@@ -108,7 +108,7 @@ class OneShotBadgedCard extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(width: 8),
-                      
+
                       // Writer info
                       Expanded(
                         child: Column(
@@ -148,7 +148,7 @@ class OneShotBadgedCard extends StatelessWidget {
 
   Widget _buildTypeBadge(BuildContext context, String label) {
     final colorScheme = Theme.of(context).colorScheme;
-    
+
     return Container(
       height: 28,
       padding: const EdgeInsets.symmetric(horizontal: 10),
@@ -180,7 +180,7 @@ class OneShotBadgedCard extends StatelessWidget {
 
   Widget _buildJLPTChip(BuildContext context, String jlpt) {
     final colorScheme = Theme.of(context).colorScheme;
-    
+
     return Container(
       height: 28,
       padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -201,10 +201,9 @@ class OneShotBadgedCard extends StatelessWidget {
     );
   }
 
-
   Widget _buildPlaceholder(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    
+
     return Container(
       color: colorScheme.surfaceVariant,
       child: Center(
@@ -220,7 +219,7 @@ class OneShotBadgedCard extends StatelessWidget {
   Widget _buildTitleBandWithBlur(BuildContext context, OneShot oneShot) {
     final theme = Theme.of(context);
     final isDarkMode = theme.brightness == Brightness.dark;
-    
+
     return Positioned(
       bottom: 0,
       left: 0,
@@ -236,7 +235,7 @@ class OneShotBadgedCard extends StatelessWidget {
             width: double.infinity,
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             decoration: BoxDecoration(
-              color: isDarkMode 
+              color: isDarkMode
                   ? Colors.black.withOpacity(0.4)
                   : Colors.black.withOpacity(0.3),
             ),

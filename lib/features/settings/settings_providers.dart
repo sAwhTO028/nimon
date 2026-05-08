@@ -112,3 +112,23 @@ class MonoExplanationEnabledNotifier extends StateNotifier<bool> {
     state = enabled;
   }
 }
+
+final monoReaderTranslationEnabledProvider =
+    StateNotifierProvider<MonoReaderTranslationEnabledNotifier, bool>((ref) {
+  return MonoReaderTranslationEnabledNotifier();
+});
+
+class MonoReaderTranslationEnabledNotifier extends StateNotifier<bool> {
+  MonoReaderTranslationEnabledNotifier() : super(false) {
+    _load();
+  }
+
+  Future<void> _load() async {
+    state = await AppSettingsPrefs.loadMonoReaderTranslationEnabled();
+  }
+
+  Future<void> setEnabled(bool enabled) async {
+    await AppSettingsPrefs.saveMonoReaderTranslationEnabled(enabled);
+    state = enabled;
+  }
+}

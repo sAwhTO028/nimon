@@ -114,8 +114,8 @@ NimonFuriganaLineStyle resolveNimonFuriganaLineStyle(
         height: 1.05,
         fontWeight: FontWeight.w500,
         letterSpacing: 0.02,
-        color: cs.onSurfaceVariant
-            .withValues(alpha: NimonFuriganaPreviewTokens.rubyForegroundAlphaCreator),
+        color: cs.onSurfaceVariant.withValues(
+            alpha: NimonFuriganaPreviewTokens.rubyForegroundAlphaCreator),
       );
 
       return NimonFuriganaLineStyle(
@@ -128,15 +128,15 @@ NimonFuriganaLineStyle resolveNimonFuriganaLineStyle(
 
     case NimonFuriganaPreviewContext.reading:
       final base = type.readingJa(theme, wc).copyWith(
-        color: cs.onSurface,
-      );
+            color: cs.onSurface,
+          );
       final ruby = type.furigana(theme, wc).copyWith(
-        color: cs.onSurface
-            .withValues(alpha: NimonFuriganaPreviewTokens.rubyForegroundAlphaReading),
-        fontWeight: FontWeight.w500,
-        height: 1.02,
-        letterSpacing: 0.05,
-      );
+            color: cs.onSurface.withValues(
+                alpha: NimonFuriganaPreviewTokens.rubyForegroundAlphaReading),
+            fontWeight: FontWeight.w500,
+            height: 1.02,
+            letterSpacing: 0.05,
+          );
 
       return NimonFuriganaLineStyle(
         baseStyle: base,

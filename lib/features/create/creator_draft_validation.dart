@@ -40,4 +40,3 @@ bool isMeaningfulDraftForProcessing(CreatorStoryV1 d) {
 
   return false;
 }
-

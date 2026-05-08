@@ -9,7 +9,7 @@ import '../../features/reader/reader_screen.dart';
 import '../../features/reader/episode_reader_screen.dart';
 
 /// Global Episode Bottom Sheet - Reusable across the entire app
-/// 
+///
 /// This provides a consistent episode preview experience with:
 /// - Material 3 compliant design
 /// - DraggableScrollableSheet with proper constraints
@@ -17,7 +17,7 @@ import '../../features/reader/episode_reader_screen.dart';
 /// - Proper dismissal gestures
 /// - Responsive design for landscape/tablet
 /// - Haptic feedback and smooth animations
-/// 
+///
 /// Usage:
 /// ```dart
 /// await showEpisodeBottomSheet(
@@ -28,12 +28,12 @@ import '../../features/reader/episode_reader_screen.dart';
 /// ```
 
 /// Shows the global Episode Bottom Sheet
-/// 
+///
 /// Parameters:
 /// - [context]: The build context to show the sheet in
 /// - [episode]: Episode data to display (FULL episode with all blocks)
 /// - [shareVisible]: Whether to show the share button (default: true)
-/// 
+///
 /// Returns a Future that completes when the sheet is dismissed.
 Future<void> showEpisodeBottomSheet(
   BuildContext context,
@@ -42,13 +42,13 @@ Future<void> showEpisodeBottomSheet(
 }) async {
   // Convert Episode to EpisodeModel for the existing UI
   final episodeModel = _convertEpisodeToModel(episode);
-  
+
   final mediaQuery = MediaQuery.of(context);
   final screenHeight = mediaQuery.size.height;
-  
+
   // Adjust initial size for very small devices
   final initialChildSize = screenHeight < 640 ? 0.50 : 0.55;
-  
+
   return showModalBottomSheet<void>(
     context: context,
     useRootNavigator: false,
@@ -87,12 +87,12 @@ Future<void> showEpisodeBottomSheetFromMeta(
   bool shareVisible = true,
 }) async {
   final episodeModel = EpisodeModel.fromEpisodeMeta(meta);
-  
+
   final mediaQuery = MediaQuery.of(context);
   final screenHeight = mediaQuery.size.height;
-  
+
   final initialChildSize = screenHeight < 640 ? 0.50 : 0.55;
-  
+
   return showModalBottomSheet<void>(
     context: context,
     useRootNavigator: false,
@@ -165,7 +165,7 @@ Episode _convertModelToEpisode(EpisodeModel episodeModel) {
 }
 
 /// Material 3 compliant Episode Bottom Sheet Content
-/// 
+///
 /// This is the exact same implementation as the existing EpisodeModalSheet
 /// but renamed and slightly adapted for global use.
 class _EpisodeBottomSheetContent extends StatelessWidget {
@@ -189,11 +189,11 @@ class _EpisodeBottomSheetContent extends StatelessWidget {
     final mediaQuery = MediaQuery.of(context);
     final screenWidth = mediaQuery.size.width;
     final bottomPadding = mediaQuery.viewPadding.bottom;
-    
+
     // Responsive width for landscape/tablet
     final isLandscapeOrTablet = screenWidth >= 720;
     final contentWidth = isLandscapeOrTablet ? 720.0 : screenWidth;
-    
+
     return Container(
       width: contentWidth,
       decoration: BoxDecoration(
@@ -206,7 +206,8 @@ class _EpisodeBottomSheetContent extends StatelessWidget {
           ? Center(
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 720),
-                child: _buildContent(context, colorScheme, textTheme, bottomPadding),
+                child: _buildContent(
+                    context, colorScheme, textTheme, bottomPadding),
               ),
             )
           : _buildContent(context, colorScheme, textTheme, bottomPadding),
@@ -230,7 +231,7 @@ class _EpisodeBottomSheetContent extends StatelessWidget {
               SliverToBoxAdapter(
                 child: _buildHeader(context, colorScheme, textTheme),
               ),
-              
+
               // Divider
               SliverToBoxAdapter(
                 child: Divider(
@@ -241,15 +242,16 @@ class _EpisodeBottomSheetContent extends StatelessWidget {
                   color: colorScheme.outlineVariant,
                 ),
               ),
-              
+
               // Preview card section
               SliverPadding(
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
                 sliver: SliverToBoxAdapter(
                   child: _buildPreviewCard(context, colorScheme, textTheme),
                 ),
               ),
-              
+
               // Metrics row section
               SliverPadding(
                 padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -257,7 +259,7 @@ class _EpisodeBottomSheetContent extends StatelessWidget {
                   child: _buildMetricsRow(context, colorScheme, textTheme),
                 ),
               ),
-              
+
               // Add some bottom padding to ensure content doesn't get cut off
               const SliverToBoxAdapter(
                 child: SizedBox(height: 20),
@@ -265,7 +267,7 @@ class _EpisodeBottomSheetContent extends StatelessWidget {
             ],
           ),
         ),
-        
+
         // Fixed footer with CTA buttons
         _buildStickyFooter(context, colorScheme, textTheme, bottomPadding),
       ],
@@ -284,9 +286,9 @@ class _EpisodeBottomSheetContent extends StatelessWidget {
         children: [
           // Cover image
           _buildCoverImage(colorScheme),
-          
+
           const SizedBox(width: 12),
-          
+
           // Title and metadata
           Expanded(
             child: Column(
@@ -303,9 +305,9 @@ class _EpisodeBottomSheetContent extends StatelessWidget {
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                 ),
-                
+
                 const SizedBox(height: 4),
-                
+
                 // Episode number
                 Text(
                   'Episode ${episode.number}',
@@ -314,9 +316,9 @@ class _EpisodeBottomSheetContent extends StatelessWidget {
                     fontWeight: FontWeight.w500,
                   ),
                 ),
-                
+
                 const SizedBox(height: 2),
-                
+
                 // Writer row
                 Row(
                   children: [
@@ -340,9 +342,9 @@ class _EpisodeBottomSheetContent extends StatelessWidget {
               ],
             ),
           ),
-          
+
           const SizedBox(width: 8),
-          
+
           // JLPT chip and Share button row
           Column(
             children: [
@@ -360,9 +362,12 @@ class _EpisodeBottomSheetContent extends StatelessWidget {
                         SnackBar(
                           content: const Row(
                             children: [
-                              Icon(Icons.check_circle, color: Colors.white, size: 20),
+                              Icon(Icons.check_circle,
+                                  color: Colors.white, size: 20),
                               SizedBox(width: 8),
-                              Expanded(child: Text('Episode link copied to clipboard!')),
+                              Expanded(
+                                  child: Text(
+                                      'Episode link copied to clipboard!')),
                             ],
                           ),
                           backgroundColor: colorScheme.primary,
@@ -408,7 +413,8 @@ class _EpisodeBottomSheetContent extends StatelessWidget {
             ? Image.network(
                 episode.coverUrl,
                 fit: BoxFit.cover,
-                errorBuilder: (context, error, stackTrace) => _buildFallbackCover(colorScheme),
+                errorBuilder: (context, error, stackTrace) =>
+                    _buildFallbackCover(colorScheme),
               )
             : _buildFallbackCover(colorScheme),
       ),
@@ -475,9 +481,9 @@ class _EpisodeBottomSheetContent extends StatelessWidget {
             size: 20,
             color: colorScheme.onSurfaceVariant.withOpacity(0.7),
           ),
-          
+
           const SizedBox(width: 8),
-          
+
           // Preview text
           Expanded(
             child: Text(
@@ -513,9 +519,9 @@ class _EpisodeBottomSheetContent extends StatelessWidget {
               textTheme: textTheme,
             ),
           ),
-          
+
           const SizedBox(width: 12),
-          
+
           // Read time metric
           Expanded(
             child: _buildMetricCard(
@@ -526,9 +532,9 @@ class _EpisodeBottomSheetContent extends StatelessWidget {
               textTheme: textTheme,
             ),
           ),
-          
+
           const SizedBox(width: 12),
-          
+
           // Category metric
           Expanded(
             child: _buildMetricCard(
@@ -646,27 +652,30 @@ class _EpisodeBottomSheetContent extends StatelessWidget {
                 ),
               ),
             ),
-            
+
             const SizedBox(width: 12),
-            
+
             // Start Reading button
             Expanded(
               child: FilledButton.icon(
                 onPressed: () {
                   HapticFeedback.selectionClick();
                   // Use original episode if available (has full blocks), otherwise convert
-                  final episodeForReader = originalEpisode ?? _convertModelToEpisode(episode);
-                  
+                  final episodeForReader =
+                      originalEpisode ?? _convertModelToEpisode(episode);
+
                   // Debug: Print episode content length to verify full text is used
                   final contentLength = episodeForReader.blocks.fold<int>(
                     0,
                     (sum, block) => sum + block.text.length,
                   );
-                  debugPrint('EP${episodeForReader.index} length = $contentLength');
-                  
+                  debugPrint(
+                      'EP${episodeForReader.index} length = $contentLength');
+
                   Navigator.of(context, rootNavigator: true).push(
                     MaterialPageRoute(
-                      builder: (context) => EpisodeReaderScreen(episode: episodeForReader),
+                      builder: (context) =>
+                          EpisodeReaderScreen(episode: episodeForReader),
                       fullscreenDialog: true,
                     ),
                   );

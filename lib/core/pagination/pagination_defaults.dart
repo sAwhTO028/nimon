@@ -5,6 +5,10 @@ abstract final class PaginationDefaults {
   static const int maxPageLimit = 50;
   static const int searchDebounceMs = 250;
   static const int feedFirstPageLimit = 20;
+
+  /// Mono Home public catalog (`GET /v1/mono/feed`) — backend default 15, max 30.
+  static const int monoFeedPageLimit = 15;
+
   static const int profilePageLimit = 20;
   static const int workspacePageLimit = 20;
 }

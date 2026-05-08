@@ -28,13 +28,14 @@ class PaperSheetWidgetCompact extends StatelessWidget {
     final isSelected = state == PaperSheetState.selected;
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final screenWidth = MediaQuery.of(context).size.width;
-    
+
     // Target sizing: 50% of parent content width, max 200dp, min 150dp (smaller size)
-    final contentWidth = screenWidth - 32; // Account for 16dp padding on each side
+    final contentWidth =
+        screenWidth - 32; // Account for 16dp padding on each side
     final cardWidth = (contentWidth * 0.5).clamp(150.0, 200.0);
     // Book cover aspect ratio: more square-ish like a typical book cover (3:4)
     final cardHeight = (cardWidth * 1.33).clamp(150.0, 200.0);
-    
+
     return GestureDetector(
       onTap: onSelect,
       child: Container(
@@ -44,24 +45,28 @@ class PaperSheetWidgetCompact extends StatelessWidget {
           color: isDark ? Colors.grey.shade900 : Colors.white,
           borderRadius: BorderRadius.circular(4),
           border: Border.all(
-            color: isSelected 
+            color: isSelected
                 ? const Color(0xFF3B82F6)
-                : (isDark ? Colors.grey.shade700 : const Color(0xCC222222)), // 80% opacity
+                : (isDark
+                    ? Colors.grey.shade700
+                    : const Color(0xCC222222)), // 80% opacity
             width: isSelected ? 2 : 1,
           ),
-          boxShadow: isSelected ? [
-            BoxShadow(
-              color: const Color(0xFF3B82F6).withOpacity(0.08),
-              blurRadius: 6,
-              offset: const Offset(0, 1),
-            ),
-          ] : [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.05),
-              blurRadius: 4,
-              offset: const Offset(0, 1),
-            ),
-          ],
+          boxShadow: isSelected
+              ? [
+                  BoxShadow(
+                    color: const Color(0xFF3B82F6).withOpacity(0.08),
+                    blurRadius: 6,
+                    offset: const Offset(0, 1),
+                  ),
+                ]
+              : [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.05),
+                    blurRadius: 4,
+                    offset: const Offset(0, 1),
+                  ),
+                ],
         ),
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 10),
@@ -80,13 +85,15 @@ class PaperSheetWidgetCompact extends StatelessWidget {
                         style: TextStyle(
                           fontSize: 10,
                           fontWeight: FontWeight.w700,
-                          color: isDark ? Colors.grey.shade300 : const Color(0xFF111111),
+                          color: isDark
+                              ? Colors.grey.shade300
+                              : const Color(0xFF111111),
                         ),
                       ),
                     ),
                 ],
               ),
-              
+
               // Title (centered)
               Padding(
                 padding: const EdgeInsets.only(top: 4),
@@ -95,12 +102,13 @@ class PaperSheetWidgetCompact extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.w500,
-                    color: isDark ? Colors.grey.shade300 : const Color(0xFF111111),
+                    color:
+                        isDark ? Colors.grey.shade300 : const Color(0xFF111111),
                   ),
                   textAlign: TextAlign.center,
                 ),
               ),
-              
+
               // Thumbnail
               Container(
                 width: 48,
@@ -112,7 +120,7 @@ class PaperSheetWidgetCompact extends StatelessWidget {
                 child: _buildThumbnail(isDark),
               ),
               const SizedBox(height: 6),
-              
+
               // Story name
               if (storyName.isNotEmpty)
                 Align(
@@ -129,7 +137,7 @@ class PaperSheetWidgetCompact extends StatelessWidget {
                     ),
                   ),
                 ),
-              
+
               // Context
               if (contextText.isNotEmpty)
                 Align(
@@ -139,13 +147,15 @@ class PaperSheetWidgetCompact extends StatelessWidget {
                     style: TextStyle(
                       fontSize: 9.5,
                       height: 1.2,
-                      color: isDark ? Colors.grey.shade400 : const Color(0xFF444444),
+                      color: isDark
+                          ? Colors.grey.shade400
+                          : const Color(0xFF444444),
                     ),
                     maxLines: 3,
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
-              
+
               // Duration
               if (duration.isNotEmpty)
                 Align(
@@ -156,14 +166,16 @@ class PaperSheetWidgetCompact extends StatelessWidget {
                       'Duration: $duration',
                       style: TextStyle(
                         fontSize: 9,
-                        color: isDark ? Colors.grey.shade500 : const Color(0xFF666666),
+                        color: isDark
+                            ? Colors.grey.shade500
+                            : const Color(0xFF666666),
                       ),
                     ),
                   ),
                 ),
-              
+
               const Spacer(),
-              
+
               // Footer label
               Padding(
                 padding: const EdgeInsets.only(bottom: 4),
@@ -171,7 +183,8 @@ class PaperSheetWidgetCompact extends StatelessWidget {
                   'One-Short paper',
                   style: TextStyle(
                     fontSize: 9,
-                    color: isDark ? Colors.grey.shade500 : const Color(0xFF777777),
+                    color:
+                        isDark ? Colors.grey.shade500 : const Color(0xFF777777),
                   ),
                   textAlign: TextAlign.center,
                 ),
@@ -225,7 +238,7 @@ class PaperSheetWidgetCompact extends StatelessWidget {
   Widget _buildCategoryPlaceholder() {
     // Map story name to category for placeholder (matching home page categories)
     String category = 'General';
-    if (storyName.toLowerCase().contains('love') || 
+    if (storyName.toLowerCase().contains('love') ||
         storyName.toLowerCase().contains('rainy') ||
         storyName.toLowerCase().contains('snow')) {
       category = 'Love';
@@ -243,7 +256,8 @@ class PaperSheetWidgetCompact extends StatelessWidget {
       category = 'Drama';
     } else if (storyName.toLowerCase().contains('business')) {
       category = 'Business';
-    } else if (storyName.toLowerCase().contains('sci-fi') || storyName.toLowerCase().contains('scifi')) {
+    } else if (storyName.toLowerCase().contains('sci-fi') ||
+        storyName.toLowerCase().contains('scifi')) {
       category = 'Sci-Fi';
     } else if (storyName.toLowerCase().contains('mystery')) {
       category = 'Mystery';

@@ -112,4 +112,3 @@ CreatorProcessingState computeProcessingState(
   }
   return state;
 }
-

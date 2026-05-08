@@ -30,7 +30,9 @@ class FilterState {
 
   /// Check if any filters are active
   bool get hasActiveFilters {
-    return selectedLevel != null || selectedCategory != null || sortBy != SortBy.newest;
+    return selectedLevel != null ||
+        selectedCategory != null ||
+        sortBy != SortBy.newest;
   }
 
   /// Get filter count for UI display
@@ -53,9 +55,7 @@ class FilterState {
 
   @override
   int get hashCode {
-    return selectedLevel.hashCode ^
-        selectedCategory.hashCode ^
-        sortBy.hashCode;
+    return selectedLevel.hashCode ^ selectedCategory.hashCode ^ sortBy.hashCode;
   }
 
   @override
@@ -104,4 +104,3 @@ extension SortByExtension on SortBy {
     }
   }
 }
-

@@ -16,10 +16,13 @@ class ShareProfileScreen extends StatelessWidget {
   final String handle;
   final String publicProfileUrl;
 
-  String get _safeName => displayName.trim().isEmpty ? 'Just4withYou' : displayName.trim();
-  String get _safeHandle => handle.trim().isEmpty ? '@just4withyou' : handle.trim();
-  String get _safeUrl =>
-      publicProfileUrl.trim().isEmpty ? 'https://nimon.app/u/just4withyou' : publicProfileUrl.trim();
+  String get _safeName =>
+      displayName.trim().isEmpty ? 'Just4withYou' : displayName.trim();
+  String get _safeHandle =>
+      handle.trim().isEmpty ? '@just4withyou' : handle.trim();
+  String get _safeUrl => publicProfileUrl.trim().isEmpty
+      ? 'https://nimon.app/u/just4withyou'
+      : publicProfileUrl.trim();
 
   Future<void> _copyLink(BuildContext context) async {
     await Clipboard.setData(ClipboardData(text: _safeUrl));
@@ -284,4 +287,3 @@ class _FakeQrPainter extends CustomPainter {
   bool shouldRepaint(covariant _FakeQrPainter oldDelegate) =>
       oldDelegate.ink != ink;
 }
-

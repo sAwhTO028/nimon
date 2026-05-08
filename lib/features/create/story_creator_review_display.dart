@@ -73,8 +73,7 @@ StoryReviewPublishMode resolveDefaultStoryReviewMode({
   required StoryPublishState draftPublishState,
   StoryReviewPublishMode? lastExplicitChoice,
 }) {
-  bool allowed(StoryReviewPublishMode m) =>
-      isStoryReviewModeAllowed(m, model);
+  bool allowed(StoryReviewPublishMode m) => isStoryReviewModeAllowed(m, model);
 
   if (lastExplicitChoice != null && allowed(lastExplicitChoice)) {
     return lastExplicitChoice;
@@ -82,7 +81,8 @@ StoryReviewPublishMode resolveDefaultStoryReviewMode({
 
   final fromPublish = switch (draftPublishState) {
     StoryPublishState.draft => null,
-    StoryPublishState.readingOnlyPublished => StoryReviewPublishMode.readingOnly,
+    StoryPublishState.readingOnlyPublished =>
+      StoryReviewPublishMode.readingOnly,
     StoryPublishState.fullLearnPublished => StoryReviewPublishMode.fullLearn,
   };
   if (fromPublish != null && allowed(fromPublish)) {

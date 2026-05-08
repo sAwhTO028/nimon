@@ -1,5 +1,32 @@
 import type { PublishedMonoListItemDto, PublishedMonoDetailDto } from './published-monos.dto';
 
+/** Subset of UserProfile used to stamp writer identity onto mono DTOs (M9f). */
+export type WriterProfileSlice = {
+  displayName: string | null;
+  handle: string | null;
+  avatarUrl: string | null;
+};
+
+export function attachWriterProfileToListItem(
+  item: PublishedMonoListItemDto,
+  writer: WriterProfileSlice | null,
+): PublishedMonoListItemDto {
+  return {
+    ...item,
+    writerDisplayName: writer?.displayName ?? null,
+    writerHandle: writer?.handle ?? null,
+    writerAvatarUrl: writer?.avatarUrl ?? null,
+  };
+}
+
+export function attachWriterProfileToDetail(
+  detail: PublishedMonoDetailDto,
+  writer: WriterProfileSlice | null,
+): PublishedMonoDetailDto {
+  const stamped = attachWriterProfileToListItem(detail, writer);
+  return { ...stamped, content: detail.content };
+}
+
 export const DURATION_BY_BAND: Record<string, string> = {
   '3_5': '3–5 min',
   '5_7': '5–7 min',
@@ -72,6 +99,9 @@ export function publishedMonoListItemFromRow(m: {
     createdAt: m.createdAt.toISOString(),
     updatedAt: m.updatedAt.toISOString(),
     contentSummary,
+    writerDisplayName: null,
+    writerHandle: null,
+    writerAvatarUrl: null,
   };
 }
 

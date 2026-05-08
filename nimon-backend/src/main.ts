@@ -1,34 +1,28 @@
+import { isAbsolute, resolve } from 'node:path';
 import { NestFactory } from '@nestjs/core';
+import { NestExpressApplication } from '@nestjs/platform-express';
 import { AppModule } from './app.module';
 import { ValidationPipe } from '@nestjs/common';
 import type { CorsOptions } from '@nestjs/common/interfaces/external/cors-options.interface';
-
-/**
- * True when the request Origin is safe for local Flutter Web / Vite / webpack-dev-server.
- * (CORS does not support `http://localhost:*` as a string; we validate the URL instead.)
- */
-function isLocalWebDevOrigin(origin: string | undefined): boolean {
-  if (origin == null || origin.length === 0) {
-    // e.g. Postman, curl, same-origin, or some embedded contexts
-    return true;
-  }
-  try {
-    const u = new URL(origin);
-    if (u.protocol !== 'http:' && u.protocol !== 'https:') {
-      return false;
-    }
-    const h = u.hostname;
-    if (h === 'localhost' || h === '127.0.0.1' || h === '::1' || h === '[::1]') {
-      return true;
-    }
-  } catch {
-    return false;
-  }
-  return false;
-}
+import * as express from 'express';
+import type { NextFunction, Request, Response } from 'express';
+import {
+  applyUploadsStaticCors,
+  isLocalWebDevOrigin,
+} from './common/uploads-static-cors';
 
 const corsOptions: CorsOptions = {
   origin: (reqOrigin, callback) => {
+    const configured = process.env.CORS_ORIGIN?.trim();
+    if (configured === '*') {
+      // Reflect request Origin (works with credentials: true; unlike literal `*`).
+      callback(null, true);
+      return;
+    }
+    if (configured && configured !== '*' && reqOrigin === configured) {
+      callback(null, true);
+      return;
+    }
     if (isLocalWebDevOrigin(reqOrigin)) {
       // `true` = reflect request Origin in Access-Control-Allow-Origin (required with credentials: true; cannot be *).
       callback(null, true);
@@ -50,8 +44,38 @@ const corsOptions: CorsOptions = {
   optionsSuccessStatus: 204,
 };
 
+/** Align with {@link MediaService} upload root resolution for static `/uploads`. */
+function resolveUploadRootAbs(): string {
+  const fallback = 'uploads';
+  const raw = process.env.MEDIA_UPLOAD_DIR?.trim();
+  if (!raw) {
+    return resolve(process.cwd(), fallback);
+  }
+  const trimmed = raw.replace(/^[/\\]+/, '').trim() || fallback;
+  if (trimmed.includes('..')) {
+    return resolve(process.cwd(), fallback);
+  }
+  if (isAbsolute(trimmed)) {
+    return trimmed;
+  }
+  return resolve(process.cwd(), trimmed);
+}
+
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule);
+  const uploadAbs = resolveUploadRootAbs();
+  app.use(
+    '/uploads',
+    (req: Request, res: Response, next: NextFunction) => {
+      applyUploadsStaticCors(req, res);
+      if (req.method === 'OPTIONS') {
+        res.status(204).end();
+        return;
+      }
+      next();
+    },
+    express.static(uploadAbs),
+  );
   app.enableCors(corsOptions);
   app.enableShutdownHooks();
   app.useGlobalPipes(

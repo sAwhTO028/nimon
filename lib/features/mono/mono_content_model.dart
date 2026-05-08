@@ -89,4 +89,3 @@ class MonoContent {
     return out.toString().trimRight();
   }
 }
-

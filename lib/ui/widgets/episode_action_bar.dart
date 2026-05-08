@@ -4,7 +4,7 @@ import '../../core/share_utils.dart';
 import '../../models/episode_meta.dart';
 
 /// A reusable action bar widget for episode details with Save for Later, Share, and Start Reading buttons.
-/// 
+///
 /// Features:
 /// - Material 3 design with proper button styles and spacing
 /// - Responsive layout that works on phones and landscape
@@ -38,14 +38,14 @@ class _EpisodeActionBarState extends State<EpisodeActionBar> {
 
   Future<void> _handleShare() async {
     if (_isSharing) return;
-    
+
     setState(() => _isSharing = true);
-    
+
     try {
       // Add haptic feedback for better UX
       // Don't await: some test environments/platform channels can hang.
       HapticFeedback.lightImpact();
-      
+
       if (widget.onShare != null) {
         widget.onShare!();
       } else if (widget.episodeMeta != null) {
@@ -63,7 +63,7 @@ class _EpisodeActionBarState extends State<EpisodeActionBar> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     const gap = SizedBox(width: 8); // Smaller gap to fit 3 buttons
-    
+
     // Share button (icon only for compact design)
     final shareBtn = SizedBox(
       width: 48,
@@ -80,7 +80,7 @@ class _EpisodeActionBarState extends State<EpisodeActionBar> {
           ),
           padding: EdgeInsets.zero,
         ),
-        child: _isSharing 
+        child: _isSharing
             ? SizedBox(
                 width: 20,
                 height: 20,
@@ -151,7 +151,7 @@ class _EpisodeActionBarState extends State<EpisodeActionBar> {
               child: shareBtn,
             ),
             gap,
-            
+
             // Save for Later button
             Expanded(
               child: Semantics(
@@ -161,7 +161,7 @@ class _EpisodeActionBarState extends State<EpisodeActionBar> {
               ),
             ),
             gap,
-            
+
             // Start Reading button (primary)
             Expanded(
               flex: 2, // Give more space to the primary button

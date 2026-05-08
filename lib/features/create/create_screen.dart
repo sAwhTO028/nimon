@@ -3,7 +3,13 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:nimon/features/auth/auth_providers.dart';
+import 'package:nimon/features/auth/auth_session_state.dart';
 import 'package:nimon/features/create/create_story_basics_form.dart';
+import 'package:nimon/features/create/data/media_upload_repository.dart';
+import 'package:nimon/features/create/data/media_upload_repository_provider.dart';
+import 'package:nimon/features/create/story_basics_cover_upload_outcome.dart';
 import 'package:nimon/features/create/creator_back_policy.dart';
 import 'package:nimon/features/create/story_creator_provider.dart';
 import 'package:nimon/ui/widgets/nimon_circle_nav_button.dart';
@@ -38,6 +44,32 @@ class _CreateScreenState extends ConsumerState<CreateScreen> {
 
   GlobalKey<CreateStoryBasicsFormState> get _formKey =>
       widget.editFromReview ? _editFromReviewFormKey : _createFormKey;
+
+  Future<StoryBasicsCoverUploadOutcome> _uploadCoverFromGallery(
+      XFile file) async {
+    final tok = await ref.read(authTokenStoreProvider).readTokens();
+    if (tok == null || tok.accessToken.trim().isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Sign in to upload cover images.')),
+        );
+      }
+      return StoryBasicsCoverUploadOutcome.pendingLocal(inlineHint: null);
+    }
+    try {
+      final r = await ref.read(mediaUploadRepositoryProvider).uploadCover(file);
+      return StoryBasicsCoverUploadOutcome.ok(r);
+    } on MediaUploadException catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.userMessage)),
+        );
+      }
+      return StoryBasicsCoverUploadOutcome.pendingLocal(
+        inlineHint: coverUploadFailureInlineHint(e),
+      );
+    }
+  }
 
   Future<void> _handleCreate() async {
     final payload = _formKey.currentState?.buildPayloadIfValid();
@@ -79,6 +111,8 @@ class _CreateScreenState extends ConsumerState<CreateScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final draft = ref.watch(storyCreatorDraftDataProvider);
+    final coverUploadAllowed =
+        ref.watch(authSessionProvider) is AuthSessionAuthenticated;
     final canSubmit = _formKey.currentState?.isStep1Complete ?? false;
 
     if (widget.editFromReview) {
@@ -108,6 +142,8 @@ class _CreateScreenState extends ConsumerState<CreateScreen> {
                 initialDraft: draft,
                 progressSheetActionLabel: 'Save changes',
                 onFieldsChanged: () => setState(() {}),
+                onCoverUpload: _uploadCoverFromGallery,
+                coverUploadAllowed: coverUploadAllowed,
               ),
             ),
             Material(
@@ -119,7 +155,9 @@ class _CreateScreenState extends ConsumerState<CreateScreen> {
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
                   child: FilledButton(
-                    onPressed: canSubmit ? () => unawaited(_handleSaveFromReview()) : null,
+                    onPressed: canSubmit
+                        ? () => unawaited(_handleSaveFromReview())
+                        : null,
                     style: FilledButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 14),
                     ),
@@ -159,7 +197,8 @@ class _CreateScreenState extends ConsumerState<CreateScreen> {
               child: SizedBox(
                 height: 40,
                 child: FilledButton(
-                  onPressed: canSubmit ? () => unawaited(_handleCreate()) : null,
+                  onPressed:
+                      canSubmit ? () => unawaited(_handleCreate()) : null,
                   style: FilledButton.styleFrom(
                     backgroundColor:
                         canSubmit ? Colors.blue : Colors.grey.shade300,
@@ -191,6 +230,8 @@ class _CreateScreenState extends ConsumerState<CreateScreen> {
               initialDraft: null,
               progressSheetActionLabel: 'CREATE',
               onFieldsChanged: () => setState(() {}),
+              onCoverUpload: _uploadCoverFromGallery,
+              coverUploadAllowed: coverUploadAllowed,
             ),
           ),
         ],
