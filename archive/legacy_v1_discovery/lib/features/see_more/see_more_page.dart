@@ -38,7 +38,8 @@ class _SeeMorePageState extends State<SeeMorePage> {
   void _loadStories() {
     if (widget.storyRepo != null) {
       if (_filterState.hasActiveFilters) {
-        _storiesFuture = widget.storyRepo!.getFilteredStories(widget.section, _filterState);
+        _storiesFuture =
+            widget.storyRepo!.getFilteredStories(widget.section, _filterState);
       } else {
         _storiesFuture = widget.storyRepo!.getStoriesBySection(widget.section);
       }
@@ -53,9 +54,9 @@ class _SeeMorePageState extends State<SeeMorePage> {
       _filterState = newFilter;
       _isLoading = true;
     });
-    
+
     _loadStories();
-    
+
     setState(() {
       _isLoading = false;
     });
@@ -86,7 +87,7 @@ class _SeeMorePageState extends State<SeeMorePage> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    
+
     return Scaffold(
       extendBodyBehindAppBar: false,
       appBar: AppBar(
@@ -141,12 +142,13 @@ class _SeeMorePageState extends State<SeeMorePage> {
       body: FutureBuilder<List<Story>>(
         future: _storiesFuture,
         builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting || _isLoading) {
+          if (snapshot.connectionState == ConnectionState.waiting ||
+              _isLoading) {
             return const Center(
               child: CircularProgressIndicator(),
             );
           }
-          
+
           if (snapshot.hasError) {
             return Center(
               child: Column(
@@ -182,9 +184,9 @@ class _SeeMorePageState extends State<SeeMorePage> {
               ),
             );
           }
-          
+
           final stories = snapshot.data ?? [];
-          
+
           if (stories.isEmpty) {
             return Center(
               child: Column(
@@ -220,9 +222,9 @@ class _SeeMorePageState extends State<SeeMorePage> {
               ),
             );
           }
-          
+
           return ListView.separated(
-            physics: Platform.isIOS 
+            physics: Platform.isIOS
                 ? const BouncingScrollPhysics()
                 : const ClampingScrollPhysics(),
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -242,4 +244,3 @@ class _SeeMorePageState extends State<SeeMorePage> {
     );
   }
 }
-

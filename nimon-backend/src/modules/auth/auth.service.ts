@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
+import { MediaUrlCanonicalizerService } from '../media/media-url-canonicalizer.service';
 import { PrismaService } from '../prisma/prisma.service';
 import * as bcrypt from 'bcryptjs';
 import { createHash, randomBytes } from 'node:crypto';
@@ -12,6 +13,25 @@ import { Prisma } from '@prisma/client';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import { resolveRefreshExpiresSeconds } from './auth.config';
+import { assertNoBlockingValidationIssues } from '../../common/validation/validation-exception';
+import { combine } from '../../common/validation/validation-result';
+import {
+  normalizeEmailInput,
+  validateLoginPayload,
+  validateRegisterPayload,
+} from '../../common/validation/auth-validation';
+import {
+  validateProfileBio,
+  validateProfileDisplayName,
+  validateProfileHandle,
+} from '../../common/validation/profile-validation';
+import {
+  DEFAULT_ME_PREFERENCES,
+  READING_TEXT_SIZES,
+  type MePreferencesResponseDto,
+  type PatchMePreferencesDto,
+  type ReadingTextSize,
+} from './dto/me-preferences.dto';
 
 export interface AuthTokens {
   accessToken: string;
@@ -43,6 +63,7 @@ export class AuthService {
     private readonly prisma: PrismaService,
     private readonly jwt: JwtService,
     private readonly config: ConfigService,
+    private readonly media: MediaUrlCanonicalizerService,
   ) {}
 
   private hashRefreshOpaque(token: string): string {
@@ -61,7 +82,13 @@ export class AuthService {
   }
 
   async register(dto: RegisterDto): Promise<AuthTokens> {
-    const email = dto.email;
+    const regVal = validateRegisterPayload({
+      email: dto.email,
+      password: dto.password,
+    });
+    assertNoBlockingValidationIssues(regVal);
+
+    const email = normalizeEmailInput(dto.email);
     const existing = await this.prisma.user.findUnique({
       where: { email },
     });
@@ -128,18 +155,24 @@ export class AuthService {
   }
 
   async login(dto: LoginDto): Promise<AuthTokens> {
-    const email = dto.email;
+    const loginVal = validateLoginPayload({
+      email: dto.email,
+      password: dto.password,
+    });
+    assertNoBlockingValidationIssues(loginVal);
+
+    const email = normalizeEmailInput(dto.email);
     const user = await this.prisma.user.findUnique({
       where: { email },
     });
 
     if (!user?.passwordHash) {
-      throw new UnauthorizedException('Invalid credentials');
+      throw new UnauthorizedException('Email or password is incorrect.');
     }
 
     const ok = bcrypt.compareSync(dto.password, user.passwordHash);
     if (!ok) {
-      throw new UnauthorizedException('Invalid credentials');
+      throw new UnauthorizedException('Email or password is incorrect.');
     }
 
     await this.prisma.refreshToken.updateMany({
@@ -172,17 +205,33 @@ export class AuthService {
     };
   }
 
+  /**
+   * Rotates the opaque refresh token: revokes the presented row, inserts a new
+   * `RefreshToken` row, and returns a new access JWT + new plaintext refresh.
+   *
+   * **Reuse:** A row found by hash with `revokedAt` set (e.g. post-rotation or
+   * logout) is treated as a reuse signal — all still-valid refresh rows for that
+   * user are revoked, then `UnauthorizedException` is thrown (same message as
+   * unknown/expired tokens; no extra detail).
+   */
   async refresh(refreshTokenPlain: string): Promise<AuthTokens> {
     const tokenHash = this.hashRefreshOpaque(refreshTokenPlain);
     const row = await this.prisma.refreshToken.findUnique({
       where: { tokenHash },
     });
 
-    if (
-      !row ||
-      row.revokedAt != null ||
-      row.expiresAt.getTime() <= Date.now()
-    ) {
+    if (!row) {
+      throw new UnauthorizedException('Invalid refresh token');
+    }
+
+    const now = new Date();
+
+    if (row.revokedAt != null) {
+      await this.revokeAllActiveRefreshTokensForUser(row.userId, now);
+      throw new UnauthorizedException('Invalid refresh token');
+    }
+
+    if (row.expiresAt.getTime() <= now.getTime()) {
       throw new UnauthorizedException('Invalid refresh token');
     }
 
@@ -193,15 +242,62 @@ export class AuthService {
       throw new UnauthorizedException('Invalid refresh token');
     }
 
+    const refreshSeconds = resolveRefreshExpiresSeconds(this.config);
+    const newExpiresAt = new Date(Date.now() + refreshSeconds * 1000);
+    const newPlain = this.newOpaqueRefreshToken();
+    const newHash = this.hashRefreshOpaque(newPlain);
+
+    await this.prisma.$transaction(async (tx) => {
+      const cur = await tx.refreshToken.findUnique({
+        where: { tokenHash },
+      });
+      if (
+        !cur ||
+        cur.revokedAt != null ||
+        cur.expiresAt.getTime() <= Date.now()
+      ) {
+        throw new UnauthorizedException('Invalid refresh token');
+      }
+      await tx.refreshToken.update({
+        where: { tokenHash },
+        data: { revokedAt: new Date() },
+      });
+      await tx.refreshToken.create({
+        data: {
+          userId: cur.userId,
+          tokenHash: newHash,
+          expiresAt: newExpiresAt,
+        },
+      });
+    });
+
     const accessToken = await this.signAccessToken(user.id, user.email);
 
     return {
       accessToken,
-      refreshToken: refreshTokenPlain,
+      refreshToken: newPlain,
       tokenType: 'Bearer',
     };
   }
 
+  /** Revokes all non-expired, non-revoked refresh tokens for a user (session kill). */
+  private async revokeAllActiveRefreshTokensForUser(
+    userId: string,
+    at: Date,
+  ): Promise<void> {
+    await this.prisma.refreshToken.updateMany({
+      where: {
+        userId,
+        revokedAt: null,
+        expiresAt: { gt: at },
+      },
+      data: { revokedAt: at },
+    });
+  }
+
+  /**
+   * Idempotent: unknown hash or already-revoked row updates 0 rows; no error.
+   */
   async logout(refreshTokenPlain: string): Promise<void> {
     const tokenHash = this.hashRefreshOpaque(refreshTokenPlain);
     await this.prisma.refreshToken.updateMany({
@@ -230,8 +326,8 @@ export class AuthService {
         ? {
             displayName: p.displayName,
             handle: p.handle,
-            avatarUrl: p.avatarUrl,
-            coverImageUrl: (p as any).coverImageUrl ?? null,
+            avatarUrl: this.media.url(p.avatarUrl),
+            coverImageUrl: this.media.url((p as any).coverImageUrl ?? null),
             bio: p.bio,
             createdAt: p.createdAt.toISOString(),
             updatedAt: p.updatedAt.toISOString(),
@@ -257,8 +353,8 @@ export class AuthService {
         ? {
             displayName: p.displayName,
             handle: p.handle,
-            avatarUrl: p.avatarUrl,
-            coverImageUrl: (p as any).coverImageUrl ?? null,
+            avatarUrl: this.media.url(p.avatarUrl),
+            coverImageUrl: this.media.url((p as any).coverImageUrl ?? null),
             bio: p.bio,
           }
         : null,
@@ -276,6 +372,15 @@ export class AuthService {
     if (!user) {
       throw new UnauthorizedException();
     }
+
+    const profileValidation = combine(
+      ...(dto.displayName !== undefined
+        ? [validateProfileDisplayName(dto.displayName)]
+        : []),
+      ...(dto.handle !== undefined ? [validateProfileHandle(dto.handle)] : []),
+      ...(dto.bio !== undefined ? [validateProfileBio(dto.bio)] : []),
+    );
+    assertNoBlockingValidationIssues(profileValidation);
 
     const data: Record<string, unknown> = {};
     if (dto.displayName !== undefined) data.displayName = dto.displayName;
@@ -302,8 +407,8 @@ export class AuthService {
         profile: {
           displayName: profile.displayName,
           handle: profile.handle,
-          avatarUrl: profile.avatarUrl,
-          coverImageUrl: (profile as any).coverImageUrl ?? null,
+          avatarUrl: this.media.url(profile.avatarUrl),
+          coverImageUrl: this.media.url((profile as any).coverImageUrl ?? null),
           bio: profile.bio,
         },
       };
@@ -322,5 +427,195 @@ export class AuthService {
       }
       throw e;
     }
+  }
+
+  private resolvePreference<T extends string>(
+    v: string | null | undefined,
+    defaultValue: T,
+    opts?: { treatDefaultStringAsNull?: T },
+  ): T {
+    const t = typeof v === 'string' ? v.trim() : '';
+    if (!t) return defaultValue;
+    if (opts?.treatDefaultStringAsNull && t === opts.treatDefaultStringAsNull) {
+      return defaultValue;
+    }
+    return t as T;
+  }
+
+  private sanitizeReadingTextSize(raw: string): ReadingTextSize {
+    return (READING_TEXT_SIZES as readonly string[]).includes(raw)
+      ? (raw as ReadingTextSize)
+      : DEFAULT_ME_PREFERENCES.readingTextSize;
+  }
+
+  private storePreference(
+    v: string | null,
+    defaultValue: string,
+    opts?: { defaultAlias?: string },
+  ): string | null {
+    if (v == null) return null;
+    const t = String(v).trim();
+    if (!t) return null;
+    if (t === defaultValue) return null;
+    if (opts?.defaultAlias && t === opts.defaultAlias) return null;
+    return t;
+  }
+
+  async getMePreferences(userId: string): Promise<MePreferencesResponseDto> {
+    const row = await this.prisma.userPreference.findUnique({
+      where: { userId },
+      select: {
+        appLocale: true,
+        contentLocale: true,
+        learningLanguage: true,
+        themeMode: true,
+        readingTextSize: true,
+        showExplanations: true,
+      },
+    });
+
+    if (!row) return { ...DEFAULT_ME_PREFERENCES };
+
+    return {
+      appLocale: this.resolvePreference(row.appLocale, DEFAULT_ME_PREFERENCES.appLocale, {
+        treatDefaultStringAsNull: 'system',
+      }),
+      contentLocale: this.resolvePreference(row.contentLocale, DEFAULT_ME_PREFERENCES.contentLocale),
+      learningLanguage: this.resolvePreference(
+        row.learningLanguage,
+        DEFAULT_ME_PREFERENCES.learningLanguage,
+      ),
+      themeMode: this.resolvePreference(row.themeMode, DEFAULT_ME_PREFERENCES.themeMode, {
+        treatDefaultStringAsNull: 'system',
+      }),
+      readingTextSize: this.sanitizeReadingTextSize(
+        this.resolvePreference(row.readingTextSize, DEFAULT_ME_PREFERENCES.readingTextSize, {
+          treatDefaultStringAsNull: 'standard',
+        }),
+      ),
+      showExplanations: row.showExplanations ?? DEFAULT_ME_PREFERENCES.showExplanations,
+    };
+  }
+
+  async patchMePreferences(
+    userId: string,
+    dto: PatchMePreferencesDto,
+  ): Promise<MePreferencesResponseDto> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true },
+    });
+    if (!user) {
+      throw new UnauthorizedException();
+    }
+
+    const data: Record<string, unknown> = {};
+    if (dto.appLocale !== undefined) {
+      data.appLocale = this.storePreference(dto.appLocale, DEFAULT_ME_PREFERENCES.appLocale, {
+        defaultAlias: 'system',
+      });
+    }
+    if (dto.contentLocale !== undefined) {
+      data.contentLocale = this.storePreference(
+        dto.contentLocale,
+        DEFAULT_ME_PREFERENCES.contentLocale,
+      );
+    }
+    if (dto.learningLanguage !== undefined) {
+      data.learningLanguage = this.storePreference(
+        dto.learningLanguage,
+        DEFAULT_ME_PREFERENCES.learningLanguage,
+      );
+    }
+    if (dto.themeMode !== undefined) {
+      data.themeMode = this.storePreference(dto.themeMode, DEFAULT_ME_PREFERENCES.themeMode, {
+        defaultAlias: 'system',
+      });
+    }
+    if (dto.readingTextSize !== undefined) {
+      data.readingTextSize = this.storePreference(
+        dto.readingTextSize,
+        DEFAULT_ME_PREFERENCES.readingTextSize,
+        { defaultAlias: 'standard' },
+      );
+    }
+    if (dto.showExplanations !== undefined) {
+      if (dto.showExplanations === null || dto.showExplanations === true) {
+        data.showExplanations = null;
+      } else {
+        data.showExplanations = false;
+      }
+    }
+
+    const out = await this.prisma.userPreference.upsert({
+      where: { userId },
+      create: {
+        userId,
+        appLocale:
+          dto.appLocale === undefined
+            ? null
+            : (this.storePreference(dto.appLocale, DEFAULT_ME_PREFERENCES.appLocale, {
+                defaultAlias: 'system',
+              }) as any),
+        contentLocale:
+          dto.contentLocale === undefined
+            ? null
+            : (this.storePreference(dto.contentLocale, DEFAULT_ME_PREFERENCES.contentLocale) as any),
+        learningLanguage:
+          dto.learningLanguage === undefined
+            ? null
+            : (this.storePreference(
+                dto.learningLanguage,
+                DEFAULT_ME_PREFERENCES.learningLanguage,
+              ) as any),
+        themeMode:
+          dto.themeMode === undefined
+            ? null
+            : (this.storePreference(dto.themeMode, DEFAULT_ME_PREFERENCES.themeMode, {
+                defaultAlias: 'system',
+              }) as any),
+        readingTextSize:
+          dto.readingTextSize === undefined
+            ? null
+            : (this.storePreference(dto.readingTextSize, DEFAULT_ME_PREFERENCES.readingTextSize, {
+                defaultAlias: 'standard',
+              }) as any),
+        showExplanations:
+          dto.showExplanations === undefined
+            ? null
+            : dto.showExplanations === null || dto.showExplanations === true
+              ? null
+              : false,
+      },
+      update: data as any,
+      select: {
+        appLocale: true,
+        contentLocale: true,
+        learningLanguage: true,
+        themeMode: true,
+        readingTextSize: true,
+        showExplanations: true,
+      },
+    });
+
+    return {
+      appLocale: this.resolvePreference(out.appLocale, DEFAULT_ME_PREFERENCES.appLocale, {
+        treatDefaultStringAsNull: 'system',
+      }),
+      contentLocale: this.resolvePreference(out.contentLocale, DEFAULT_ME_PREFERENCES.contentLocale),
+      learningLanguage: this.resolvePreference(
+        out.learningLanguage,
+        DEFAULT_ME_PREFERENCES.learningLanguage,
+      ),
+      themeMode: this.resolvePreference(out.themeMode, DEFAULT_ME_PREFERENCES.themeMode, {
+        treatDefaultStringAsNull: 'system',
+      }),
+      readingTextSize: this.sanitizeReadingTextSize(
+        this.resolvePreference(out.readingTextSize, DEFAULT_ME_PREFERENCES.readingTextSize, {
+          treatDefaultStringAsNull: 'standard',
+        }),
+      ),
+      showExplanations: out.showExplanations ?? DEFAULT_ME_PREFERENCES.showExplanations,
+    };
   }
 }

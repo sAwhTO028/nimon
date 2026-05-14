@@ -19,30 +19,34 @@ import 'package:nimon/features/mono/mono_reader_menu_origin.dart';
 import 'package:nimon/ui/reading/nimon_ruby_text.dart';
 import 'package:nimon/ui/reading/nimon_sentence_block.dart';
 import 'package:nimon/ui/bottom_sheets/mono_story_options_sheet.dart';
+import 'package:nimon/ui/quota_exceeded_dialog.dart';
 import 'package:nimon/widgets/floating_dock_nav_bar.dart';
 import 'package:nimon/core/design_system/nimon_typography.dart';
 import 'package:nimon/core/format_social_count.dart';
-import 'package:nimon/l10n/nimon_app_strings.dart';
 import 'package:nimon/ui/widgets/nimon_circle_nav_button.dart';
 import 'package:nimon/features/create/data/remote_backend_config.dart';
 import 'package:nimon/features/mono/data/mono_feed_item_mapper.dart';
 import 'package:nimon/features/mono/data/mono_feed_providers.dart';
-import 'package:nimon/features/mono/expandable_footer_description.dart';
 import 'package:nimon/features/mono/mono_feed_models.dart';
 import 'package:nimon/features/mono/saved_only_ux_policy.dart';
 import 'package:nimon/features/mono/share_mono_link.dart';
 import 'package:nimon/features/profile/saved_library_copy.dart';
 import 'package:nimon/features/profile/data/published_mono_catalog_visibility_exception.dart';
+import 'package:nimon/features/profile/data/published_mono_display_contract.dart';
 import 'package:nimon/features/profile/creator_profile_location.dart';
 import 'package:nimon/features/profile/profile_processing_refresh.dart';
+import 'package:nimon/core/design_system/nimon_color_tokens.dart';
+import 'package:nimon/core/networking/network_error_mapping.dart';
+import 'package:nimon/core/validation/app_quota_exceeded_exception.dart';
+import 'package:nimon/core/validation/protected_action.dart';
+import 'package:nimon/core/validation/protected_action_guard.dart';
 import 'package:nimon/features/mono/mono_line_explanation_display.dart';
-import 'package:nimon/features/settings/settings_providers.dart';
+import 'package:nimon/features/settings/presentation/providers/user_preferences_notifier.dart';
 import 'package:nimon/features/mono/bookmark_ownership_policy.dart';
+import 'package:nimon/features/profile/data/profile_public_providers.dart';
+import 'package:nimon/features/profile/presentation/providers/profile_following_pager.dart';
 
 export 'mono_feed_models.dart';
-
-/// Learn Group actions (Hero + Read): unified icon and label color.
-const Color monoLearnGroupActionColor = Color(0xFF23231E);
 
 String _monoCoverFallbackAsset(MonoCoverCategory c) {
   switch (c) {
@@ -131,9 +135,12 @@ class _MonoScreenState extends ConsumerState<MonoScreen> {
   static String _levelCompactMenuLabel(String v) =>
       v == 'All' ? 'All levels' : v;
 
-  static const _readingBg = Color(0xFFF5F2EA);
-  static const _readingInk = Color(0xFF1A1917);
-  static const _readingInkMuted = Color(0xFF5C5A55);
+  NimonColorTokens _nimonColors(ThemeData theme) {
+    return theme.extension<NimonColorTokens>() ??
+        (theme.brightness == Brightness.dark
+            ? NimonColorTokens.dark
+            : NimonColorTokens.light);
+  }
 
   /// Legacy small mock set (retired from primary V1 dataset).
   // ignore: unused_field
@@ -2097,8 +2104,10 @@ class _MonoScreenState extends ConsumerState<MonoScreen> {
     )) {
       return;
     }
-    if (!_isAuthed) {
-      _snack(SavedLibraryCopy.monoGuestSave);
+    if (!await ensureProtectedActionAllowed(
+      context,
+      action: ProtectedActionType.save,
+    )) {
       return;
     }
     final id = item.id;
@@ -2123,15 +2132,26 @@ class _MonoScreenState extends ConsumerState<MonoScreen> {
             ? SavedLibraryCopy.monoSavedSnack
             : SavedLibraryCopy.monoRemovedSnack,
       );
+    } on AppQuotaExceededException catch (e) {
+      n.value = before;
+      if (mounted) {
+        await showQuotaExceededDialog(context, e);
+      }
     } catch (e) {
       n.value = before;
-      _snack(e is StateError ? e.message : SavedLibraryCopy.monoSaveError);
+      final offlineMsg = offlineUserMessageIfRecognized(e);
+      _snack(
+        offlineMsg ??
+            (e is StateError ? e.message : SavedLibraryCopy.monoSaveError),
+      );
     }
   }
 
   Future<void> _toggleReact(MonoFeedItem item) async {
-    if (!_isAuthed) {
-      _snack(NimonAppStrings.signInToReact);
+    if (!await ensureProtectedActionAllowed(
+      context,
+      action: ProtectedActionType.react,
+    )) {
       return;
     }
     final id = item.id;
@@ -2155,7 +2175,11 @@ class _MonoScreenState extends ConsumerState<MonoScreen> {
     } catch (e) {
       reactN.value = beforeReact;
       likesN.value = beforeLikes;
-      _snack(e is StateError ? e.message : 'Could not update reaction.');
+      final offlineMsg = offlineUserMessageIfRecognized(e);
+      _snack(
+        offlineMsg ??
+            (e is StateError ? e.message : 'Could not update reaction.'),
+      );
     }
   }
 
@@ -2237,7 +2261,7 @@ class _MonoScreenState extends ConsumerState<MonoScreen> {
             Text(
               'Could not load the feed.',
               style: theme.textTheme.titleMedium?.copyWith(
-                color: _readingInk,
+                color: _nimonColors(theme).textPrimary,
                 fontWeight: FontWeight.w700,
               ),
               textAlign: TextAlign.center,
@@ -2246,7 +2270,7 @@ class _MonoScreenState extends ConsumerState<MonoScreen> {
             Text(
               '$error',
               style: theme.textTheme.bodySmall?.copyWith(
-                color: _readingInkMuted,
+                color: _nimonColors(theme).textSecondary,
               ),
               textAlign: TextAlign.center,
             ),
@@ -2274,7 +2298,7 @@ class _MonoScreenState extends ConsumerState<MonoScreen> {
               ? 'No published stories yet.'
               : '$_selectedLevel の投稿はありません',
           style: theme.textTheme.bodyLarge?.copyWith(
-            color: _readingInkMuted,
+            color: _nimonColors(theme).textSecondary,
           ),
           textAlign: TextAlign.center,
         ),
@@ -2462,7 +2486,7 @@ class _MonoScreenState extends ConsumerState<MonoScreen> {
         child: Text(
           '$_selectedLevel の投稿はありません',
           style: theme.textTheme.bodyLarge?.copyWith(
-            color: _readingInkMuted,
+            color: _nimonColors(theme).textSecondary,
           ),
           textAlign: TextAlign.center,
         ),
@@ -2525,26 +2549,14 @@ class _MonoScreenState extends ConsumerState<MonoScreen> {
         setState(() => _feedIndex = i);
         _precacheCoversNear(context, data, i);
         if (segmentKind == _MonoMainFeedKind.forYou && _useRemoteForYouFeed) {
-          final pagerState = ref.read(monoFeedPagerProvider);
-          if (pagerState.hasMore &&
-              !pagerState.isLoadingMore &&
-              i >= data.length - 2) {
-            unawaited(ref.read(monoFeedPagerProvider.notifier).loadMore());
-          }
+          ref.read(monoFeedPagerProvider.notifier).maybePrefetch(i);
           if (i >= 0 && i < data.length) {
             unawaited(_ensureDetailLoaded(data[i]));
           }
         }
         if (segmentKind == _MonoMainFeedKind.following &&
             _useRemoteFollowingFeed) {
-          final pagerState = ref.read(followingMonoFeedPagerProvider);
-          if (pagerState.hasMore &&
-              !pagerState.isLoadingMore &&
-              i >= data.length - 2) {
-            unawaited(
-              ref.read(followingMonoFeedPagerProvider.notifier).loadMore(),
-            );
-          }
+          ref.read(followingMonoFeedPagerProvider.notifier).maybePrefetch(i);
           if (i >= 0 && i < data.length) {
             unawaited(_ensureDetailLoaded(data[i]));
           }
@@ -2570,9 +2582,9 @@ class _MonoScreenState extends ConsumerState<MonoScreen> {
           onToggleBookmark: () => unawaited(_toggleBookmark(item)),
           onToggleReact: () => unawaited(_toggleReact(item)),
           onShare: () => _share(item),
-          readingBg: _readingBg,
-          readingInk: _readingInk,
-          readingInkMuted: _readingInkMuted,
+          readingBg: _nimonColors(theme).appBackground,
+          readingInk: _nimonColors(theme).textPrimary,
+          readingInkMuted: _nimonColors(theme).textSecondary,
           showExplanationLines: showExplanationLines,
           currentUserId: _currentUserId,
         );
@@ -2604,7 +2616,7 @@ class _MonoScreenState extends ConsumerState<MonoScreen> {
         child: Text(
           '$_selectedLevel の投稿はありません',
           style: theme.textTheme.bodyLarge?.copyWith(
-            color: _readingInkMuted,
+            color: _nimonColors(theme).textSecondary,
           ),
           textAlign: TextAlign.center,
         ),
@@ -2869,7 +2881,7 @@ class _MonoScreenState extends ConsumerState<MonoScreen> {
                             'Save & organize',
                             style: theme.textTheme.titleMedium?.copyWith(
                               fontWeight: FontWeight.w700,
-                              color: _readingInk,
+                              color: _nimonColors(theme).textPrimary,
                             ),
                           ),
                         ),
@@ -2897,10 +2909,11 @@ class _MonoScreenState extends ConsumerState<MonoScreen> {
                                           ? Icons.bookmark
                                           : Icons.bookmark_border,
                                       color: !isSaved
-                                          ? _readingInkMuted
+                                          ? _nimonColors(theme).textSecondary
                                           : (defaultSavedActive
                                               ? theme.colorScheme.primary
-                                              : _readingInkMuted),
+                                              : _nimonColors(theme)
+                                                  .textSecondary),
                                       size: 26,
                                     ),
                                     const SizedBox(width: 12),
@@ -2914,7 +2927,8 @@ class _MonoScreenState extends ConsumerState<MonoScreen> {
                                             style: theme.textTheme.titleSmall
                                                 ?.copyWith(
                                               fontWeight: FontWeight.w700,
-                                              color: _readingInk,
+                                              color: _nimonColors(theme)
+                                                  .textPrimary,
                                             ),
                                           ),
                                           const SizedBox(height: 2),
@@ -2922,7 +2936,8 @@ class _MonoScreenState extends ConsumerState<MonoScreen> {
                                             savedCardSubtitle,
                                             style: theme.textTheme.bodySmall
                                                 ?.copyWith(
-                                              color: _readingInkMuted,
+                                              color: _nimonColors(theme)
+                                                  .textSecondary,
                                             ),
                                           ),
                                         ],
@@ -2930,7 +2945,7 @@ class _MonoScreenState extends ConsumerState<MonoScreen> {
                                     ),
                                     Icon(
                                       Icons.chevron_right,
-                                      color: _readingInkMuted,
+                                      color: _nimonColors(theme).textSecondary,
                                     ),
                                   ],
                                 ),
@@ -2947,7 +2962,7 @@ class _MonoScreenState extends ConsumerState<MonoScreen> {
                                   'Add to a collection',
                                   style: theme.textTheme.titleSmall?.copyWith(
                                     fontWeight: FontWeight.w700,
-                                    color: _readingInk,
+                                    color: _nimonColors(theme).textPrimary,
                                   ),
                                 ),
                               ),
@@ -2988,7 +3003,7 @@ class _MonoScreenState extends ConsumerState<MonoScreen> {
                                   Icons.folder_outlined,
                                   color: added
                                       ? theme.colorScheme.primary
-                                      : _readingInkMuted,
+                                      : _nimonColors(theme).textSecondary,
                                 ),
                                 title: Text(f.name),
                                 trailing: added
@@ -3131,7 +3146,8 @@ class _MonoScreenState extends ConsumerState<MonoScreen> {
         });
       }
     }
-    final showExplanation = ref.watch(monoReaderTranslationEnabledProvider);
+    final showExplanation =
+        ref.watch(userPreferencesNotifierProvider).prefs.showExplanations;
     final useReaderDock = widget.showTopControls == false;
     final effectiveDockHeight = useReaderDock
         ? MonoReaderDock.occupiedHeight(context)
@@ -3160,7 +3176,7 @@ class _MonoScreenState extends ConsumerState<MonoScreen> {
     }
 
     final scaffold = Scaffold(
-      backgroundColor: _readingBg,
+      backgroundColor: _nimonColors(theme).appBackground,
       body: SafeArea(
         bottom: false,
         child: Stack(
@@ -3169,7 +3185,7 @@ class _MonoScreenState extends ConsumerState<MonoScreen> {
             Padding(
               padding: EdgeInsets.only(bottom: dockH + monoAboveDockExtraGap),
               child: ColoredBox(
-                color: _readingBg,
+                color: _nimonColors(theme).appBackground,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
@@ -3215,8 +3231,8 @@ class _MonoScreenState extends ConsumerState<MonoScreen> {
                                   _mainFeedKind == _MonoMainFeedKind.following,
                               onTap: () =>
                                   _setMainFeedKind(_MonoMainFeedKind.following),
-                              ink: _readingInk,
-                              inkMuted: _readingInkMuted,
+                              ink: _nimonColors(theme).textPrimary,
+                              inkMuted: _nimonColors(theme).textSecondary,
                               accent: theme.colorScheme.primary,
                             ),
                             const SizedBox(width: 10),
@@ -3226,8 +3242,8 @@ class _MonoScreenState extends ConsumerState<MonoScreen> {
                                   _mainFeedKind == _MonoMainFeedKind.forYou,
                               onTap: () =>
                                   _setMainFeedKind(_MonoMainFeedKind.forYou),
-                              ink: _readingInk,
-                              inkMuted: _readingInkMuted,
+                              ink: _nimonColors(theme).textPrimary,
+                              inkMuted: _nimonColors(theme).textSecondary,
                               accent: theme.colorScheme.primary,
                             ),
                             const Spacer(),
@@ -3335,8 +3351,9 @@ class _MonoScreenState extends ConsumerState<MonoScreen> {
                                           ),
                                           style: theme.textTheme.labelMedium
                                               ?.copyWith(
-                                            color: _readingInkMuted.withValues(
-                                                alpha: 0.92),
+                                            color: _nimonColors(theme)
+                                                .textSecondary
+                                                .withValues(alpha: 0.92),
                                             fontWeight: FontWeight.w500,
                                             letterSpacing: 0.1,
                                             height: 1.1,
@@ -3346,8 +3363,9 @@ class _MonoScreenState extends ConsumerState<MonoScreen> {
                                         Icon(
                                           Icons.keyboard_arrow_down_rounded,
                                           size: 18,
-                                          color: _readingInkMuted.withValues(
-                                              alpha: 0.75),
+                                          color: _nimonColors(theme)
+                                              .textSecondary
+                                              .withValues(alpha: 0.75),
                                         ),
                                       ],
                                     ),
@@ -3355,44 +3373,6 @@ class _MonoScreenState extends ConsumerState<MonoScreen> {
                                 ),
                               ),
                             if (_mainFeedKind == _MonoMainFeedKind.forYou)
-                              const SizedBox(width: 2),
-                            if (_useRemoteForYouFeed &&
-                                _mainFeedKind == _MonoMainFeedKind.forYou)
-                              Tooltip(
-                                message: 'Refresh feed',
-                                child: Material(
-                                  color: Colors.transparent,
-                                  child: InkWell(
-                                    onTap: () {
-                                      _clearRemoteHydration();
-                                      unawaited(
-                                        ref
-                                            .read(
-                                              monoFeedPagerProvider.notifier,
-                                            )
-                                            .refresh(),
-                                      );
-                                    },
-                                    borderRadius: BorderRadius.circular(12),
-                                    splashColor: theme.colorScheme.primary
-                                        .withValues(alpha: 0.10),
-                                    highlightColor: theme.colorScheme.primary
-                                        .withValues(alpha: 0.05),
-                                    child: Padding(
-                                      padding: const EdgeInsets.all(10),
-                                      child: Icon(
-                                        Icons.refresh_rounded,
-                                        size: 22,
-                                        color: _readingInk.withValues(
-                                          alpha: 0.88,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            if (_useRemoteForYouFeed &&
-                                _mainFeedKind == _MonoMainFeedKind.forYou)
                               const SizedBox(width: 2),
                             Tooltip(
                               message: 'Search Mono',
@@ -3410,9 +3390,11 @@ class _MonoScreenState extends ConsumerState<MonoScreen> {
                                     child: Icon(
                                       Icons.search_rounded,
                                       size: 22,
-                                      color: _readingInk.withValues(
-                                        alpha: 0.88,
-                                      ),
+                                      color: _nimonColors(theme)
+                                          .textPrimary
+                                          .withValues(
+                                            alpha: 0.88,
+                                          ),
                                     ),
                                   ),
                                 ),
@@ -3438,8 +3420,9 @@ class _MonoScreenState extends ConsumerState<MonoScreen> {
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: theme.textTheme.labelLarge?.copyWith(
-                                  color:
-                                      _readingInkMuted.withValues(alpha: 0.92),
+                                  color: _nimonColors(theme)
+                                      .textSecondary
+                                      .withValues(alpha: 0.92),
                                   fontWeight: FontWeight.w600,
                                   letterSpacing: 0.12,
                                 ),
@@ -3523,9 +3506,12 @@ class _MonoScreenState extends ConsumerState<MonoScreen> {
                                       onToggleReact: () =>
                                           unawaited(_toggleReact(item)),
                                       onShare: () => _share(item),
-                                      readingBg: _readingBg,
-                                      readingInk: _readingInk,
-                                      readingInkMuted: _readingInkMuted,
+                                      readingBg:
+                                          _nimonColors(theme).appBackground,
+                                      readingInk:
+                                          _nimonColors(theme).textPrimary,
+                                      readingInkMuted:
+                                          _nimonColors(theme).textSecondary,
                                       showExplanationLines: showExplanation,
                                       currentUserId: _currentUserId,
                                     );
@@ -3591,7 +3577,7 @@ class _MonoScreenState extends ConsumerState<MonoScreen> {
             Text(
               'Could not load Following.',
               style: theme.textTheme.titleMedium?.copyWith(
-                color: _readingInk,
+                color: _nimonColors(theme).textPrimary,
                 fontWeight: FontWeight.w700,
               ),
               textAlign: TextAlign.center,
@@ -3600,7 +3586,7 @@ class _MonoScreenState extends ConsumerState<MonoScreen> {
             Text(
               '$error',
               style: theme.textTheme.bodySmall?.copyWith(
-                color: _readingInkMuted,
+                color: _nimonColors(theme).textSecondary,
               ),
               textAlign: TextAlign.center,
             ),
@@ -3622,24 +3608,19 @@ class _MonoScreenState extends ConsumerState<MonoScreen> {
   }
 }
 
-/// Per feed page: full-width story column; meta bottom-left (inset from rail); rail [Positioned] lower-right
-/// only — does not shrink the story’s horizontal constraint for the full page height.
+/// Per feed page: full-width story column; footer is [footerRow] (transparent meta + action column).
 class _MonoGroupedBackgroundContent extends StatelessWidget {
   final Color background;
   final Widget storyTextArea;
-  final Widget metaGroup;
-  final Widget learnGroup;
+  final Widget footerRow;
 
   const _MonoGroupedBackgroundContent({
     required this.background,
     required this.storyTextArea,
-    required this.metaGroup,
-    required this.learnGroup,
+    required this.footerRow,
   });
 
   static const _footerRowRightPad = 8.0;
-  static const _railW = 56.0;
-  static const _railGap = 6.0;
 
   @override
   Widget build(BuildContext context) {
@@ -3650,27 +3631,11 @@ class _MonoGroupedBackgroundContent extends StatelessWidget {
           left: 14,
           right: _footerRowRightPad,
         ),
-        child: Stack(
-          clipBehavior: Clip.none,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Expanded(child: storyTextArea),
-                metaGroup,
-              ],
-            ),
-            Positioned(
-              right: 0,
-              bottom: 0,
-              child: SizedBox(
-                width: _railW,
-                child: Padding(
-                  padding: const EdgeInsets.only(left: _railGap),
-                  child: learnGroup,
-                ),
-              ),
-            ),
+            Expanded(child: storyTextArea),
+            footerRow,
           ],
         ),
       ),
@@ -3858,157 +3823,18 @@ class _MonoCoverPage extends StatelessWidget {
   }
 }
 
-/// Read mode only: same bottom-right slot as Hero [learnGroup], collapsed FAB or expanded to [_BottomActionRail].
-class _ReadModeLearnGroupCollapsible extends StatelessWidget {
-  final bool expanded;
-  final ValueChanged<bool> onSetExpanded;
-  final ValueNotifier<bool> bookmarkNotifier;
-  final ValueNotifier<bool> reactNotifier;
-  final ValueNotifier<int> likesCountNotifier;
-  final VoidCallback onLearn;
-  final VoidCallback onToggleBookmark;
-  final VoidCallback onToggleReact;
-  final VoidCallback onShare;
-  final double railWidth;
-  final Color surfaceColor;
-  final bool showBookmark;
-
-  const _ReadModeLearnGroupCollapsible({
-    required this.expanded,
-    required this.onSetExpanded,
-    required this.bookmarkNotifier,
-    required this.reactNotifier,
-    required this.likesCountNotifier,
-    required this.onLearn,
-    required this.onToggleBookmark,
-    required this.onToggleReact,
-    required this.onShare,
-    required this.railWidth,
-    required this.surfaceColor,
-    this.showBookmark = true,
-  });
-
-  /// Small compact FAB (matches “not intrusive” / right-column alignment).
-  static const double collapsedFabSize = 40.0;
-
-  static const double _arrowIconSize = 24.0;
-
-  static const double _gapAboveRail = 8.0;
-
-  /// Vertical space occupied by the collapsed FAB alone (for reading scroll inset).
-  static double get collapsedScrollClearance => collapsedFabSize;
-
-  /// Vertical space when expanded: collapse control + gap + full rail (for reading scroll inset).
-  static double get expandedScrollClearance =>
-      collapsedFabSize + _gapAboveRail + _BottomActionRail.blockedColumnHeight;
-
-  @override
-  Widget build(BuildContext context) {
-    final borderSide = BorderSide(
-      color: monoLearnGroupActionColor.withValues(alpha: 0.18),
-    );
-
-    Widget expandFab() {
-      return Tooltip(
-        message: 'Actions',
-        child: Material(
-          color: surfaceColor.withValues(alpha: 0.92),
-          elevation: 2,
-          shadowColor: Colors.black.withValues(alpha: 0.12),
-          shape: CircleBorder(side: borderSide),
-          child: InkWell(
-            customBorder: const CircleBorder(),
-            onTap: () => onSetExpanded(true),
-            child: SizedBox(
-              width: collapsedFabSize,
-              height: collapsedFabSize,
-              child: Center(
-                child: Icon(
-                  Icons.keyboard_arrow_down,
-                  size: _arrowIconSize,
-                  color: monoLearnGroupActionColor,
-                ),
-              ),
-            ),
-          ),
-        ),
-      );
-    }
-
-    Widget collapseFab() {
-      return Tooltip(
-        message: 'Hide actions',
-        child: Material(
-          color: surfaceColor.withValues(alpha: 0.92),
-          elevation: 2,
-          shadowColor: Colors.black.withValues(alpha: 0.12),
-          shape: CircleBorder(side: borderSide),
-          child: InkWell(
-            customBorder: const CircleBorder(),
-            onTap: () => onSetExpanded(false),
-            child: SizedBox(
-              width: collapsedFabSize,
-              height: collapsedFabSize,
-              child: Center(
-                child: Icon(
-                  Icons.keyboard_arrow_up,
-                  size: _arrowIconSize,
-                  color: monoLearnGroupActionColor,
-                ),
-              ),
-            ),
-          ),
-        ),
-      );
-    }
-
-    if (!expanded) {
-      return Align(
-        alignment: Alignment.bottomRight,
-        child: expandFab(),
-      );
-    }
-
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.end,
-      children: [
-        collapseFab(),
-        const SizedBox(height: _gapAboveRail),
-        AnimatedBuilder(
-          animation: Listenable.merge([
-            bookmarkNotifier,
-            reactNotifier,
-            likesCountNotifier,
-          ]),
-          builder: (context, _) {
-            return _BottomActionRail(
-              width: railWidth,
-              isBookmarked: bookmarkNotifier.value,
-              isReacted: reactNotifier.value,
-              likesCount: likesCountNotifier.value,
-              onLearn: onLearn,
-              onToggleReact: onToggleReact,
-              onToggleBookmark: onToggleBookmark,
-              onShare: onShare,
-              showBookmark: showBookmark,
-              ink: monoLearnGroupActionColor,
-              inkMuted: monoLearnGroupActionColor,
-            );
-          },
-        ),
-      ],
-    );
-  }
-}
+/// Read mode only: footer row is transparent meta + transparent More/React column (see [_buildReadingFooterRow]).
+// (M12b3) Read-mode action rail is always visible and aligned with the footer
+// meta group. The old expand/collapse arrow-FAB system was removed to match the
+// cover page presentation.
 
 /// Bottom-left account/meta block (shorter than the Learn rail). Bottom edge aligns with [_MonoLearnRailOverlay].
 ///
-/// [onFooterMetaHeight] reports [_PostFooterMeta] height only (for L1 [readingBottomInset]).
+/// [_MeasureSize] on the composed footer row drives L1 [readingBottomInset] layout math.
 class _ReadingFeedPostState extends State<_ReadingFeedPost>
     with AutomaticKeepAliveClientMixin {
   static const _hPad = 20.0;
-  static const _railWidth = 56.0;
+  static const _footerMetaToActionGap = 8.0;
 
   /// Matches [_MonoGroupedBackgroundContent] right padding — rail inset from the screen edge.
   static const _footerRowRightPaddingPx = 8.0;
@@ -4070,9 +3896,112 @@ class _ReadingFeedPostState extends State<_ReadingFeedPost>
   double _metaH = 0;
   int? _lastHPageLayoutKey;
 
-  /// Read mode only: collapsed '^' FAB vs full [_BottomActionRail]. Reset when returning to Hero.
-  bool _readModeLearnExpanded = false;
+  // (M12b3) Reader actions are always visible (no arrow-FAB collapse system).
   late final PageController _horizontalPageController;
+
+  Future<void> _openMonoActionsSheet({required bool allowBookmark}) async {
+    final item = widget.item;
+    final tc = Theme.of(context).colors;
+
+    final p = item.publishedAccess;
+    final showLearn = p?.isFullLearnPublished == true;
+
+    final isSaved = widget.bookmarkNotifier.value;
+    final shareLink = monoShareUrlOrEmpty(item);
+    final shareEnabled = shareLink.trim().isNotEmpty;
+
+    await showModalBottomSheet<void>(
+      context: context,
+      useRootNavigator: true,
+      showDragHandle: true,
+      backgroundColor: tc.surface,
+      builder: (ctx) {
+        final padBottom = MediaQuery.viewPaddingOf(ctx).bottom;
+
+        Widget row({
+          required IconData icon,
+          required String title,
+          String? subtitle,
+          required VoidCallback? onTap,
+          bool enabled = true,
+        }) {
+          final ink = enabled ? tc.textPrimary : tc.textSecondary;
+          final subInk = tc.textSecondary;
+          return ListTile(
+            enabled: enabled,
+            leading: Icon(icon, color: ink),
+            title: Text(
+              title,
+              style: Theme.of(ctx).textTheme.bodyLarge?.copyWith(color: ink),
+            ),
+            subtitle: subtitle == null
+                ? null
+                : Text(
+                    subtitle,
+                    style: Theme.of(ctx)
+                        .textTheme
+                        .bodySmall
+                        ?.copyWith(color: subInk),
+                  ),
+            onTap: enabled ? onTap : null,
+          );
+        }
+
+        return Padding(
+          padding: EdgeInsets.only(bottom: padBottom),
+          child: SafeArea(
+            top: false,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 6, 20, 6),
+                  child: Text(
+                    'Mono actions',
+                    style: Theme.of(ctx).textTheme.titleMedium?.copyWith(
+                          color: tc.textPrimary,
+                          fontWeight: FontWeight.w800,
+                        ),
+                  ),
+                ),
+                const Divider(height: 1),
+                if (showLearn)
+                  row(
+                    icon: Icons.school_outlined,
+                    title: 'Learn this story',
+                    onTap: () {
+                      Navigator.of(ctx).pop();
+                      widget.onLearn();
+                    },
+                  ),
+                if (allowBookmark)
+                  row(
+                    icon: isSaved ? Icons.bookmark : Icons.bookmark_outline,
+                    title: isSaved ? 'Saved' : 'Save',
+                    subtitle: isSaved ? 'Tap to unsave' : null,
+                    onTap: () {
+                      Navigator.of(ctx).pop();
+                      widget.onToggleBookmark();
+                    },
+                  ),
+                row(
+                  icon: Icons.ios_share,
+                  title: 'Share',
+                  subtitle: shareEnabled ? null : 'Share link unavailable',
+                  enabled: shareEnabled,
+                  onTap: () {
+                    Navigator.of(ctx).pop();
+                    widget.onShare();
+                  },
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
 
   @override
   bool get wantKeepAlive => true;
@@ -4095,7 +4024,6 @@ class _ReadingFeedPostState extends State<_ReadingFeedPost>
     if (oldWidget.item.id != widget.item.id) {
       _pageIndex = 0;
       _lastHPageLayoutKey = null;
-      _readModeLearnExpanded = false;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted && _horizontalPageController.hasClients) {
           _horizontalPageController.jumpToPage(0);
@@ -4104,48 +4032,34 @@ class _ReadingFeedPostState extends State<_ReadingFeedPost>
     }
   }
 
-  Widget _buildLearnGroup(bool onReadingPage) {
+  Widget _buildReadingFooterRow({required Widget meta}) {
     final allowBookmark = canBookmarkMono(
       currentUserId: widget.currentUserId,
       monoOwnerId: widget.item.writerId,
     );
-    if (!onReadingPage) {
-      return AnimatedBuilder(
-        animation: Listenable.merge([
-          widget.bookmarkNotifier,
-          widget.reactNotifier,
-          widget.likesCountNotifier,
-        ]),
-        builder: (context, _) {
-          return _BottomActionRail(
-            width: _railWidth,
-            isBookmarked: widget.bookmarkNotifier.value,
-            isReacted: widget.reactNotifier.value,
-            likesCount: widget.likesCountNotifier.value,
-            onLearn: widget.onLearn,
-            onToggleReact: widget.onToggleReact,
-            onToggleBookmark: widget.onToggleBookmark,
-            onShare: widget.onShare,
-            showBookmark: allowBookmark,
-            ink: monoLearnGroupActionColor,
-            inkMuted: monoLearnGroupActionColor,
-          );
-        },
-      );
-    }
-    return _ReadModeLearnGroupCollapsible(
-      expanded: _readModeLearnExpanded,
-      onSetExpanded: (v) => setState(() => _readModeLearnExpanded = v),
-      bookmarkNotifier: widget.bookmarkNotifier,
-      reactNotifier: widget.reactNotifier,
-      likesCountNotifier: widget.likesCountNotifier,
-      onLearn: widget.onLearn,
-      onToggleBookmark: widget.onToggleBookmark,
-      onToggleReact: widget.onToggleReact,
-      onShare: widget.onShare,
-      railWidth: _railWidth,
-      surfaceColor: widget.readingBg,
-      showBookmark: allowBookmark,
+    return AnimatedBuilder(
+      animation: Listenable.merge([
+        widget.bookmarkNotifier,
+        widget.reactNotifier,
+        widget.likesCountNotifier,
+      ]),
+      builder: (context, _) {
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Expanded(child: meta),
+            SizedBox(width: _footerMetaToActionGap),
+            _MonoFooterTransparentActionColumn(
+              isReacted: widget.reactNotifier.value,
+              likesCount: widget.likesCountNotifier.value,
+              onToggleReact: widget.onToggleReact,
+              onMore: () => unawaited(
+                _openMonoActionsSheet(allowBookmark: allowBookmark),
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 
@@ -4163,7 +4077,7 @@ class _ReadingFeedPostState extends State<_ReadingFeedPost>
           // Top pills live in [MonoScreen]’s Column above the PageView — only a small inset here.
           const topClearance = 8.0;
           final metaForLayout = _metaH > 0 ? _metaH : 78.0;
-          // Story sits above meta; rail is stacked bottom-right — full padded width for layout math.
+          // Story sits above footer row — full padded width for layout math.
           final contentH = (constraints.maxHeight - metaForLayout)
               .clamp(0.0, double.infinity);
           final paddedW =
@@ -4218,18 +4132,10 @@ class _ReadingFeedPostState extends State<_ReadingFeedPost>
               });
             }
 
-            final onReadingPage = _pageIndex > 0;
-
             final readingColumnMaxW =
                 (constraints.maxWidth - _hPad * 2).clamp(0.0, double.infinity);
             final readingTopPad = _readModeScrollTopPadding(topClearance);
-            final learnClearance = onReadingPage
-                ? (_readModeLearnExpanded
-                    ? _ReadModeLearnGroupCollapsible.expandedScrollClearance
-                    : _ReadModeLearnGroupCollapsible.collapsedScrollClearance)
-                : _ReadModeLearnGroupCollapsible.collapsedScrollClearance;
             final readingBottomInset = _readBottomPad +
-                learnClearance +
                 _readModeStandardVerticalBreath +
                 _readModeMetaBreath +
                 MediaQuery.paddingOf(context).bottom;
@@ -4354,7 +4260,6 @@ class _ReadingFeedPostState extends State<_ReadingFeedPost>
                           : const NeverScrollableScrollPhysics(),
                       onPageChanged: (i) => setState(() {
                         _pageIndex = i;
-                        if (i == 0) _readModeLearnExpanded = false;
                       }),
                       itemCount: horizontalCount,
                       itemBuilder: (context, i) {
@@ -4374,42 +4279,45 @@ class _ReadingFeedPostState extends State<_ReadingFeedPost>
                   ),
                 ],
               ),
-              metaGroup: _MeasureSize(
+              footerRow: _MeasureSize(
                 onChange: (s) {
                   final h = s.height;
                   if ((h - _metaH).abs() < 0.5) return;
                   if (!mounted) return;
                   setState(() => _metaH = h);
                 },
-                child: _PostFooterMeta(
-                  writerName: item.writerName,
-                  writerHandle: item.writerHandle,
-                  writerAvatarUrl: item.writerAvatarUrl,
-                  title: item.title,
-                  subtitleLine: item.storyDescription.trim(),
-                  ink: widget.readingInk,
-                  inkMuted: widget.readingInkMuted,
-                  onTapCreator: () {
-                    final loc = creatorProfileLocation(
-                      userId: item.writerId,
-                      handle: item.writerHandle,
-                      allowLegacyHandle: false,
-                    );
-                    if (loc == null) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content:
-                              Text('Creator profile is not available yet.'),
-                          behavior: SnackBarBehavior.floating,
-                        ),
+                child: _buildReadingFooterRow(
+                  meta: _PostFooterMeta(
+                    writerId: (item.writerId ?? '').trim(),
+                    currentUserId: widget.currentUserId,
+                    writerDisplayName: item.writerName,
+                    writerAvatarUrl: item.writerAvatarUrl,
+                    level: item.level,
+                    publishedAccess: item.publishedAccess,
+                    title: item.title,
+                    ink: widget.readingInk,
+                    inkMuted: widget.readingInkMuted,
+                    onTapCreator: () {
+                      final loc = creatorProfileLocation(
+                        userId: item.writerId,
+                        handle: item.writerHandle,
+                        allowLegacyHandle: false,
                       );
-                      return;
-                    }
-                    context.push(loc);
-                  },
+                      if (loc == null) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content:
+                                Text('Creator profile is not available yet.'),
+                            behavior: SnackBarBehavior.floating,
+                          ),
+                        );
+                        return;
+                      }
+                      context.push(loc);
+                    },
+                  ),
                 ),
               ),
-              learnGroup: _buildLearnGroup(onReadingPage),
             );
           }
 
@@ -4445,16 +4353,8 @@ class _ReadingFeedPostState extends State<_ReadingFeedPost>
             });
           }
 
-          final onReadingPage = _pageIndex > 0;
-
           final readingTopPad = _readModeScrollTopPadding(topClearance);
-          final learnClearance = onReadingPage
-              ? (_readModeLearnExpanded
-                  ? _ReadModeLearnGroupCollapsible.expandedScrollClearance
-                  : _ReadModeLearnGroupCollapsible.collapsedScrollClearance)
-              : _ReadModeLearnGroupCollapsible.collapsedScrollClearance;
           final readingBottomInset = _readBottomPad +
-              learnClearance +
               _readModeStandardVerticalBreath +
               _readModeMetaBreath +
               MediaQuery.paddingOf(context).bottom;
@@ -4506,7 +4406,6 @@ class _ReadingFeedPostState extends State<_ReadingFeedPost>
                         : const NeverScrollableScrollPhysics(),
                     onPageChanged: (i) => setState(() {
                       _pageIndex = i;
-                      if (i == 0) _readModeLearnExpanded = false;
                     }),
                     itemCount: horizontalCount,
                     itemBuilder: (context, i) {
@@ -4526,41 +4425,45 @@ class _ReadingFeedPostState extends State<_ReadingFeedPost>
                 ),
               ],
             ),
-            metaGroup: _MeasureSize(
+            footerRow: _MeasureSize(
               onChange: (s) {
                 final h = s.height;
                 if ((h - _metaH).abs() < 0.5) return;
                 if (!mounted) return;
                 setState(() => _metaH = h);
               },
-              child: _PostFooterMeta(
-                writerName: item.writerName,
-                writerHandle: item.writerHandle,
-                writerAvatarUrl: item.writerAvatarUrl,
-                title: item.title,
-                subtitleLine: item.storyDescription.trim(),
-                ink: widget.readingInk,
-                inkMuted: widget.readingInkMuted,
-                onTapCreator: () {
-                  final loc = creatorProfileLocation(
-                    userId: item.writerId,
-                    handle: item.writerHandle,
-                    allowLegacyHandle: false,
-                  );
-                  if (loc == null) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Creator profile is not available yet.'),
-                        behavior: SnackBarBehavior.floating,
-                      ),
+              child: _buildReadingFooterRow(
+                meta: _PostFooterMeta(
+                  writerId: (item.writerId ?? '').trim(),
+                  currentUserId: widget.currentUserId,
+                  writerDisplayName: item.writerName,
+                  writerAvatarUrl: item.writerAvatarUrl,
+                  level: item.level,
+                  publishedAccess: item.publishedAccess,
+                  title: item.title,
+                  ink: widget.readingInk,
+                  inkMuted: widget.readingInkMuted,
+                  onTapCreator: () {
+                    final loc = creatorProfileLocation(
+                      userId: item.writerId,
+                      handle: item.writerHandle,
+                      allowLegacyHandle: false,
                     );
-                    return;
-                  }
-                  context.push(loc);
-                },
+                    if (loc == null) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content:
+                              Text('Creator profile is not available yet.'),
+                          behavior: SnackBarBehavior.floating,
+                        ),
+                      );
+                      return;
+                    }
+                    context.push(loc);
+                  },
+                ),
               ),
             ),
-            learnGroup: _buildLearnGroup(onReadingPage),
           );
         },
       ),
@@ -4946,8 +4849,8 @@ class _WriterFooterAvatar extends StatelessWidget {
   Widget build(BuildContext context) {
     final u = (url ?? '').trim();
     return Container(
-      width: 42,
-      height: 42,
+      width: 38,
+      height: 38,
       decoration: BoxDecoration(
         color: ink.withOpacity(0.06),
         shape: BoxShape.circle,
@@ -4955,132 +4858,170 @@ class _WriterFooterAvatar extends StatelessWidget {
       ),
       clipBehavior: Clip.antiAlias,
       child: u.isEmpty
-          ? Icon(Icons.person_outline, size: 22, color: inkMuted)
+          ? Icon(Icons.person_outline, size: 20, color: inkMuted)
           : Image.network(
               u,
               fit: BoxFit.cover,
               gaplessPlayback: true,
               filterQuality: FilterQuality.low,
               errorBuilder: (_, __, ___) =>
-                  Icon(Icons.person_outline, size: 22, color: inkMuted),
+                  Icon(Icons.person_outline, size: 20, color: inkMuted),
             ),
     );
   }
 }
 
 class _PostFooterMeta extends StatelessWidget {
-  final String writerName;
-  final String writerHandle;
-  final String? writerAvatarUrl;
-  final String? title;
+  /// Breathing room above the username row (balances with action column height).
+  static const _metaColumnTopInset = 6.0;
 
-  /// Story Basics description preview; empty hides the line.
-  final String subtitleLine;
+  /// Username row → story title.
+  static const _metaNameToTitleGap = 6.0;
+
+  /// Story title → level/status chip.
+  static const _metaTitleToChipGap = 5.0;
+
+  final String writerId;
+  final String? currentUserId;
+  final String writerDisplayName;
+  final String? writerAvatarUrl;
+  final String level;
+  final PublishedMonoAccess? publishedAccess;
+  final String? title;
   final Color ink;
   final Color inkMuted;
   final VoidCallback? onTapCreator;
 
   const _PostFooterMeta({
-    required this.writerName,
-    required this.writerHandle,
+    required this.writerId,
+    required this.currentUserId,
+    required this.writerDisplayName,
     this.writerAvatarUrl,
-    required this.subtitleLine,
+    required this.level,
+    required this.publishedAccess,
+    this.title,
     required this.ink,
     required this.inkMuted,
-    this.title,
     this.onTapCreator,
   });
+
+  String _statusLabel() {
+    final isFullLearn = publishedAccess?.isFullLearnPublished == true;
+    final mode = isFullLearn ? 'Full Learn' : 'Read only';
+    final lv = level.trim();
+    if (lv.isEmpty) return mode;
+    return '$lv · $mode';
+  }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final tc = theme.colors;
+
+    final trimmedTitle = (title ?? '').trim();
+
+    final showFollow = writerId.trim().isNotEmpty &&
+        (currentUserId ?? '').trim() != writerId.trim();
+
     return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        Material(
-          color: Colors.transparent,
-          shape: const CircleBorder(),
-          child: InkWell(
-            onTap: onTapCreator,
-            customBorder: const CircleBorder(),
-            splashColor: ink.withValues(alpha: 0.10),
-            highlightColor: ink.withValues(alpha: 0.04),
-            child: _WriterFooterAvatar(
-              url: writerAvatarUrl,
-              ink: ink,
-              inkMuted: inkMuted,
+        Semantics(
+          label: 'View creator profile',
+          button: true,
+          child: Material(
+            key: const ValueKey('monoReaderCreatorAvatar'),
+            color: Colors.transparent,
+            shape: const CircleBorder(),
+            child: InkWell(
+              onTap: onTapCreator,
+              customBorder: const CircleBorder(),
+              splashColor: ink.withValues(alpha: 0.10),
+              highlightColor: ink.withValues(alpha: 0.04),
+              child: _WriterFooterAvatar(
+                url: writerAvatarUrl,
+                ink: ink,
+                inkMuted: inkMuted,
+              ),
             ),
           ),
         ),
-        const SizedBox(width: 12),
+        const SizedBox(width: 8),
         Expanded(
           child: Column(
+            mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Material(
-                color: Colors.transparent,
-                child: InkWell(
-                  onTap: onTapCreator,
-                  borderRadius: BorderRadius.circular(10),
-                  splashColor: ink.withValues(alpha: 0.10),
-                  highlightColor: ink.withValues(alpha: 0.04),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 2),
-                    child: Text.rich(
-                      TextSpan(
-                        style:
-                            theme.textTheme.labelMedium?.copyWith(height: 1.2),
-                        children: [
-                          TextSpan(
-                            text: writerName,
-                            style: theme.textTheme.labelLarge?.copyWith(
-                              color: ink,
-                              fontWeight: FontWeight.w700,
-                              height: 1.2,
+              const SizedBox(height: _metaColumnTopInset),
+              Row(
+                mainAxisSize: MainAxisSize.max,
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Flexible(
+                    child: Semantics(
+                      label: 'View creator profile',
+                      button: true,
+                      container: true,
+                      child: InkWell(
+                        key: const ValueKey('monoReaderCreatorUsername'),
+                        onTap: onTapCreator,
+                        borderRadius: BorderRadius.circular(8),
+                        splashColor: ink.withValues(alpha: 0.10),
+                        highlightColor: ink.withValues(alpha: 0.04),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            vertical: 4,
+                            horizontal: 2,
+                          ),
+                          child: Align(
+                            alignment: Alignment.centerLeft,
+                            child: Text(
+                              writerDisplayName,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: ink,
+                                fontWeight: FontWeight.w800,
+                                fontSize: 15,
+                                height: 1.12,
+                                letterSpacing: -0.15,
+                              ),
                             ),
                           ),
-                          TextSpan(
-                            text: ' · ',
-                            style: TextStyle(
-                              color: inkMuted.withOpacity(0.55),
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                          TextSpan(
-                            text: writerHandle,
-                            style: TextStyle(
-                              color: inkMuted,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ],
+                        ),
                       ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
-                ),
+                  if (showFollow) ...[
+                    const SizedBox(width: 6),
+                    _FooterFollowButton(
+                      targetUserId: writerId,
+                      currentUserId: currentUserId,
+                    ),
+                  ],
+                ],
               ),
-              if ((title ?? '').trim().isNotEmpty) ...[
-                const SizedBox(height: 6),
+              const SizedBox(height: _metaNameToTitleGap),
+              if (trimmedTitle.isNotEmpty)
                 Text(
-                  title!,
-                  maxLines: 2,
+                  trimmedTitle,
+                  maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: theme.textTheme.bodySmall?.copyWith(
-                    color: ink,
+                    color: ink.withValues(alpha: 0.88),
                     fontWeight: FontWeight.w600,
-                    height: 1.35,
+                    fontSize: 12.5,
+                    height: 1.2,
                   ),
                 ),
-              ],
-              if (subtitleLine.trim().isNotEmpty) ...[
-                const SizedBox(height: 5),
-                ExpandableFooterDescription(
-                  text: subtitleLine.trim(),
-                  inkMuted: inkMuted,
-                ),
-              ],
+              const SizedBox(height: _metaTitleToChipGap),
+              _MonoStatusChip(
+                label: _statusLabel(),
+                ink: tc.textSecondary,
+                border: tc.border,
+                background:
+                    tc.surface.withValues(alpha: _MonoStatusChip.kSurfaceAlpha),
+              ),
             ],
           ),
         ),
@@ -5089,207 +5030,374 @@ class _PostFooterMeta extends StatelessWidget {
   }
 }
 
-/// Fixed-width rail: equal slot heights, equal gaps, labels baseline-aligned.
-class _BottomActionRail extends StatelessWidget {
-  static const _iconArea = 42.0;
-  static const _labelH = 13.0;
-  static const _slotH = _iconArea + _labelH;
-  static const _between = 10.0;
-  static const _iconSize = 22.0;
+class _MonoStatusChip extends StatelessWidget {
+  /// Shared with [_FooterFollowButtonState] “Following” outline style.
+  static const double kSurfaceAlpha = 0.55;
+  static const double kBorderAlpha = 0.7;
 
-  /// Total height of the stacked actions (narrow **right** column only).
-  static double get blockedColumnHeight => _slotH * 4 + _between * 3;
-
-  final double width;
-  final bool isBookmarked;
-  final bool isReacted;
-  final int likesCount;
-  final VoidCallback onLearn;
-  final VoidCallback onToggleReact;
-  final VoidCallback onToggleBookmark;
-  final VoidCallback onShare;
+  final String label;
   final Color ink;
-  final Color inkMuted;
-  final bool showBookmark;
+  final Color border;
+  final Color background;
 
-  const _BottomActionRail({
-    required this.width,
-    required this.isBookmarked,
-    required this.isReacted,
-    required this.likesCount,
-    required this.onLearn,
-    required this.onToggleReact,
-    required this.onToggleBookmark,
-    required this.onShare,
+  const _MonoStatusChip({
+    required this.label,
     required this.ink,
-    required this.inkMuted,
-    this.showBookmark = true,
+    required this.border,
+    required this.background,
   });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final t = label.trim();
+    if (t.isEmpty) return const SizedBox.shrink();
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: border.withValues(alpha: kBorderAlpha)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        child: Text(
+          t,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: theme.textTheme.labelSmall?.copyWith(
+            color: ink,
+            fontWeight: FontWeight.w600,
+            fontSize: 10,
+            height: 1.0,
+            letterSpacing: 0.08,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _FooterFollowButton extends ConsumerStatefulWidget {
+  final String targetUserId;
+  final String? currentUserId;
+
+  const _FooterFollowButton({
+    required this.targetUserId,
+    required this.currentUserId,
+  });
+
+  @override
+  ConsumerState<_FooterFollowButton> createState() =>
+      _FooterFollowButtonState();
+}
+
+class _FooterFollowButtonState extends ConsumerState<_FooterFollowButton> {
+  bool _loading = false;
+  bool? _isFollowing;
+
+  bool get _isAuthed =>
+      ref.read(authSessionProvider) is AuthSessionAuthenticated;
+
+  bool get _isSelf {
+    final me = (widget.currentUserId ?? '').trim();
+    final target = widget.targetUserId.trim();
+    if (me.isEmpty || target.isEmpty) return false;
+    return me == target;
+  }
+
+  Future<void> _loadInitialIfNeeded() async {
+    if (!mounted) return;
+    if (!RemoteBackendConfig.useRemoteDrafts) return;
+    if (!_isAuthed) return;
+    if (_isSelf) return;
+    if (_isFollowing != null) return;
+    final target = widget.targetUserId.trim();
+    if (target.isEmpty) return;
+    try {
+      final repo = ref.read(remotePublicCreatorProfileRepositoryProvider);
+      final p = await repo.fetchPublicCreatorProfile(target);
+      if (!mounted) return;
+      setState(() => _isFollowing = p.isFollowingByMe);
+    } catch (_) {
+      // If this fails, we still allow the user to attempt Follow.
+      if (!mounted) return;
+      setState(() => _isFollowing = false);
+    }
+  }
+
+  void _snack(String msg) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(msg),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  Future<void> _toggleFollow() async {
+    if (_loading) return;
+    if (!RemoteBackendConfig.useRemoteDrafts) return;
+    if (_isSelf) return;
+    if (!await ensureProtectedActionAllowed(
+      context,
+      action: ProtectedActionType.follow,
+    )) {
+      return;
+    }
+
+    final target = widget.targetUserId.trim();
+    if (target.isEmpty) return;
+
+    final before = _isFollowing ?? false;
+    final next = !before;
+    setState(() {
+      _loading = true;
+      _isFollowing = next;
+    });
+
+    try {
+      final repo = ref.read(remoteUserFollowRepositoryProvider);
+      final out = next
+          ? await repo.followUser(target)
+          : await repo.unfollowUser(target);
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _isFollowing = out.isFollowing;
+      });
+      // Refresh the key surfaces that depend on follow state.
+      unawaited(ref.read(followingMonoFeedPagerProvider.notifier).refresh());
+      unawaited(
+          ref.read(profileFollowingPagerProvider.notifier).loadFirstPage());
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _isFollowing = before;
+      });
+      final offlineMsg = offlineUserMessageIfRecognized(e);
+      _snack(offlineMsg ??
+          (e is StateError ? e.message : 'Could not update follow.'));
+    }
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    unawaited(_loadInitialIfNeeded());
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final tc = theme.colors;
+
+    final target = widget.targetUserId.trim();
+    if (target.isEmpty) return const SizedBox.shrink();
+    if (_isSelf) return const SizedBox.shrink();
+
+    final isFollowing = _isFollowing ?? false;
+
+    final baseStyle = theme.textTheme.labelSmall?.copyWith(
+      fontWeight: FontWeight.w800,
+      fontSize: 12,
+      height: 1.0,
+      letterSpacing: 0.1,
+    );
+
+    const followRadius = 10.0;
+    final minSize = const Size(0, 28);
+    final minWidth = isFollowing ? 84.0 : 68.0;
+    final followBg = tc.textPrimary.withValues(alpha: 0.88);
+    final followFg = tc.appBackground;
+    final disabledBg = tc.textPrimary.withValues(alpha: 0.45);
+    final disabledFg = tc.appBackground.withValues(alpha: 0.9);
+
+    final followingBg =
+        tc.surface.withValues(alpha: _MonoStatusChip.kSurfaceAlpha);
+    final followingFg = tc.textSecondary;
+    final followingBorder =
+        tc.border.withValues(alpha: _MonoStatusChip.kBorderAlpha);
+    final followingDisabledBg = tc.surface.withValues(alpha: 0.35);
+    final followingDisabledFg = tc.textSecondary.withValues(alpha: 0.45);
+
+    if (isFollowing) {
+      return Semantics(
+        button: true,
+        label: 'Following',
+        child: ConstrainedBox(
+          key: const ValueKey('monoReaderFollowButton'),
+          constraints: BoxConstraints(minWidth: minWidth),
+          child: OutlinedButton(
+            onPressed: _loading ? null : _toggleFollow,
+            style: OutlinedButton.styleFrom(
+              minimumSize: minSize,
+              padding: const EdgeInsets.symmetric(horizontal: 11),
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              elevation: 0,
+              foregroundColor: followingFg,
+              backgroundColor: followingBg,
+              disabledForegroundColor: followingDisabledFg,
+              disabledBackgroundColor: followingDisabledBg,
+              side: BorderSide(color: followingBorder),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(followRadius),
+              ),
+            ),
+            child: Text(
+              'Following',
+              style: baseStyle?.copyWith(color: followingFg),
+              maxLines: 1,
+              softWrap: false,
+              overflow: TextOverflow.visible,
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Semantics(
+      button: true,
+      label: 'Follow',
+      child: ConstrainedBox(
+        key: const ValueKey('monoReaderFollowButton'),
+        constraints: BoxConstraints(minWidth: minWidth),
+        child: FilledButton(
+          onPressed: _loading ? null : _toggleFollow,
+          style: FilledButton.styleFrom(
+            minimumSize: minSize,
+            padding: const EdgeInsets.symmetric(horizontal: 11),
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            backgroundColor: followBg,
+            foregroundColor: followFg,
+            disabledForegroundColor: disabledFg,
+            disabledBackgroundColor: disabledBg,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(followRadius),
+            ),
+          ),
+          child: Text(
+            'Follow',
+            style: baseStyle?.copyWith(color: followFg),
+            maxLines: 1,
+            softWrap: false,
+            overflow: TextOverflow.visible,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Transparent vertical column: More then React + count; no background.
+class _MonoFooterTransparentActionColumn extends StatelessWidget {
+  static const columnWidth = 52.0;
+  static const betweenActions = 5.0;
+  static const _countFontSize = 11.0;
+
+  final bool isReacted;
+  final int likesCount;
+  final VoidCallback onToggleReact;
+  final VoidCallback onMore;
+
+  const _MonoFooterTransparentActionColumn({
+    required this.isReacted,
+    required this.likesCount,
+    required this.onToggleReact,
+    required this.onMore,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final tc = theme.colors;
+    final reactIcon = isReacted ? tc.react : tc.textPrimary;
+    final showCount = likesCount > 0;
     return SizedBox(
-      width: width,
-      height: blockedColumnHeight,
+      width: columnWidth,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          _RailActionSlot(
-            width: width,
-            slotHeight: _slotH,
-            iconArea: _iconArea,
-            labelHeight: _labelH,
-            iconSize: _iconSize,
-            icon: isReacted ? Icons.favorite : Icons.favorite_border,
-            label: monoReactRailPrimaryLabel(likesCount),
+          _FooterReaderIconActionButton(
+            semanticsLabel: 'More actions',
+            icon: Icons.more_horiz,
+            foregroundColor: tc.textSecondary,
+            onPressed: onMore,
+          ),
+          const SizedBox(height: betweenActions),
+          _FooterReaderIconActionButton(
             semanticsLabel: monoReactRailSemanticsLabel(likesCount),
-            onTap: onToggleReact,
-            ink: ink,
-            inkMuted: inkMuted,
-            theme: theme,
+            icon: isReacted ? Icons.favorite : Icons.favorite_border,
+            foregroundColor: reactIcon,
+            onPressed: onToggleReact,
           ),
-          const SizedBox(height: _between),
-          _RailActionSlot(
-            width: width,
-            slotHeight: _slotH,
-            iconArea: _iconArea,
-            labelHeight: _labelH,
-            iconSize: _iconSize,
-            icon: Icons.school_outlined,
-            label: 'Learn',
-            onTap: onLearn,
-            ink: ink,
-            inkMuted: inkMuted,
-            theme: theme,
-          ),
-          const SizedBox(height: _between),
-          if (showBookmark) ...[
-            _RailActionSlot(
-              width: width,
-              slotHeight: _slotH,
-              iconArea: _iconArea,
-              labelHeight: _labelH,
-              iconSize: _iconSize,
-              icon: isBookmarked ? Icons.bookmark : Icons.bookmark_outline,
-              label: isBookmarked ? 'Saved' : 'Save',
-              onTap: onToggleBookmark,
-              ink: ink,
-              inkMuted: inkMuted,
-              theme: theme,
+          if (showCount)
+            Padding(
+              padding: const EdgeInsets.only(top: 2),
+              child: Text(
+                '$likesCount',
+                textAlign: TextAlign.center,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: tc.textSecondary,
+                  fontSize: _countFontSize,
+                  fontWeight: FontWeight.w700,
+                  height: 1.0,
+                ),
+              ),
             ),
-            const SizedBox(height: _between),
-          ],
-          _RailActionSlot(
-            width: width,
-            slotHeight: _slotH,
-            iconArea: _iconArea,
-            labelHeight: _labelH,
-            iconSize: _iconSize,
-            icon: Icons.ios_share,
-            label: 'Share',
-            onTap: onShare,
-            ink: ink,
-            inkMuted: inkMuted,
-            theme: theme,
-          ),
         ],
       ),
     );
   }
 }
 
-class _RailActionSlot extends StatelessWidget {
-  final double width;
-  final double slotHeight;
-  final double iconArea;
-  final double labelHeight;
-  final double iconSize;
-  final IconData? icon;
-  final String? iconEmoji;
-  final String label;
-  final String? semanticsLabel;
-  final VoidCallback onTap;
-  final Color ink;
-  final Color inkMuted;
-  final ThemeData theme;
+/// Shared square tap target for Mono reader footer icon actions (More + React).
+class _FooterReaderIconActionButton extends StatelessWidget {
+  static const kSlotSize = 44.0;
+  static const kIconSize = 24.0;
 
-  const _RailActionSlot({
-    required this.width,
-    required this.slotHeight,
-    required this.iconArea,
-    required this.labelHeight,
-    required this.iconSize,
-    this.icon,
-    this.iconEmoji,
-    required this.label,
-    this.semanticsLabel,
-    required this.onTap,
-    required this.ink,
-    required this.inkMuted,
-    required this.theme,
-  })  : assert(icon != null || iconEmoji != null),
-        assert(!(icon != null && iconEmoji != null));
+  final String semanticsLabel;
+  final IconData icon;
+  final Color foregroundColor;
+  final VoidCallback onPressed;
+
+  const _FooterReaderIconActionButton({
+    required this.semanticsLabel,
+    required this.icon,
+    required this.foregroundColor,
+    required this.onPressed,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final iconChild = iconEmoji != null
-        ? Text(
-            iconEmoji!,
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: iconSize * 0.95,
-              height: 1.0,
-              color: ink,
-            ),
-          )
-        : Icon(
-            icon!,
-            size: iconSize,
-            color: ink,
-          );
-
+    final tc = Theme.of(context).colors;
     return Semantics(
       button: true,
-      label: semanticsLabel ?? label,
+      label: semanticsLabel,
       child: Material(
         color: Colors.transparent,
+        elevation: 0,
+        shadowColor: Colors.transparent,
         child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(14),
+          onTap: onPressed,
+          splashFactory: NoSplash.splashFactory,
+          highlightColor: tc.textPrimary.withValues(alpha: 0.05),
+          hoverColor: Colors.transparent,
+          focusColor: Colors.transparent,
+          borderRadius: BorderRadius.circular(kSlotSize / 2),
           child: SizedBox(
-            width: width,
-            height: slotHeight,
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.start,
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                SizedBox(
-                  height: iconArea,
-                  width: width,
-                  child: Center(child: iconChild),
-                ),
-                SizedBox(
-                  height: labelHeight,
-                  width: width,
-                  child: Align(
-                    alignment: Alignment.topCenter,
-                    child: Text(
-                      label,
-                      textAlign: TextAlign.center,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.labelSmall?.copyWith(
-                        color: inkMuted,
-                        fontSize: 10,
-                        fontWeight: FontWeight.w600,
-                        height: 1.0,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
+            width: kSlotSize,
+            height: kSlotSize,
+            child: Center(
+              child: Icon(
+                icon,
+                size: kIconSize,
+                color: foregroundColor,
+              ),
             ),
           ),
         ),

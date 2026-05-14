@@ -20,7 +20,7 @@ class LibraryScreen extends StatelessWidget {
             children: [
               // Following writers section at the top
               const FollowingWritersSection(),
-              
+
               // Placeholder for future sections (saved stories, history, etc.)
               // Additional sections can be added here later
             ],

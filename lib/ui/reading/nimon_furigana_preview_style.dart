@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:nimon/core/design_system/nimon_breakpoints.dart';
+import 'package:nimon/core/design_system/nimon_color_tokens.dart';
 import 'package:nimon/core/design_system/nimon_typography.dart';
 
 /// App-wide furigana **design language**: base text is primary; ruby is smaller,
@@ -26,9 +27,6 @@ abstract final class NimonFuriganaPreviewTokens {
 
   /// Creator contexts: base size when [TextTheme.bodyLarge] has no font size.
   static const double creatorBaseFontSizeFallback = 16.0;
-
-  /// Default ink for creator Japanese sentence lines (matches prior cards).
-  static const Color creatorJapaneseInk = Color(0xFF1A1917);
 
   /// Line height for creator base text.
   static const double creatorBaseLineHeight = 1.35;
@@ -90,6 +88,7 @@ NimonFuriganaLineStyle resolveNimonFuriganaLineStyle(
   switch (previewContext) {
     case NimonFuriganaPreviewContext.storytelling:
     case NimonFuriganaPreviewContext.details:
+      final tc = theme.extension<NimonColorTokens>() ?? NimonColorTokens.light;
       final baseSize = theme.textTheme.bodyLarge?.fontSize ??
           NimonFuriganaPreviewTokens.creatorBaseFontSizeFallback;
       final rubySize =
@@ -98,7 +97,7 @@ NimonFuriganaLineStyle resolveNimonFuriganaLineStyle(
               .toDouble();
 
       final base = theme.textTheme.bodyLarge?.copyWith(
-            color: NimonFuriganaPreviewTokens.creatorJapaneseInk,
+            color: tc.textPrimary,
             height: NimonFuriganaPreviewTokens.creatorBaseLineHeight,
             fontWeight: FontWeight.w600,
           ) ??
@@ -106,7 +105,7 @@ NimonFuriganaLineStyle resolveNimonFuriganaLineStyle(
             fontSize: baseSize,
             height: NimonFuriganaPreviewTokens.creatorBaseLineHeight,
             fontWeight: FontWeight.w600,
-            color: NimonFuriganaPreviewTokens.creatorJapaneseInk,
+            color: tc.textPrimary,
           );
 
       final ruby = (theme.textTheme.labelSmall ?? const TextStyle()).copyWith(
@@ -114,7 +113,7 @@ NimonFuriganaLineStyle resolveNimonFuriganaLineStyle(
         height: 1.05,
         fontWeight: FontWeight.w500,
         letterSpacing: 0.02,
-        color: cs.onSurfaceVariant.withValues(
+        color: tc.textSecondary.withValues(
             alpha: NimonFuriganaPreviewTokens.rubyForegroundAlphaCreator),
       );
 

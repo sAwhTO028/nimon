@@ -11,9 +11,14 @@ import 'package:nimon/features/create/data/local_story_draft_repository.dart';
 import 'package:nimon/features/create/data/remote_backend_config.dart';
 import 'package:nimon/features/create/data/remote_story_draft_learn_layers_wire.dart';
 import 'package:nimon/features/create/data/remote_story_draft_sentence_wire.dart';
+import 'package:nimon/core/validation/app_quota_exceeded_exception.dart';
+import 'package:nimon/core/validation/quota_exceeded_from_json.dart';
+import 'package:nimon/core/validation/validation_issue_from_json.dart';
 import 'package:nimon/features/create/data/story_draft_remote_publish_errors.dart';
 import 'package:nimon/features/create/data/story_draft_mapper.dart';
 import 'package:nimon/features/auth/auth_strict_unauthorized.dart';
+import 'package:nimon/features/auth/authenticated_http.dart';
+import 'package:nimon/features/create/data/published_edit_staging_guard.dart';
 import 'package:nimon/features/create/data/story_draft_repository.dart';
 import 'package:nimon/features/create/story_creator_draft_storage.dart'
     show CreatorDraftResumeMeta, CreatorLastActiveModule;
@@ -43,12 +48,14 @@ class RemoteStoryDraftRepository implements StoryDraftRepository {
     http.Client? client,
     StoryDraftRepository? fallbackLocal,
     StoryDraftAuthHeaderBuilder? authHeaderBuilder,
+    NimonSendWithAuth401Recovery? sendWithAuth401Recovery,
     String Function()? resolveRemoteOwnerId,
     StoryDraftPublishProgressCallback? onPublishProgress,
   })  : _apiBaseUrl = apiBaseUrl.replaceAll(RegExp(r'\/+$'), ''),
         _client = client ?? http.Client(),
         _local = fallbackLocal ?? const LocalStoryDraftRepository(),
         _authHeaderBuilder = authHeaderBuilder,
+        _sendWithAuth401 = sendWithAuth401Recovery,
         _resolveRemoteOwnerId = resolveRemoteOwnerId,
         _onPublishProgress = onPublishProgress;
 
@@ -56,6 +63,7 @@ class RemoteStoryDraftRepository implements StoryDraftRepository {
   final http.Client _client;
   final StoryDraftRepository _local;
   final StoryDraftAuthHeaderBuilder? _authHeaderBuilder;
+  final NimonSendWithAuth401Recovery? _sendWithAuth401;
   final String Function()? _resolveRemoteOwnerId;
   final StoryDraftPublishProgressCallback? _onPublishProgress;
 
@@ -65,6 +73,21 @@ class RemoteStoryDraftRepository implements StoryDraftRepository {
     final auth = await builder();
     return {...auth, ...headers};
   }
+
+  Future<http.Response> _nimonAuthSend(
+    Uri uri,
+    Future<Map<String, String>> Function() mergeHeaders,
+    Future<http.Response> Function(Map<String, String> headers) send, {
+    bool skip401Recovery = false,
+  }) =>
+      nimonSendWithOptional401Recovery(
+        _sendWithAuth401,
+        requestUri: uri,
+        mergeHeaders: mergeHeaders,
+        send: send,
+        skip401Recovery: skip401Recovery,
+        requireAuthHeaderForRecovery: true,
+      );
 
   /// When strict remote drafts are enabled, we must not mask backend errors by
   /// returning successful local fallback results.
@@ -116,7 +139,15 @@ class RemoteStoryDraftRepository implements StoryDraftRepository {
 
   Future<void> _throwIfNotOk(http.Response r) async {
     if (r.statusCode >= 200 && r.statusCode < 300) return;
-    notifyIfStrictUnauthorized401(r);
+    if (r.statusCode == 401) notifyIfStrictUnauthorized401(r);
+    final quota = tryParseQuotaExceededFromHttpBody(r.body);
+    if (quota != null) throw quota;
+    if (r.statusCode == 400) {
+      final issues = tryParseValidationIssuesFromHttpBody(r.body);
+      if (issues != null) {
+        throw StoryDraftValidationFailedException(issues);
+      }
+    }
     final friendly = publishedMonoMissingFriendlyMessageIfAny(
       statusCode: r.statusCode,
       body: r.body,
@@ -205,26 +236,34 @@ class RemoteStoryDraftRepository implements StoryDraftRepository {
   ) async {
     final id = draftId.trim();
     var sent = ifMatch.trim();
-    http.Response roResp = await _client.post(
+    http.Response roResp = await _nimonAuthSend(
       _u('/v1/story-drafts/$id/publish/read-only'),
-      headers: await _mergeAuth({
+      () => _mergeAuth({
         'Content-Type': 'application/json',
         'If-Match': sent,
       }),
-      body: jsonEncode({}),
+      (h) => _client.post(
+        _u('/v1/story-drafts/$id/publish/read-only'),
+        headers: h,
+        body: jsonEncode({}),
+      ),
     );
     roResp = await _retryOnceOn409Conflict(
       draftId: id,
       operation: 'POST publish/read-only',
       firstResp: roResp,
       firstIfMatch: sent,
-      sendWithIfMatch: (match) async => _client.post(
+      sendWithIfMatch: (match) async => _nimonAuthSend(
         _u('/v1/story-drafts/$id/publish/read-only'),
-        headers: await _mergeAuth({
+        () => _mergeAuth({
           'Content-Type': 'application/json',
           'If-Match': match,
         }),
-        body: jsonEncode({}),
+        (h) => _client.post(
+          _u('/v1/story-drafts/$id/publish/read-only'),
+          headers: h,
+          body: jsonEncode({}),
+        ),
       ),
     );
     await _throwIfNotOk(roResp);
@@ -241,26 +280,34 @@ class RemoteStoryDraftRepository implements StoryDraftRepository {
   ) async {
     final id = draftId.trim();
     var sent = ifMatch.trim();
-    http.Response flResp = await _client.post(
+    http.Response flResp = await _nimonAuthSend(
       _u('/v1/story-drafts/$id/publish/full-learn'),
-      headers: await _mergeAuth({
+      () => _mergeAuth({
         'Content-Type': 'application/json',
         'If-Match': sent,
       }),
-      body: jsonEncode({}),
+      (h) => _client.post(
+        _u('/v1/story-drafts/$id/publish/full-learn'),
+        headers: h,
+        body: jsonEncode({}),
+      ),
     );
     flResp = await _retryOnceOn409Conflict(
       draftId: id,
       operation: 'POST publish/full-learn',
       firstResp: flResp,
       firstIfMatch: sent,
-      sendWithIfMatch: (match) async => _client.post(
+      sendWithIfMatch: (match) async => _nimonAuthSend(
         _u('/v1/story-drafts/$id/publish/full-learn'),
-        headers: await _mergeAuth({
+        () => _mergeAuth({
           'Content-Type': 'application/json',
           'If-Match': match,
         }),
-        body: jsonEncode({}),
+        (h) => _client.post(
+          _u('/v1/story-drafts/$id/publish/full-learn'),
+          headers: h,
+          body: jsonEncode({}),
+        ),
       ),
     );
     await _throwIfNotOk(flResp);
@@ -374,7 +421,24 @@ class RemoteStoryDraftRepository implements StoryDraftRepository {
     return {
       'schemaVersion': dto.schemaVersion,
       'basics': _basicsToJson(dto.basics),
-      'sentences': [for (final s in dto.sentences) _sentenceToJson(s)],
+      // Backend uses array order as canonical sentence order; align orderIndex with index.
+      'sentences': [
+        for (var i = 0; i < dto.sentences.length; i++)
+          _sentenceToJson(
+            StorySentenceDto(
+              id: dto.sentences[i].id,
+              storyId: dto.sentences[i].storyId,
+              orderIndex: i,
+              japaneseText: dto.sentences[i].japaneseText,
+              reading: dto.sentences[i].reading,
+              furiganaSpans: dto.sentences[i].furiganaSpans,
+              meanings: dto.sentences[i].meanings,
+              audioStartMs: dto.sentences[i].audioStartMs,
+              audioEndMs: dto.sentences[i].audioEndMs,
+              provenance: dto.sentences[i].provenance,
+            ),
+          ),
+      ],
       'vocabularyKanji': {
         'entries': [
           for (final e in dto.vocabularyKanji.entries) _vocabToJson(e)
@@ -431,10 +495,14 @@ class RemoteStoryDraftRepository implements StoryDraftRepository {
   @override
   Future<CreatorStoryV1> createNewDraft({String? ownerId}) async {
     try {
-      final resp = await _client.post(
+      final resp = await _nimonAuthSend(
         _u('/v1/story-drafts'),
-        headers: await _mergeAuth({'Content-Type': 'application/json'}),
-        body: jsonEncode({'schemaVersion': 1}),
+        () => _mergeAuth({'Content-Type': 'application/json'}),
+        (h) => _client.post(
+          _u('/v1/story-drafts'),
+          headers: h,
+          body: jsonEncode({'schemaVersion': 1}),
+        ),
       );
       await _throwIfNotOk(resp);
       final m = await _jsonObjectFromResponse(resp);
@@ -457,9 +525,10 @@ class RemoteStoryDraftRepository implements StoryDraftRepository {
     final id = draftId.trim();
     if (id.isEmpty) return null;
     try {
-      final resp = await _client.get(
+      final resp = await _nimonAuthSend(
         _u('/v1/story-drafts/$id'),
-        headers: await _mergeAuth({}),
+        () => _mergeAuth({}),
+        (h) => _client.get(_u('/v1/story-drafts/$id'), headers: h),
       );
       await _throwIfNotOk(resp);
       final m = await _jsonObjectFromResponse(resp);
@@ -488,9 +557,10 @@ class RemoteStoryDraftRepository implements StoryDraftRepository {
   @override
   Future<List<String>> listDraftIds() async {
     try {
-      final resp = await _client.get(
+      final resp = await _nimonAuthSend(
         _u('/v1/story-drafts'),
-        headers: await _mergeAuth({}),
+        () => _mergeAuth({}),
+        (h) => _client.get(_u('/v1/story-drafts'), headers: h),
       );
       await _throwIfNotOk(resp);
       final m = await _jsonObjectFromResponse(resp);
@@ -514,7 +584,11 @@ class RemoteStoryDraftRepository implements StoryDraftRepository {
       final uri = _u('/v1/story-drafts').replace(
         queryParameters: request.toQueryParameters(),
       );
-      final resp = await _client.get(uri, headers: await _mergeAuth({}));
+      final resp = await _nimonAuthSend(
+        uri,
+        () => _mergeAuth({}),
+        (h) => _client.get(uri, headers: h),
+      );
       await _throwIfNotOk(resp);
       final m = await _jsonObjectFromResponse(resp);
       return DraftListPageDto.parseEnvelope(m);
@@ -531,9 +605,10 @@ class RemoteStoryDraftRepository implements StoryDraftRepository {
   Future<String?> _tryFetchRemoteEtag(String draftId) async {
     final id = draftId.trim();
     if (id.isEmpty) return null;
-    final resp = await _client.get(
+    final resp = await _nimonAuthSend(
       _u('/v1/story-drafts/$id'),
-      headers: await _mergeAuth({}),
+      () => _mergeAuth({}),
+      (h) => _client.get(_u('/v1/story-drafts/$id'), headers: h),
     );
     if (_isMissingDraftResponse(resp)) {
       return null;
@@ -569,10 +644,14 @@ class RemoteStoryDraftRepository implements StoryDraftRepository {
         'coverImageUrl': b.coverImageUrl,
       },
     };
-    final resp = await _client.post(
+    final resp = await _nimonAuthSend(
       _u('/v1/story-drafts'),
-      headers: await _mergeAuth({'Content-Type': 'application/json'}),
-      body: jsonEncode(body),
+      () => _mergeAuth({'Content-Type': 'application/json'}),
+      (h) => _client.post(
+        _u('/v1/story-drafts'),
+        headers: h,
+        body: jsonEncode(body),
+      ),
     );
     await _throwIfNotOk(resp);
     final created = _dtoFromJson(await _jsonObjectFromResponse(resp));
@@ -664,13 +743,17 @@ class RemoteStoryDraftRepository implements StoryDraftRepository {
       final putPayload = _dtoToJsonMap(dto);
 
       var sentIfMatch = etag.trim();
-      http.Response putResp = await _client.put(
+      http.Response putResp = await _nimonAuthSend(
         _u('/v1/story-drafts/$id'),
-        headers: await _mergeAuth({
+        () => _mergeAuth({
           'Content-Type': 'application/json',
           'If-Match': sentIfMatch,
         }),
-        body: jsonEncode(putPayload),
+        (h) => _client.put(
+          _u('/v1/story-drafts/$id'),
+          headers: h,
+          body: jsonEncode(putPayload),
+        ),
       );
       if (_isMissingDraftResponse(putResp)) {
         developer.log(
@@ -687,13 +770,17 @@ class RemoteStoryDraftRepository implements StoryDraftRepository {
           );
         }
         sentIfMatch = retryEtag;
-        putResp = await _client.put(
+        putResp = await _nimonAuthSend(
           _u('/v1/story-drafts/$id'),
-          headers: await _mergeAuth({
+          () => _mergeAuth({
             'Content-Type': 'application/json',
             'If-Match': sentIfMatch,
           }),
-          body: jsonEncode(putPayload),
+          (h) => _client.put(
+            _u('/v1/story-drafts/$id'),
+            headers: h,
+            body: jsonEncode(putPayload),
+          ),
         );
       }
 
@@ -703,13 +790,17 @@ class RemoteStoryDraftRepository implements StoryDraftRepository {
         operation: 'PUT draft content',
         firstResp: putResp,
         firstIfMatch: sentIfMatch,
-        sendWithIfMatch: (match) async => _client.put(
+        sendWithIfMatch: (match) async => _nimonAuthSend(
           _u('/v1/story-drafts/$id'),
-          headers: await _mergeAuth({
+          () => _mergeAuth({
             'Content-Type': 'application/json',
             'If-Match': match,
           }),
-          body: jsonEncode(putPayload),
+          (h) => _client.put(
+            _u('/v1/story-drafts/$id'),
+            headers: h,
+            body: jsonEncode(putPayload),
+          ),
         ),
       );
 
@@ -843,14 +934,18 @@ class RemoteStoryDraftRepository implements StoryDraftRepository {
     if (id.isEmpty) return;
 
     try {
-      final resp = await _client.delete(
+      final resp = await _nimonAuthSend(
         _u('/v1/story-drafts/$id'),
-        headers: await _mergeAuth({}),
+        () => _mergeAuth({}),
+        (h) => _client.delete(_u('/v1/story-drafts/$id'), headers: h),
       );
       await _throwIfNotOk(resp);
       await _saveEtag(id, null);
       await _local.deleteDraft(id);
     } catch (e, st) {
+      if (e is AppQuotaExceededException) {
+        Error.throwWithStackTrace(e, st);
+      }
       await _fallbackOrThrowAsync<void>(
         e,
         st,
@@ -860,6 +955,16 @@ class RemoteStoryDraftRepository implements StoryDraftRepository {
         },
       );
     }
+  }
+
+  @override
+  Future<bool> discardPublishedEditStaging(String draftId) async {
+    final id = draftId.trim();
+    if (id.isEmpty) return false;
+    final draft = await loadDraft(id);
+    if (!isLinkedPublishedEditStagingDraft(draft)) return false;
+    await deleteDraft(id);
+    return true;
   }
 
   // ---------------------------------------------------------------------------

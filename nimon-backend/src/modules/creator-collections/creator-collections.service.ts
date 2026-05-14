@@ -1,11 +1,15 @@
 import {
-  BadRequestException,
   ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
 
+import { assertNoBlockingValidationIssues } from '../../common/validation/validation-exception';
+import { validateCollectionName } from '../../common/validation/collection-validation';
+import { FREE_TIER_QUOTA_KEYS, FREE_TIER_QUOTAS } from '../../common/limits/free-tier-quotas';
+import { QuotaExceededException } from '../../common/limits/quota-exceeded.exception';
+import { MediaUrlCanonicalizerService } from '../media/media-url-canonicalizer.service';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   attachWriterProfileToListItem,
@@ -28,7 +32,10 @@ const MAX_MONO_PAGE = 50;
 
 @Injectable()
 export class CreatorCollectionsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly media: MediaUrlCanonicalizerService,
+  ) {}
 
   private async writerProfile(ownerId: string): Promise<WriterProfileSlice | null> {
     const p = await this.prisma.userProfile.findUnique({
@@ -61,7 +68,7 @@ export class CreatorCollectionsService {
       ownerId: row.ownerId,
       title: row.title,
       description: row.description,
-      coverImageUrl: row.coverImageUrl,
+      coverImageUrl: this.media.url(row.coverImageUrl),
       visibility: row.visibility,
       itemCount,
       createdAt: row.createdAt.toISOString(),
@@ -115,7 +122,10 @@ export class CreatorCollectionsService {
     const out = new Map<string, string>();
     for (const r of rows) {
       if (out.has(r.collectionId)) continue;
-      const dto = publishedMonoListItemFromRow(r.publishedMono);
+      const dto = publishedMonoListItemFromRow(
+        r.publishedMono,
+        this.media.mediaPublicBaseUrl(),
+      );
       const cover = (dto.coverImageUrl ?? '').trim();
       if (cover) out.set(r.collectionId, cover);
     }
@@ -150,8 +160,17 @@ export class CreatorCollectionsService {
     dto: CreateCreatorMonoCollectionDto,
   ): Promise<{ collection: CreatorMonoCollectionDto }> {
     const title = dto.title.trim();
-    if (!title) {
-      throw new BadRequestException('title_required');
+    const titleVal = validateCollectionName(title);
+    assertNoBlockingValidationIssues(titleVal);
+    const collectionCount = await this.prisma.creatorMonoCollection.count({
+      where: { ownerId },
+    });
+    if (collectionCount >= FREE_TIER_QUOTAS.collections) {
+      throw new QuotaExceededException(
+        FREE_TIER_QUOTA_KEYS.collections,
+        FREE_TIER_QUOTAS.collections,
+        collectionCount,
+      );
     }
     const row = await this.prisma.creatorMonoCollection.create({
       data: {
@@ -180,7 +199,8 @@ export class CreatorCollectionsService {
     const data: Record<string, unknown> = {};
     if (dto.title !== undefined) {
       const t = dto.title.trim();
-      if (!t) throw new BadRequestException('title_required');
+      const titleVal = validateCollectionName(t);
+      assertNoBlockingValidationIssues(titleVal);
       data.title = t;
     }
     if (dto.description !== undefined) data.description = dto.description;
@@ -246,6 +266,17 @@ export class CreatorCollectionsService {
       });
       if (existing && existing.collectionId === collectionId) {
         return { created: false, itemId: existing.id };
+      }
+
+      const targetCount = await tx.creatorMonoCollectionItem.count({
+        where: { collectionId },
+      });
+      if (targetCount >= FREE_TIER_QUOTAS.collectionItems) {
+        throw new QuotaExceededException(
+          FREE_TIER_QUOTA_KEYS.collectionItems,
+          FREE_TIER_QUOTAS.collectionItems,
+          targetCount,
+        );
       }
 
       const maxSort = await tx.creatorMonoCollectionItem.aggregate({
@@ -344,6 +375,10 @@ export class CreatorCollectionsService {
       });
       const byMono = new Map(existingRows.map((r) => [r.publishedMonoId, r]));
 
+      let projectedTargetCount = await tx.creatorMonoCollectionItem.count({
+        where: { collectionId },
+      });
+
       let skippedDuplicates = 0;
       let inserted = 0;
 
@@ -353,7 +388,15 @@ export class CreatorCollectionsService {
           skippedDuplicates += 1;
           continue;
         }
-        if (ex) {
+        if (ex && ex.collectionId !== collectionId) {
+          if (projectedTargetCount >= FREE_TIER_QUOTAS.collectionItems) {
+            throw new QuotaExceededException(
+              FREE_TIER_QUOTA_KEYS.collectionItems,
+              FREE_TIER_QUOTAS.collectionItems,
+              projectedTargetCount,
+            );
+          }
+          projectedTargetCount += 1;
           await tx.creatorMonoCollectionItem.update({
             where: { id: ex.id },
             data: { collectionId, sortOrder: orderBase++ },
@@ -361,6 +404,14 @@ export class CreatorCollectionsService {
           inserted += 1;
           continue;
         }
+        if (projectedTargetCount >= FREE_TIER_QUOTAS.collectionItems) {
+          throw new QuotaExceededException(
+            FREE_TIER_QUOTA_KEYS.collectionItems,
+            FREE_TIER_QUOTAS.collectionItems,
+            projectedTargetCount,
+          );
+        }
+        projectedTargetCount += 1;
         await tx.creatorMonoCollectionItem.create({
           data: { collectionId, publishedMonoId, sortOrder: orderBase++ },
         });
@@ -436,10 +487,12 @@ export class CreatorCollectionsService {
     const page = rows.slice(0, take);
     const hasMore = rows.length > take;
     const writer = await this.writerProfile(profileUserId);
+    const base = this.media.mediaPublicBaseUrl();
     const items: PublishedMonoListItemDto[] = page.map((r) =>
       attachWriterProfileToListItem(
-        publishedMonoListItemFromRow(r.publishedMono),
+        publishedMonoListItemFromRow(r.publishedMono, base),
         writer,
+        base,
       ),
     );
     const last = page[page.length - 1];
@@ -488,10 +541,12 @@ export class CreatorCollectionsService {
     const page = rows.slice(0, take);
     const hasMore = rows.length > take;
     const writer = await this.writerProfile(ownerId);
+    const base = this.media.mediaPublicBaseUrl();
     const items: PublishedMonoListItemDto[] = page.map((r) =>
       attachWriterProfileToListItem(
-        publishedMonoListItemFromRow(r.publishedMono),
+        publishedMonoListItemFromRow(r.publishedMono, base),
         writer,
+        base,
       ),
     );
     const last = page[page.length - 1];

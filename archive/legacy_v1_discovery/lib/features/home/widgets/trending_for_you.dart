@@ -24,7 +24,7 @@ class _TrendingForYouState extends State<TrendingForYou>
     with TickerProviderStateMixin {
   late PageController _pageController;
   int _currentIndex = 0;
-  
+
   // Section padding constant
   static const double kSectionHPad = 16;
 
@@ -50,7 +50,8 @@ class _TrendingForYouState extends State<TrendingForYou>
   }
 
   void _onPageChanged() {
-    if (_pageController.hasClients && _pageController.position.hasContentDimensions) {
+    if (_pageController.hasClients &&
+        _pageController.position.hasContentDimensions) {
       final newIndex = (_pageController.page ?? 0).round();
       if (newIndex != _currentIndex) {
         setState(() {
@@ -83,9 +84,10 @@ class _TrendingForYouState extends State<TrendingForYou>
     }
 
     final trendingStories = widget.stories.take(5).toList();
-    final isLandscape = MediaQuery.of(context).orientation == Orientation.landscape;
+    final isLandscape =
+        MediaQuery.of(context).orientation == Orientation.landscape;
     final screenWidth = MediaQuery.of(context).size.width;
-    
+
     // Update PageController if orientation changed
     final targetViewportFraction = isLandscape ? 0.84 : 0.90;
     if (_pageController.viewportFraction != targetViewportFraction) {
@@ -103,7 +105,8 @@ class _TrendingForYouState extends State<TrendingForYou>
     }
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: kSectionHPad, vertical: 8),
+      padding:
+          const EdgeInsets.symmetric(horizontal: kSectionHPad, vertical: 8),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -111,7 +114,8 @@ class _TrendingForYouState extends State<TrendingForYou>
             title: 'Trending For You',
             sectionKey: SectionKey.trendingForYou,
             storyRepo: widget.storyRepo,
-            padding: EdgeInsets.zero, // No padding since container already has 16px
+            padding:
+                EdgeInsets.zero, // No padding since container already has 16px
           ),
           const SizedBox(height: 12),
           SizedBox(
@@ -124,7 +128,8 @@ class _TrendingForYouState extends State<TrendingForYou>
               itemCount: trendingStories.length,
               itemBuilder: (context, index) {
                 return Container(
-                  margin: const EdgeInsets.only(right: 12), // Tighter peek effect
+                  margin:
+                      const EdgeInsets.only(right: 12), // Tighter peek effect
                   child: _TrendingCard(
                     story: trendingStories[index],
                     onTap: () => _openStory(trendingStories[index]),
@@ -155,7 +160,7 @@ class _TrendingCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final color = theme.colorScheme;
-    
+
     // Cover dimensions based on orientation
     final coverW = (isLandscape ? 110 : 120).toDouble();
     final coverH = coverW * 1.5; // 2:3 ratio
@@ -263,7 +268,8 @@ class _TrendingCard extends StatelessWidget {
                   ClipRRect(
                     borderRadius: BorderRadius.circular(16),
                     child: Image.network(
-                      story.coverUrl ?? 'https://picsum.photos/seed/${story.id}/600/900',
+                      story.coverUrl ??
+                          'https://picsum.photos/seed/${story.id}/600/900',
                       width: coverW,
                       height: coverH,
                       fit: BoxFit.cover,
@@ -284,7 +290,8 @@ class _TrendingCard extends StatelessWidget {
                           height: coverH,
                           color: Colors.grey[300],
                           child: const Center(
-                            child: Icon(Icons.book, size: 32, color: Colors.grey),
+                            child:
+                                Icon(Icons.book, size: 32, color: Colors.grey),
                           ),
                         );
                       },
@@ -294,7 +301,8 @@ class _TrendingCard extends StatelessWidget {
                     top: 8,
                     right: 8,
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 4),
                       decoration: BoxDecoration(
                         color: color.primary,
                         borderRadius: BorderRadius.circular(14),
@@ -325,4 +333,3 @@ class _TrendingCard extends StatelessWidget {
     );
   }
 }
-

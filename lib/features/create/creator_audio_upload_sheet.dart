@@ -47,9 +47,6 @@ class CreatorAudioUploadSheet extends StatefulWidget {
         RemoteBackendConfig.creatorAudioAdvancedUxEnabled,
   });
 
-  static const ink = Color(0xFF1A1917);
-  static const muted = Color(0xFF5C5A55);
-
   static const allowedAudioExts = {'mp3', 'm4a', 'wav'};
 
   static String? validatePickedAudioExt(PlatformFile f) {
@@ -270,6 +267,9 @@ class _CreatorAudioUploadSheetState extends State<CreatorAudioUploadSheet> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final ink = scheme.onSurface;
+    final muted = scheme.onSurfaceVariant;
     final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
 
     return Padding(
@@ -281,7 +281,7 @@ class _CreatorAudioUploadSheetState extends State<CreatorAudioUploadSheet> {
             Text(
               widget.sheetTitle,
               style: theme.textTheme.titleLarge?.copyWith(
-                color: CreatorAudioUploadSheet.ink,
+                color: ink,
                 fontWeight: FontWeight.w800,
               ),
             ),
@@ -290,7 +290,7 @@ class _CreatorAudioUploadSheetState extends State<CreatorAudioUploadSheet> {
               Text(
                 'Choose an audio file for this story.',
                 style: theme.textTheme.bodyMedium?.copyWith(
-                  color: CreatorAudioUploadSheet.muted,
+                  color: muted,
                   height: 1.4,
                 ),
               ),
@@ -298,7 +298,7 @@ class _CreatorAudioUploadSheetState extends State<CreatorAudioUploadSheet> {
               Text(
                 'Supported: mp3, m4a, wav',
                 style: theme.textTheme.bodySmall?.copyWith(
-                  color: CreatorAudioUploadSheet.muted,
+                  color: muted,
                   fontWeight: FontWeight.w600,
                 ),
               ),
@@ -306,7 +306,7 @@ class _CreatorAudioUploadSheetState extends State<CreatorAudioUploadSheet> {
               Text(
                 'Choose a file first. After upload, add it to your story.',
                 style: theme.textTheme.bodySmall?.copyWith(
-                  color: CreatorAudioUploadSheet.muted,
+                  color: muted,
                   height: 1.35,
                 ),
               ),
@@ -315,7 +315,7 @@ class _CreatorAudioUploadSheetState extends State<CreatorAudioUploadSheet> {
                 Text(
                   'Sign in to upload audio.',
                   style: theme.textTheme.bodyMedium?.copyWith(
-                    color: CreatorAudioUploadSheet.muted,
+                    color: muted,
                     height: 1.45,
                   ),
                 ),
@@ -339,13 +339,13 @@ class _CreatorAudioUploadSheetState extends State<CreatorAudioUploadSheet> {
                     'Optional details',
                     style: theme.textTheme.titleSmall?.copyWith(
                       fontWeight: FontWeight.w700,
-                      color: CreatorAudioUploadSheet.ink,
+                      color: ink,
                     ),
                   ),
                   subtitle: Text(
                     'Display name and length',
                     style: theme.textTheme.bodySmall?.copyWith(
-                      color: CreatorAudioUploadSheet.muted,
+                      color: muted,
                     ),
                   ),
                   initiallyExpanded: false,
@@ -377,13 +377,13 @@ class _CreatorAudioUploadSheetState extends State<CreatorAudioUploadSheet> {
                     'Advanced options',
                     style: theme.textTheme.titleSmall?.copyWith(
                       fontWeight: FontWeight.w700,
-                      color: CreatorAudioUploadSheet.ink,
+                      color: ink,
                     ),
                   ),
                   subtitle: Text(
                     'Public link or local-only draft',
                     style: theme.textTheme.bodySmall?.copyWith(
-                      color: CreatorAudioUploadSheet.muted,
+                      color: muted,
                     ),
                   ),
                   initiallyExpanded: false,
@@ -391,7 +391,7 @@ class _CreatorAudioUploadSheetState extends State<CreatorAudioUploadSheet> {
                     Text(
                       'Public audio URL',
                       style: theme.textTheme.labelLarge?.copyWith(
-                        color: CreatorAudioUploadSheet.ink,
+                        color: ink,
                         fontWeight: FontWeight.w800,
                       ),
                     ),
@@ -416,7 +416,7 @@ class _CreatorAudioUploadSheetState extends State<CreatorAudioUploadSheet> {
                     Text(
                       'Attach without uploading',
                       style: theme.textTheme.labelLarge?.copyWith(
-                        color: CreatorAudioUploadSheet.ink,
+                        color: ink,
                         fontWeight: FontWeight.w800,
                       ),
                     ),
@@ -424,7 +424,7 @@ class _CreatorAudioUploadSheetState extends State<CreatorAudioUploadSheet> {
                     Text(
                       'Draft preview on this device only.',
                       style: theme.textTheme.bodySmall?.copyWith(
-                        color: CreatorAudioUploadSheet.muted,
+                        color: muted,
                         height: 1.35,
                       ),
                     ),
@@ -443,7 +443,7 @@ class _CreatorAudioUploadSheetState extends State<CreatorAudioUploadSheet> {
                       _advancedLocalPicked?.name ??
                           'No file selected for local attach',
                       style: theme.textTheme.bodySmall?.copyWith(
-                        color: CreatorAudioUploadSheet.muted,
+                        color: muted,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
@@ -466,7 +466,7 @@ class _CreatorAudioUploadSheetState extends State<CreatorAudioUploadSheet> {
                 'Uploading…',
                 textAlign: TextAlign.center,
                 style: theme.textTheme.titleSmall?.copyWith(
-                  color: CreatorAudioUploadSheet.ink,
+                  color: ink,
                   fontWeight: FontWeight.w700,
                 ),
               ),
@@ -475,7 +475,7 @@ class _CreatorAudioUploadSheetState extends State<CreatorAudioUploadSheet> {
                 'Please wait…',
                 textAlign: TextAlign.center,
                 style: theme.textTheme.bodySmall?.copyWith(
-                  color: CreatorAudioUploadSheet.muted,
+                  color: muted,
                   height: 1.35,
                 ),
               ),
@@ -494,7 +494,7 @@ class _CreatorAudioUploadSheetState extends State<CreatorAudioUploadSheet> {
                     child: Text(
                       'Upload complete',
                       style: theme.textTheme.titleMedium?.copyWith(
-                        color: CreatorAudioUploadSheet.ink,
+                        color: ink,
                         fontWeight: FontWeight.w800,
                       ),
                     ),
@@ -510,7 +510,7 @@ class _CreatorAudioUploadSheetState extends State<CreatorAudioUploadSheet> {
               Text(
                 'Tap Add audio to story to attach this file to your draft.',
                 style: theme.textTheme.bodyMedium?.copyWith(
-                  color: CreatorAudioUploadSheet.muted,
+                  color: muted,
                   height: 1.4,
                 ),
               ),
@@ -520,7 +520,7 @@ class _CreatorAudioUploadSheetState extends State<CreatorAudioUploadSheet> {
                   'Optional details',
                   style: theme.textTheme.titleSmall?.copyWith(
                     fontWeight: FontWeight.w700,
-                    color: CreatorAudioUploadSheet.ink,
+                    color: ink,
                   ),
                 ),
                 initiallyExpanded: false,
@@ -605,12 +605,17 @@ class _SuccessSummary extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final ink = scheme.onSurface;
+    final muted = scheme.onSurfaceVariant;
     final name = nameCtrl.text.trim();
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: theme.colorScheme.surface,
+        color: scheme.surface,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.black.withValues(alpha: 0.08)),
+        border: Border.all(
+          color: scheme.outlineVariant.withValues(alpha: 0.55),
+        ),
       ),
       child: Padding(
         padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
@@ -622,7 +627,7 @@ class _SuccessSummary extends StatelessWidget {
                   ? response.originalName
                   : 'Audio file',
               style: theme.textTheme.titleSmall?.copyWith(
-                color: CreatorAudioUploadSheet.ink,
+                color: ink,
                 fontWeight: FontWeight.w800,
               ),
             ),
@@ -631,7 +636,7 @@ class _SuccessSummary extends StatelessWidget {
               Text(
                 'Title: $name',
                 style: theme.textTheme.bodySmall?.copyWith(
-                  color: CreatorAudioUploadSheet.muted,
+                  color: muted,
                 ),
               ),
             ],
@@ -639,7 +644,7 @@ class _SuccessSummary extends StatelessWidget {
             Text(
               _sizeLabel(response.sizeBytes),
               style: theme.textTheme.bodySmall?.copyWith(
-                color: CreatorAudioUploadSheet.muted,
+                color: muted,
               ),
             ),
             if (response.durationSeconds != null &&
@@ -648,7 +653,7 @@ class _SuccessSummary extends StatelessWidget {
               Text(
                 'Length: ${response.durationSeconds} sec',
                 style: theme.textTheme.bodySmall?.copyWith(
-                  color: CreatorAudioUploadSheet.muted,
+                  color: muted,
                   fontWeight: FontWeight.w600,
                 ),
               ),

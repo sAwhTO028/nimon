@@ -119,7 +119,8 @@ class _WriterAvatar extends StatelessWidget {
             height: 56,
             child: CircleAvatar(
               radius: 28,
-              backgroundColor: Theme.of(context).colorScheme.primary.withOpacity(0.1),
+              backgroundColor:
+                  Theme.of(context).colorScheme.primary.withOpacity(0.1),
               backgroundImage: writer.avatarUrl != null
                   ? NetworkImage(writer.avatarUrl!)
                   : null,
@@ -204,4 +205,3 @@ class _AllWritersButton extends StatelessWidget {
     );
   }
 }
-

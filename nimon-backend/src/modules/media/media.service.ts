@@ -1,4 +1,9 @@
 import { BadRequestException, Inject, Injectable } from '@nestjs/common';
+import { throwValidationFailed } from '../../common/validation/validation-exception';
+import {
+  issueMediaAudioTooLarge,
+  issueMediaImageTooLarge,
+} from '../../common/validation/media-validation';
 import type { MulterMemoryUploadedFile } from './media-upload.types';
 import type { MediaUploadResponseDto } from './media-upload-response.dto';
 import {
@@ -7,7 +12,6 @@ import {
 } from './media-file-limits';
 import { MEDIA_STORAGE, type MediaStorage } from './media-storage';
 import {
-  assertWithinMax,
   CANONICAL_AUDIO_MPEG,
   CANONICAL_AUDIO_MP4,
   CANONICAL_AUDIO_WAV,
@@ -47,7 +51,9 @@ export class MediaService {
     file: MulterMemoryUploadedFile,
   ): Promise<MediaUploadResponseDto> {
     const maxBytes = this.coverMaxBytes();
-    assertWithinMax(file.size, maxBytes);
+    if (file.size > maxBytes) {
+      throwValidationFailed([issueMediaImageTooLarge(maxBytes)]);
+    }
     const mime = resolveCoverMime(file.mimetype, file.originalname);
     return this.persistFile(userId, 'cover', file, mime);
   }
@@ -57,7 +63,9 @@ export class MediaService {
     file: MulterMemoryUploadedFile,
   ): Promise<MediaUploadResponseDto> {
     const maxBytes = this.audioMaxBytes();
-    assertWithinMax(file.size, maxBytes);
+    if (file.size > maxBytes) {
+      throwValidationFailed([issueMediaAudioTooLarge(maxBytes)]);
+    }
     const mime = resolveAudioMime(file.mimetype, file.originalname);
     return this.persistFile(userId, 'audio', file, mime);
   }

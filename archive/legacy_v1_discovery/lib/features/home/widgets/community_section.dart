@@ -37,7 +37,7 @@ class _CommunitySectionState extends State<CommunitySection> {
     // Take the first 3 stories for the community section
     for (final story in stories.take(3)) {
       final episodes = await widget.repo.getEpisodesByStory(story.id);
-      
+
       collections.add(_CommunityCollectionData(
         story: story,
         episodes: episodes,
@@ -50,7 +50,7 @@ class _CommunitySectionState extends State<CommunitySection> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    
+
     return FutureBuilder<List<_CommunityCollectionData>>(
       future: _collectionsFuture,
       builder: (context, snapshot) {
@@ -91,21 +91,24 @@ class _CommunitySectionState extends State<CommunitySection> {
                   final collection = collections[index];
                   final story = collection.story;
                   final episodes = collection.episodes;
-                  final category = story.tags.isNotEmpty ? story.tags.first : 'Story';
-                  
+                  final category =
+                      story.tags.isNotEmpty ? story.tags.first : 'Story';
+
                   // Map episodes to CommunityEpisode format
                   // Use local assets if available, otherwise fall back to placeholder URLs
                   final communityEpisodes = episodes.take(3).map((ep) {
                     String thumbnailUrl;
-                    if (ep.thumbnailUrl != null && ep.thumbnailUrl!.isNotEmpty) {
+                    if (ep.thumbnailUrl != null &&
+                        ep.thumbnailUrl!.isNotEmpty) {
                       thumbnailUrl = ep.thumbnailUrl!;
                     } else {
                       // Try to use local asset based on category
-                      final assetPath = StoryCategories.getEpisodeThumbnailPath(category, ep.index);
-                      thumbnailUrl = assetPath ?? 
+                      final assetPath = StoryCategories.getEpisodeThumbnailPath(
+                          category, ep.index);
+                      thumbnailUrl = assetPath ??
                           'https://picsum.photos/seed/${story.id}_${ep.index}/100/100';
                     }
-                    
+
                     return CommunityEpisode(
                       title: ep.title ?? 'Episode ${ep.index}',
                       episodeNumber: ep.index,
@@ -121,7 +124,7 @@ class _CommunitySectionState extends State<CommunitySection> {
                         title: story.title,
                         authorLine: 'by Community Writers',
                         description: story.description,
-                        coverUrl: story.coverUrl ?? 
+                        coverUrl: story.coverUrl ??
                             'https://picsum.photos/seed/${story.id}/200/300',
                         jlptLevel: story.jlptLevel,
                         totalEpisodes: episodes.length,

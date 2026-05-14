@@ -7,6 +7,7 @@ import 'package:nimon/core/pagination/page_result.dart';
 import 'package:nimon/features/mono/data/mono_feed_repository.dart';
 import 'package:nimon/features/mono/data/mono_feed_summary_dto.dart';
 import 'package:nimon/features/mono/data/remote_mono_feed_repository.dart';
+import 'package:nimon/features/auth/authenticated_http.dart';
 import 'package:nimon/features/profile/data/published_mono_dto.dart';
 
 /// Remote Following feed over `GET /v1/mono/feed?following=true` (auth required).
@@ -15,9 +16,11 @@ class RemoteFollowingMonoFeedRepository implements MonoFeedRepository {
     required String apiBaseUrl,
     required MonoFeedAuthHeaderBuilder authHeaderBuilder,
     http.Client? client,
+    NimonSendWithAuth401Recovery? sendWithAuth401Recovery,
   })  : _apiBaseUrl = apiBaseUrl.replaceAll(RegExp(r'/+$'), ''),
         _client = client ?? http.Client(),
         _authHeaderBuilder = authHeaderBuilder,
+        _sendWithAuth401 = sendWithAuth401Recovery,
         _detailRepo = RemoteMonoFeedRepository(
           apiBaseUrl: apiBaseUrl,
           client: client,
@@ -27,6 +30,7 @@ class RemoteFollowingMonoFeedRepository implements MonoFeedRepository {
   final String _apiBaseUrl;
   final http.Client _client;
   final MonoFeedAuthHeaderBuilder _authHeaderBuilder;
+  final NimonSendWithAuth401Recovery? _sendWithAuth401;
   final RemoteMonoFeedRepository _detailRepo;
 
   Uri _u(String path) => Uri.parse('$_apiBaseUrl$path');
@@ -38,6 +42,18 @@ class RemoteFollowingMonoFeedRepository implements MonoFeedRepository {
     }
     return h;
   }
+
+  Future<http.Response> _nimonAuthSend(
+    Uri uri,
+    Future<Map<String, String>> Function() mergeHeaders,
+    Future<http.Response> Function(Map<String, String> headers) send,
+  ) =>
+      nimonSendWithOptional401Recovery(
+        _sendWithAuth401,
+        requestUri: uri,
+        mergeHeaders: mergeHeaders,
+        send: send,
+      );
 
   Map<String, Object?> _jsonObjectFromResponse(http.Response r) {
     final body = r.body.trim();
@@ -83,12 +99,13 @@ class RemoteFollowingMonoFeedRepository implements MonoFeedRepository {
     if (kDebugMode) {
       debugPrint('RemoteFollowingMonoFeedRepository.fetchFeedPage: GET $uri');
     }
-    final resp = await _client.get(
+    final resp = await _nimonAuthSend(
       uri,
-      headers: {
+      () async => <String, String>{
         ...await _authHeadersOrThrow(),
         'Accept': 'application/json',
       },
+      (h) => _client.get(uri, headers: h),
     );
     if (resp.statusCode < 200 || resp.statusCode >= 300) _mapHttpError(resp);
     final m = _jsonObjectFromResponse(resp);

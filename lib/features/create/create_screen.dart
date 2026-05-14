@@ -7,12 +7,18 @@ import 'package:image_picker/image_picker.dart';
 import 'package:nimon/features/auth/auth_providers.dart';
 import 'package:nimon/features/auth/auth_session_state.dart';
 import 'package:nimon/features/create/create_story_basics_form.dart';
-import 'package:nimon/features/create/data/media_upload_repository.dart';
 import 'package:nimon/features/create/data/media_upload_repository_provider.dart';
 import 'package:nimon/features/create/story_basics_cover_upload_outcome.dart';
 import 'package:nimon/features/create/creator_back_policy.dart';
+import 'package:nimon/core/media/media_upload_error_mapper.dart';
+import 'package:nimon/core/validation/app_quota_exceeded_exception.dart';
+import 'package:nimon/core/validation/protected_action.dart';
+import 'package:nimon/core/validation/protected_action_guard.dart';
+import 'package:nimon/core/validation/localized_validation_messages.dart';
 import 'package:nimon/features/create/story_creator_provider.dart';
 import 'package:nimon/ui/widgets/nimon_circle_nav_button.dart';
+import 'package:nimon/ui/quota_exceeded_dialog.dart';
+import 'package:nimon/core/design_system/nimon_color_tokens.dart';
 
 /// Create entry from the dock **+ Add**. Step 1 is the unified Story basics form.
 ///
@@ -47,11 +53,24 @@ class _CreateScreenState extends ConsumerState<CreateScreen> {
 
   Future<StoryBasicsCoverUploadOutcome> _uploadCoverFromGallery(
       XFile file) async {
+    if (!await ensureProtectedActionAllowed(
+      context,
+      action: ProtectedActionType.uploadMedia,
+    )) {
+      return StoryBasicsCoverUploadOutcome.pendingLocal(inlineHint: null);
+    }
     final tok = await ref.read(authTokenStoreProvider).readTokens();
     if (tok == null || tok.accessToken.trim().isEmpty) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Sign in to upload cover images.')),
+          SnackBar(
+            content: Text(
+              validationMessageKeyLocalized(
+                context,
+                'protected.uploadMedia.login',
+              ),
+            ),
+          ),
         );
       }
       return StoryBasicsCoverUploadOutcome.pendingLocal(inlineHint: null);
@@ -59,36 +78,60 @@ class _CreateScreenState extends ConsumerState<CreateScreen> {
     try {
       final r = await ref.read(mediaUploadRepositoryProvider).uploadCover(file);
       return StoryBasicsCoverUploadOutcome.ok(r);
-    } on MediaUploadException catch (e) {
+    } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.userMessage)),
+          SnackBar(
+            content: Text(
+              mediaUploadUserMessageLocalized(
+                context,
+                e,
+                surface: MediaUploadSurface.storyCover,
+              ),
+            ),
+          ),
         );
       }
       return StoryBasicsCoverUploadOutcome.pendingLocal(
-        inlineHint: coverUploadFailureInlineHint(e),
+        inlineHint:
+            mounted ? coverUploadFailureInlineHintLocalized(context, e) : null,
       );
     }
   }
 
   Future<void> _handleCreate() async {
+    if (!await ensureProtectedActionAllowed(
+      context,
+      action: ProtectedActionType.createStory,
+    )) {
+      return;
+    }
     final payload = _formKey.currentState?.buildPayloadIfValid();
     if (payload == null) return;
+    final nav = context;
     // Add/Create is ONLY for starting a brand-new story draft.
     // Start an ephemeral draft session; the first persist happens when fields are applied.
     ref.read(storyCreatorDraftProvider.notifier).reset();
-    ref.read(storyCreatorDraftProvider.notifier).applyBasics(
-          title: payload.title,
-          category: payload.category,
-          level: payload.level,
-          description: payload.description,
-          promptSourceNote: payload.promptSourceNote,
-          targetDurationBandKey: payload.targetDurationBandKey,
-          coverImageUrl: payload.coverImageUrl,
-        );
-    if (!mounted) return;
+    try {
+      await ref
+          .read(storyCreatorDraftProvider.notifier)
+          .applyBasicsAndWaitPersist(
+            title: payload.title,
+            category: payload.category,
+            level: payload.level,
+            description: payload.description,
+            promptSourceNote: payload.promptSourceNote,
+            targetDurationBandKey: payload.targetDurationBandKey,
+            coverImageUrl: payload.coverImageUrl,
+          );
+    } on AppQuotaExceededException catch (e) {
+      if (!nav.mounted) return;
+      await showQuotaExceededDialog(nav, e);
+      return;
+    }
+    if (!nav.mounted) return;
     final created = ref.read(storyCreatorDraftDataProvider);
-    context.push('/create/story/sentences?draftId=${created.id}');
+    nav.push('/create/story/sentences?draftId=${created.id}');
   }
 
   Future<void> _handleSaveFromReview() async {
@@ -171,22 +214,24 @@ class _CreateScreenState extends ConsumerState<CreateScreen> {
       );
     }
 
+    final tc = theme.colors;
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: tc.appBackground,
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: tc.appBackground,
         elevation: 0,
+        surfaceTintColor: Colors.transparent,
         leading: NimonBackButton(
           onPressed: () => unawaited(handleCreatorBackPressed(context, ref)),
           icon: Icons.close_rounded,
           tooltip: 'Close',
         ),
-        title: const Text(
+        title: Text(
           'Create',
-          style: TextStyle(
+          style: theme.textTheme.titleLarge?.copyWith(
             fontSize: 22,
             fontWeight: FontWeight.w700,
-            color: Colors.black87,
+            color: tc.textPrimary,
           ),
         ),
         centerTitle: true,
@@ -200,10 +245,15 @@ class _CreateScreenState extends ConsumerState<CreateScreen> {
                   onPressed:
                       canSubmit ? () => unawaited(_handleCreate()) : null,
                   style: FilledButton.styleFrom(
-                    backgroundColor:
-                        canSubmit ? Colors.blue : Colors.grey.shade300,
-                    foregroundColor:
-                        canSubmit ? Colors.white : Colors.grey.shade600,
+                    backgroundColor: canSubmit
+                        ? tc.actionPrimary
+                        : tc.disabled.withValues(alpha: 0.35),
+                    foregroundColor: canSubmit
+                        ? theme.colorScheme.onPrimary
+                        : tc.textSecondary,
+                    disabledBackgroundColor:
+                        tc.disabled.withValues(alpha: 0.35),
+                    disabledForegroundColor: tc.textSecondary,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(8),
                     ),

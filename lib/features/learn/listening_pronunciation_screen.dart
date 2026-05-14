@@ -6,6 +6,8 @@ import 'package:go_router/go_router.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:nimon/features/create/data/dto/story_draft_dto.dart';
 import 'package:nimon/features/learn/learn_catalog_content_gate.dart';
+import 'package:nimon/features/learn/learn_creator_module_tokens.dart';
+import 'package:nimon/features/learn/learn_module_surface_tokens.dart';
 import 'package:nimon/features/learn/learn_explanation_language.dart';
 import 'package:nimon/features/learn/learn_explanation_language_provider.dart';
 import 'package:nimon/features/learn/learn_published_snapshot_mappers.dart';
@@ -52,13 +54,10 @@ class ListeningPronunciationScreen extends ConsumerWidget {
   /// When set (e.g. from route `extra`), skips SharedPreferences.
   final LearnExplanationLanguage? explanationLanguageOverride;
 
-  static const _bg = Color(0xFFF6F3EA);
-  static const _ink = Color(0xFF1A1917);
-  static const _inkMuted = Color(0xFF5C5A55);
-
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
+    final cs = theme.colorScheme;
     final LearnExplanationLanguage lang = explanationLanguageOverride != null
         ? explanationLanguageOverride!
         : ref.watch(learnExplanationLanguageProvider);
@@ -86,11 +85,13 @@ class ListeningPronunciationScreen extends ConsumerWidget {
         ref.watch(catalogPublishedMonoDetailProvider(contentId));
     final snapAsync = ref.watch(learnPublishedSnapshotProvider(contentId));
 
+    final pageBg = learnModuleListPageBackground(context);
+
     Widget wrapScaffold(Widget body) {
       return Scaffold(
-        backgroundColor: _bg,
+        backgroundColor: pageBg,
         appBar: AppBar(
-          backgroundColor: _bg,
+          backgroundColor: pageBg,
           surfaceTintColor: Colors.transparent,
           elevation: 0,
           leading: NimonBackButton(onPressed: () => context.pop()),
@@ -98,7 +99,7 @@ class ListeningPronunciationScreen extends ConsumerWidget {
           title: Text(
             'Listening / Pronunciation',
             style: theme.textTheme.titleMedium?.copyWith(
-              color: _ink,
+              color: cs.onSurface,
               fontWeight: FontWeight.w800,
             ),
           ),
@@ -193,12 +194,10 @@ class ListeningPronunciationScreen extends ConsumerWidget {
 class _ListeningLockedBody extends StatelessWidget {
   const _ListeningLockedBody();
 
-  static const _ink = ListeningPronunciationScreen._ink;
-  static const _inkMuted = ListeningPronunciationScreen._inkMuted;
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final cs = theme.colorScheme;
     final bottomInset = MediaQuery.paddingOf(context).bottom;
     return Padding(
       padding: EdgeInsets.fromLTRB(24, 24, 24, bottomInset + 24),
@@ -210,7 +209,7 @@ class _ListeningLockedBody extends StatelessWidget {
             'Stories published as read-only don’t include learning modules '
             'until you publish full learn.',
             style: theme.textTheme.bodyLarge?.copyWith(
-              color: _ink,
+              color: cs.onSurface,
               height: 1.45,
             ),
           ),
@@ -218,7 +217,7 @@ class _ListeningLockedBody extends StatelessWidget {
           Text(
             'Publish Full Learn from the creator workspace to sync story audio to readers.',
             style: theme.textTheme.bodyMedium?.copyWith(
-              color: _inkMuted,
+              color: cs.onSurfaceVariant,
               height: 1.4,
             ),
           ),
@@ -231,12 +230,10 @@ class _ListeningLockedBody extends StatelessWidget {
 class _ListeningAudioUnavailableBody extends StatelessWidget {
   const _ListeningAudioUnavailableBody();
 
-  static const _ink = ListeningPronunciationScreen._ink;
-  static const _inkMuted = ListeningPronunciationScreen._inkMuted;
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final cs = theme.colorScheme;
     final bottomInset = MediaQuery.paddingOf(context).bottom;
     return Padding(
       padding: EdgeInsets.fromLTRB(24, 24, 24, bottomInset + 24),
@@ -246,7 +243,7 @@ class _ListeningAudioUnavailableBody extends StatelessWidget {
           Text(
             'Audio is not available for this story yet.',
             style: theme.textTheme.bodyLarge?.copyWith(
-              color: _ink,
+              color: cs.onSurface,
               height: 1.45,
             ),
           ),
@@ -255,7 +252,7 @@ class _ListeningAudioUnavailableBody extends StatelessWidget {
             'Only streamed audio (http/https) can be played here. '
             'Local-only or missing URLs cannot be loaded in the catalog reader.',
             style: theme.textTheme.bodyMedium?.copyWith(
-              color: _inkMuted,
+              color: cs.onSurfaceVariant,
               height: 1.4,
             ),
           ),
@@ -276,11 +273,10 @@ class _ListeningErrorBody extends StatelessWidget {
   final String detail;
   final VoidCallback onRetry;
 
-  static const _ink = ListeningPronunciationScreen._ink;
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final cs = theme.colorScheme;
     final bottomInset = MediaQuery.paddingOf(context).bottom;
     return Padding(
       padding: EdgeInsets.fromLTRB(24, 24, 24, bottomInset + 24),
@@ -290,14 +286,14 @@ class _ListeningErrorBody extends StatelessWidget {
           Text(
             message,
             style: theme.textTheme.titleMedium?.copyWith(
-              color: _ink,
+              color: cs.onSurface,
               fontWeight: FontWeight.w700,
             ),
           ),
           const SizedBox(height: 8),
           Text(
             detail,
-            style: theme.textTheme.bodySmall?.copyWith(color: _ink),
+            style: theme.textTheme.bodySmall?.copyWith(color: cs.onSurface),
           ),
           const SizedBox(height: 16),
           TextButton(onPressed: onRetry, child: const Text('Retry')),
@@ -328,10 +324,6 @@ class _ListeningPlaybackView extends StatefulWidget {
 
   final String? audioUnavailableMessage;
   final String? transcriptEmptyMessage;
-
-  static const _bg = Color(0xFFF6F3EA);
-  static const _ink = Color(0xFF1A1917);
-  static const _inkMuted = Color(0xFF5C5A55);
 
   @override
   State<_ListeningPlaybackView> createState() => _ListeningPlaybackViewState();
@@ -401,6 +393,8 @@ class _ListeningPlaybackViewState extends State<_ListeningPlaybackView> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final pageBg = learnModuleListPageBackground(context);
     final subtitle = widget.storySubtitle.trim();
     final bottomInset = MediaQuery.paddingOf(context).bottom;
     const cardReserve = 160.0;
@@ -409,9 +403,9 @@ class _ListeningPlaybackViewState extends State<_ListeningPlaybackView> {
         (widget.transcriptEmptyMessage ?? '').trim().isNotEmpty;
 
     return Scaffold(
-      backgroundColor: _ListeningPlaybackView._bg,
+      backgroundColor: pageBg,
       appBar: AppBar(
-        backgroundColor: _ListeningPlaybackView._bg,
+        backgroundColor: pageBg,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
         leading: NimonBackButton(onPressed: () => context.pop()),
@@ -423,7 +417,7 @@ class _ListeningPlaybackViewState extends State<_ListeningPlaybackView> {
             Text(
               'Listening / Pronunciation',
               style: theme.textTheme.titleMedium?.copyWith(
-                color: _ListeningPlaybackView._ink,
+                color: cs.onSurface,
                 fontWeight: FontWeight.w800,
               ),
             ),
@@ -434,7 +428,7 @@ class _ListeningPlaybackViewState extends State<_ListeningPlaybackView> {
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
                 style: theme.textTheme.bodySmall?.copyWith(
-                  color: _ListeningPlaybackView._inkMuted,
+                  color: cs.onSurfaceVariant,
                   fontWeight: FontWeight.w600,
                 ),
               ),
@@ -458,7 +452,7 @@ class _ListeningPlaybackViewState extends State<_ListeningPlaybackView> {
                       Text(
                         widget.transcriptEmptyMessage!.trim(),
                         style: theme.textTheme.bodyLarge?.copyWith(
-                          color: _ListeningPlaybackView._inkMuted,
+                          color: cs.onSurfaceVariant,
                           height: 1.45,
                         ),
                       ),
@@ -525,9 +519,6 @@ class ListeningTranscriptSentenceBlock extends StatelessWidget {
   final LearnExplanationLanguage explanationLanguage;
   final bool showTranslation;
 
-  static const _ink = Color(0xFF1A1917);
-  static const _muted = Color(0xFF5C5A55);
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -547,7 +538,7 @@ class ListeningTranscriptSentenceBlock extends StatelessWidget {
             NimonRubyToken(text: t.text, reading: t.reading),
         ],
         baseStyle: lineStyle.baseStyle.copyWith(
-          color: _ink,
+          color: learnCreatorModulePrimaryTextColor(context),
           fontWeight: FontWeight.w700,
           height: 1.45,
         ),
@@ -557,7 +548,7 @@ class ListeningTranscriptSentenceBlock extends StatelessWidget {
       japaneseBlock = Text(
         line.japanese.trim(),
         style: theme.textTheme.titleMedium?.copyWith(
-          color: _ink,
+          color: learnCreatorModulePrimaryTextColor(context),
           fontWeight: FontWeight.w700,
           height: 1.45,
         ),
@@ -583,7 +574,7 @@ class ListeningTranscriptSentenceBlock extends StatelessWidget {
             Text(
               r,
               style: theme.textTheme.bodyMedium?.copyWith(
-                color: _muted,
+                color: learnCreatorModuleSecondaryTextColor(context),
                 fontWeight: FontWeight.w500,
                 height: 1.4,
               ),
@@ -598,7 +589,7 @@ class ListeningTranscriptSentenceBlock extends StatelessWidget {
             Text(
               legacyMeaning,
               style: theme.textTheme.bodyMedium?.copyWith(
-                color: _muted,
+                color: learnCreatorModuleSecondaryTextColor(context),
                 fontWeight: FontWeight.w500,
                 height: 1.45,
               ),
@@ -617,11 +608,10 @@ class _ListeningExplanationLines extends StatelessWidget {
 
   final MonoLineExplanationDisplay display;
 
-  static const _muted = Color(0xFF5C5A55);
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final cs = theme.colorScheme;
     final sec = display.secondary;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -633,7 +623,7 @@ class _ListeningExplanationLines extends StatelessWidget {
             child: Text(
               sec.trim(),
               style: theme.textTheme.bodySmall?.copyWith(
-                color: _muted,
+                color: cs.onSurfaceVariant,
                 fontWeight: FontWeight.w500,
                 height: 1.4,
               ),
@@ -668,32 +658,33 @@ class _ListeningFloatingPlayerCard extends StatelessWidget {
   final String Function(Duration) formatDuration;
   final bool controlsEnabled;
 
-  static const _ink = Color(0xFF1A1917);
-  static const _muted = Color(0xFF5C5A55);
-  static const _cardBg = Color(0xFFFDFCF9);
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
 
     return Container(
       decoration: BoxDecoration(
-        color: _cardBg,
+        color: learnCreatorModuleCardSurfaceColor(context),
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: _ink.withValues(alpha: 0.07)),
+        border: Border.all(color: learnCreatorModuleCardBorderColor(context)),
         boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.10),
-            blurRadius: 22,
-            offset: const Offset(0, 10),
-          ),
+          if (!isDark)
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.10),
+              blurRadius: 22,
+              offset: const Offset(0, 10),
+            ),
         ],
       ),
       padding: const EdgeInsets.fromLTRB(14, 12, 14, 10),
       child: loadError != null && loadError!.trim().isNotEmpty
           ? Text(
               loadError!,
-              style: theme.textTheme.bodySmall?.copyWith(color: _muted),
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: cs.onSurfaceVariant,
+              ),
             )
           : !ready
               ? Row(
@@ -703,14 +694,14 @@ class _ListeningFloatingPlayerCard extends StatelessWidget {
                       height: 20,
                       child: CircularProgressIndicator(
                         strokeWidth: 2,
-                        color: _ink.withValues(alpha: 0.5),
+                        color: cs.onSurface.withValues(alpha: 0.5),
                       ),
                     ),
                     const SizedBox(width: 12),
                     Text(
                       'Loading audio…',
                       style: theme.textTheme.bodySmall?.copyWith(
-                        color: _muted,
+                        color: cs.onSurfaceVariant,
                       ),
                     ),
                   ],
@@ -748,7 +739,7 @@ class _ListeningFloatingPlayerCard extends StatelessWidget {
                                           formatDuration(position),
                                           style: theme.textTheme.labelMedium
                                               ?.copyWith(
-                                            color: _muted,
+                                            color: cs.onSurfaceVariant,
                                             fontWeight: FontWeight.w600,
                                             fontFeatures: const [
                                               FontFeature.tabularFigures(),
@@ -759,7 +750,7 @@ class _ListeningFloatingPlayerCard extends StatelessWidget {
                                           formatDuration(duration),
                                           style: theme.textTheme.labelMedium
                                               ?.copyWith(
-                                            color: _muted,
+                                            color: cs.onSurfaceVariant,
                                             fontWeight: FontWeight.w600,
                                             fontFeatures: const [
                                               FontFeature.tabularFigures(),
@@ -809,8 +800,9 @@ class _ListeningFloatingPlayerCard extends StatelessWidget {
                           children: [
                             IconButton(
                               style: IconButton.styleFrom(
-                                backgroundColor: _ink.withValues(alpha: 0.08),
-                                foregroundColor: _ink,
+                                backgroundColor:
+                                    cs.onSurface.withValues(alpha: 0.08),
+                                foregroundColor: cs.onSurface,
                               ),
                               onPressed: controlsEnabled
                                   ? () {
@@ -834,7 +826,10 @@ class _ListeningFloatingPlayerCard extends StatelessWidget {
                               child: Text(
                                 '${speed}x',
                                 style: theme.textTheme.labelLarge?.copyWith(
-                                  color: _ink,
+                                  color:
+                                      learnCreatorModuleActionForegroundColor(
+                                    context,
+                                  ),
                                   fontWeight: FontWeight.w700,
                                 ),
                               ),
@@ -842,9 +837,11 @@ class _ListeningFloatingPlayerCard extends StatelessWidget {
                             IconButton(
                               tooltip: 'Repeat one',
                               style: IconButton.styleFrom(
-                                foregroundColor: repeatOne ? _ink : _muted,
+                                foregroundColor: repeatOne
+                                    ? cs.onSurface
+                                    : cs.onSurfaceVariant,
                                 backgroundColor: repeatOne
-                                    ? _ink.withValues(alpha: 0.08)
+                                    ? cs.onSurface.withValues(alpha: 0.08)
                                     : null,
                               ),
                               onPressed:

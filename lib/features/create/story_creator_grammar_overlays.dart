@@ -2,76 +2,53 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:nimon/features/create/story_creator_models.dart';
 import 'package:nimon/features/create/story_creator_provider.dart';
+import 'package:nimon/features/create/widgets/creator_fit_info_bottom_sheet.dart';
 
 /// Shared overlays (bottom sheets) for the Grammar module.
 abstract final class StoryCreatorGrammarOverlays {
   StoryCreatorGrammarOverlays._();
 
   static void showHowTo(BuildContext context) {
-    final theme = Theme.of(context);
-    final cs = theme.colorScheme;
-    showModalBottomSheet<void>(
+    showCreatorFitInfoBottomSheet(
       context: context,
-      showDragHandle: true,
-      isScrollControlled: true,
-      useSafeArea: true,
-      backgroundColor: cs.surface,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      builder: (ctx) {
-        final mq = MediaQuery.of(ctx);
-        return Padding(
-          padding: EdgeInsets.only(bottom: mq.viewInsets.bottom),
-          child: ConstrainedBox(
-            constraints: BoxConstraints(maxHeight: mq.size.height * 0.78),
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'How to create Grammar patterns',
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const SizedBox(height: 14),
-                  _HelpSection(
-                    title: 'Grammar pattern',
-                    body:
-                        'Add one grammar structure readers should learn from this story.',
-                  ),
-                  const SizedBox(height: 12),
-                  _HelpSection(
-                    title: 'Main input',
-                    body:
-                        'Source language is the main field. This is the primary grammar pattern learners will study.',
-                  ),
-                  const SizedBox(height: 12),
-                  _HelpSection(
-                    title: 'Optional support',
-                    body:
-                        'Common English can be added optionally. Keep optional content collapsed / secondary when possible.',
-                  ),
-                  const SizedBox(height: 12),
-                  _HelpSection(
-                    title: 'Examples',
-                    body:
-                        'Add example sentences to show usage. V1 supports up to 3 examples.',
-                  ),
-                  const SizedBox(height: 12),
-                  _HelpSection(
-                    title: 'Completion',
-                    body:
-                        'Grammar becomes complete only when at least one valid pattern exists.',
-                  ),
-                ],
-              ),
+      title: 'How to create Grammar patterns',
+      children: [
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: const [
+            _HelpSection(
+              title: 'Grammar pattern',
+              body:
+                  'Add one grammar structure readers should learn from this story.',
             ),
-          ),
-        );
-      },
+            SizedBox(height: 12),
+            _HelpSection(
+              title: 'Main input',
+              body:
+                  'Source language is the main field. This is the primary grammar pattern learners will study.',
+            ),
+            SizedBox(height: 12),
+            _HelpSection(
+              title: 'Optional support',
+              body:
+                  'Common English can be added optionally. Keep optional content collapsed / secondary when possible.',
+            ),
+            SizedBox(height: 12),
+            _HelpSection(
+              title: 'Examples',
+              body:
+                  'Add example sentences to show usage. V1 supports up to 3 examples.',
+            ),
+            SizedBox(height: 12),
+            _HelpSection(
+              title: 'Completion',
+              body:
+                  'Grammar becomes complete only when at least one valid pattern exists.',
+            ),
+          ],
+        ),
+      ],
     );
   }
 
@@ -112,6 +89,7 @@ abstract final class StoryCreatorGrammarOverlays {
                 'Test-play grammar',
                 style: theme.textTheme.titleMedium?.copyWith(
                   fontWeight: FontWeight.w700,
+                  color: cs.onSurface,
                 ),
               ),
               const SizedBox(height: 4),
@@ -149,6 +127,7 @@ abstract final class StoryCreatorGrammarOverlays {
                             e.headline,
                             style: theme.textTheme.titleMedium?.copyWith(
                               fontWeight: FontWeight.w800,
+                              color: cs.onSurface,
                             ),
                           ),
                           if (meaningLine(e) != null) ...[

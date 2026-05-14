@@ -5,7 +5,7 @@ import '../../models/episode_meta.dart';
 import '../widgets/episode_action_bar.dart';
 
 /// Shows a floating card Episode Details bottom sheet with Material 3 design.
-/// 
+///
 /// Features:
 /// - Floating card design with 16px margins and 24px top radius
 /// - Opens at 55% height, expandable to 88% via DraggableScrollableSheet
@@ -13,7 +13,7 @@ import '../widgets/episode_action_bar.dart';
 /// - Sticky CTA buttons that never hide behind bottom navigation
 /// - Proper safe area handling and keyboard avoidance
 /// - Dismissible via backdrop tap and drag down
-/// 
+///
 /// Parameters:
 /// - [context]: The build context to show the sheet in
 /// - [meta]: Episode metadata containing all display information
@@ -22,7 +22,7 @@ import '../widgets/episode_action_bar.dart';
 /// - [onShare]: Optional callback when user taps "Share"
 /// - [onTapAuthor]: Optional callback when user taps the author name
 /// - [onTapCategory]: Optional callback when user taps the category
-/// 
+///
 /// Returns a Future that completes when the sheet is dismissed.
 Future<void> showEpisodeDetailsSheet(
   BuildContext context, {
@@ -97,10 +97,12 @@ class _EpisodeDetailsSheetState extends State<EpisodeDetailsSheet> {
     final screenWidth = mediaQuery.size.width;
     final bottomPadding = mediaQuery.viewPadding.bottom;
     final keyboardHeight = mediaQuery.viewInsets.bottom;
-    
+
     // Responsive container width
-    final containerWidth = screenWidth > 600 ? 600.0 : screenWidth - 32; // 16px margin on each side
-    
+    final containerWidth = screenWidth > 600
+        ? 600.0
+        : screenWidth - 32; // 16px margin on each side
+
     return SafeArea(
       top: false,
       bottom: true,
@@ -142,43 +144,45 @@ class _EpisodeDetailsSheetState extends State<EpisodeDetailsSheet> {
                     children: [
                       // Handle pill
                       _buildHandle(colorScheme),
-                          
-                          // Scrollable content
-                          Expanded(
-                            child: SingleChildScrollView(
-                              controller: scrollController,
-                              padding: const EdgeInsets.symmetric(horizontal: 16),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  const SizedBox(height: 8),
-                                  
-                                  // Header
-                                  _buildHeader(context, colorScheme, textTheme),
-                                  
-                                  // Divider
-                                  Container(
-                                    margin: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
-                                    height: 1,
-                                    color: colorScheme.onSurface.withOpacity(0.06),
-                                  ),
-                                  
-                                  // Episode Preview section
-                                  if (widget.meta.preview.isNotEmpty) ...[
-                                    _buildPreviewSection(context, colorScheme, textTheme),
-                                    const SizedBox(height: 16),
-                                  ],
-                                  
-                                  // Stats row
-                                  _buildStatsRow(context, colorScheme, textTheme),
-                                  
-                                  // Bottom spacing for sticky actions
-                                  const SizedBox(height: 80),
-                                ],
+
+                      // Scrollable content
+                      Expanded(
+                        child: SingleChildScrollView(
+                          controller: scrollController,
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const SizedBox(height: 8),
+
+                              // Header
+                              _buildHeader(context, colorScheme, textTheme),
+
+                              // Divider
+                              Container(
+                                margin: const EdgeInsets.symmetric(
+                                    vertical: 16, horizontal: 16),
+                                height: 1,
+                                color: colorScheme.onSurface.withOpacity(0.06),
                               ),
-                            ),
+
+                              // Episode Preview section
+                              if (widget.meta.preview.isNotEmpty) ...[
+                                _buildPreviewSection(
+                                    context, colorScheme, textTheme),
+                                const SizedBox(height: 16),
+                              ],
+
+                              // Stats row
+                              _buildStatsRow(context, colorScheme, textTheme),
+
+                              // Bottom spacing for sticky actions
+                              const SizedBox(height: 80),
+                            ],
                           ),
-                          
+                        ),
+                      ),
+
                       // Episode action bar
                       _buildActionBar(context, bottomPadding, keyboardHeight),
                     ],
@@ -214,9 +218,9 @@ class _EpisodeDetailsSheetState extends State<EpisodeDetailsSheet> {
       children: [
         // Cover image
         _buildCoverImage(colorScheme),
-        
+
         const SizedBox(width: 16),
-        
+
         // Title and metadata
         Expanded(
           child: Column(
@@ -232,9 +236,9 @@ class _EpisodeDetailsSheetState extends State<EpisodeDetailsSheet> {
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
               ),
-              
+
               const SizedBox(height: 6),
-              
+
               // Episode number
               Text(
                 widget.meta.episodeNo,
@@ -243,15 +247,16 @@ class _EpisodeDetailsSheetState extends State<EpisodeDetailsSheet> {
                   fontWeight: FontWeight.w500,
                 ),
               ),
-              
+
               const SizedBox(height: 8),
-              
+
               // Author row
               InkWell(
                 onTap: widget.onTapAuthor,
                 borderRadius: BorderRadius.circular(6),
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 2, horizontal: 2),
+                  padding:
+                      const EdgeInsets.symmetric(vertical: 2, horizontal: 2),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
@@ -277,9 +282,9 @@ class _EpisodeDetailsSheetState extends State<EpisodeDetailsSheet> {
             ],
           ),
         ),
-        
+
         const SizedBox(width: 12),
-        
+
         // JLPT chip
         _buildJLPTChip(colorScheme, textTheme),
       ],
@@ -299,7 +304,8 @@ class _EpisodeDetailsSheetState extends State<EpisodeDetailsSheet> {
               ? Image.network(
                   widget.meta.coverUrl,
                   fit: BoxFit.cover,
-                  errorBuilder: (context, error, stackTrace) => _buildPlaceholderCover(colorScheme),
+                  errorBuilder: (context, error, stackTrace) =>
+                      _buildPlaceholderCover(colorScheme),
                 )
               : _buildPlaceholderCover(colorScheme),
         ),
@@ -356,7 +362,7 @@ class _EpisodeDetailsSheetState extends State<EpisodeDetailsSheet> {
             ),
           ),
         ),
-        
+
         // Preview card
         Container(
           width: double.infinity,
@@ -400,7 +406,7 @@ class _EpisodeDetailsSheetState extends State<EpisodeDetailsSheet> {
             colorScheme: colorScheme,
             textTheme: textTheme,
           ),
-          
+
           // Read time - static size
           _buildStatItem(
             icon: Icons.access_time,
@@ -409,7 +415,7 @@ class _EpisodeDetailsSheetState extends State<EpisodeDetailsSheet> {
             colorScheme: colorScheme,
             textTheme: textTheme,
           ),
-          
+
           // Category (tappable) - static size
           InkWell(
             onTap: widget.onTapCategory,
@@ -473,7 +479,8 @@ class _EpisodeDetailsSheetState extends State<EpisodeDetailsSheet> {
     double keyboardHeight,
   ) {
     return Container(
-      padding: EdgeInsets.fromLTRB(0, 12, 0, bottomPadding + keyboardHeight + 4),
+      padding:
+          EdgeInsets.fromLTRB(0, 12, 0, bottomPadding + keyboardHeight + 4),
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surface,
         border: Border(

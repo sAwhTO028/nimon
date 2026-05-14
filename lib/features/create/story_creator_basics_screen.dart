@@ -8,10 +8,11 @@ import 'package:image_picker/image_picker.dart';
 import 'package:nimon/features/auth/auth_providers.dart';
 import 'package:nimon/features/auth/auth_session_state.dart';
 import 'package:nimon/features/create/create_story_basics_form.dart';
-import 'package:nimon/features/create/data/media_upload_repository.dart';
 import 'package:nimon/features/create/data/media_upload_repository_provider.dart';
 import 'package:nimon/features/create/story_basics_cover_upload_outcome.dart';
 import 'package:nimon/features/create/story_basics_remote_cover_url.dart';
+import 'package:nimon/core/media/media_upload_error_mapper.dart';
+import 'package:nimon/core/validation/localized_validation_messages.dart';
 import 'package:nimon/features/create/creator_back_policy.dart';
 import 'package:nimon/features/create/creator_route_sync_listener.dart';
 import 'package:nimon/features/create/story_creator_provider.dart';
@@ -40,7 +41,14 @@ class _StoryCreatorBasicsScreenState
     if (tok == null || tok.accessToken.trim().isEmpty) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Sign in to upload cover images.')),
+          SnackBar(
+            content: Text(
+              validationMessageKeyLocalized(
+                context,
+                'protected.uploadMedia.login',
+              ),
+            ),
+          ),
         );
       }
       return StoryBasicsCoverUploadOutcome.pendingLocal(inlineHint: null);
@@ -48,14 +56,22 @@ class _StoryCreatorBasicsScreenState
     try {
       final r = await ref.read(mediaUploadRepositoryProvider).uploadCover(file);
       return StoryBasicsCoverUploadOutcome.ok(r);
-    } on MediaUploadException catch (e) {
+    } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.userMessage)),
+          SnackBar(
+            content: Text(
+              mediaUploadUserMessageLocalized(
+                context,
+                e,
+                surface: MediaUploadSurface.storyCover,
+              ),
+            ),
+          ),
         );
       }
       return StoryBasicsCoverUploadOutcome.pendingLocal(
-        inlineHint: coverUploadFailureInlineHint(e),
+        inlineHint: coverUploadFailureInlineHintLocalized(context, e),
       );
     }
   }

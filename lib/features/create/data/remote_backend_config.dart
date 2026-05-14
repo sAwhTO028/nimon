@@ -15,6 +15,16 @@ abstract final class RemoteBackendConfig {
     defaultValue: 'http://localhost:3000',
   );
 
+  /// Public web origin for share links (`/mono/:id`). **Not** the uploads base
+  /// ([MEDIA_PUBLIC_BASE_URL] on the server). Leave empty to prefer the backend
+  /// [MonoFeedItem.shareUrl]; optional fallback uses [apiBaseUrl] when it is not loopback.
+  ///
+  /// `--dart-define=NIMON_PUBLIC_WEB_BASE_URL=http://192.168.11.5:3000`
+  static const String publicWebBaseUrl = String.fromEnvironment(
+    'NIMON_PUBLIC_WEB_BASE_URL',
+    defaultValue: '',
+  );
+
   /// Dev owner id sent on draft writes (`basics.ownerId` / `creatorOwnerId`).
   ///
   /// Must match the Nest `DEV_OWNER_ID` env var when set, otherwise the backend

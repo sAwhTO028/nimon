@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+import 'package:nimon/core/validation/app_quota_exceeded_exception.dart';
 import 'package:nimon/features/create/data/remote_backend_config.dart';
 import 'package:nimon/features/profile/data/published_mono_catalog_visibility_exception.dart';
 import 'package:nimon/features/profile/data/published_mono_dto.dart';
@@ -12,6 +13,8 @@ import 'package:nimon/features/profile/presentation/providers/profile_published_
 import 'package:nimon/features/profile/presentation/permanent_delete_confirm_dialog.dart';
 import 'package:nimon/features/profile/presentation/providers/profile_trashed_published_mono_pager.dart';
 import 'package:nimon/features/profile/profile_processing_refresh.dart';
+import 'package:nimon/ui/blocking_loading_overlay.dart';
+import 'package:nimon/ui/quota_exceeded_dialog.dart';
 import 'package:nimon/ui/widgets/nimon_circle_nav_button.dart';
 
 /// Owner Trash list for published monos (`GET /v1/published-monos?trashed=true`).
@@ -24,6 +27,7 @@ class ProfileTrashScreen extends ConsumerStatefulWidget {
 
 class _ProfileTrashScreenState extends ConsumerState<ProfileTrashScreen> {
   ProviderSubscription<int>? _trashBumpSub;
+  bool _publishedMonoMutationBusy = false;
 
   @override
   void initState() {
@@ -79,13 +83,31 @@ class _ProfileTrashScreenState extends ConsumerState<ProfileTrashScreen> {
       ),
     );
     if (go != true || !mounted) return;
-
+    if (_publishedMonoMutationBusy) return;
+    _publishedMonoMutationBusy = true;
+    final closeLoading = showBlockingLoadingOverlay(context, 'Restoring…');
+    AppQuotaExceededException? quota;
+    Object? otherErr;
     try {
       await repo.restorePublishedMono(row.id);
+    } on AppQuotaExceededException catch (e) {
+      quota = e;
     } catch (e) {
+      otherErr = e;
+    } finally {
+      closeLoading();
+      if (mounted) _publishedMonoMutationBusy = false;
+    }
+
+    if (quota != null) {
+      if (!mounted) return;
+      await showQuotaExceededDialog(context, quota);
+      return;
+    }
+    if (otherErr != null) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString())),
+        SnackBar(content: Text(otherErr.toString())),
       );
       return;
     }
@@ -152,12 +174,30 @@ class _ProfileTrashScreenState extends ConsumerState<ProfileTrashScreen> {
       builder: (_) => const PermanentDeleteTypedConfirmDialog(),
     );
     if (step2 != true || !mounted) return;
-
+    if (_publishedMonoMutationBusy) return;
+    _publishedMonoMutationBusy = true;
+    final closeLoading = showBlockingLoadingOverlay(context, 'Deleting…');
+    AppQuotaExceededException? quotaDel;
+    Object? otherDelErr;
     try {
       await repo.permanentlyDeletePublishedMono(row.id);
+    } on AppQuotaExceededException catch (e) {
+      quotaDel = e;
     } catch (e) {
+      otherDelErr = e;
+    } finally {
+      closeLoading();
+      if (mounted) _publishedMonoMutationBusy = false;
+    }
+
+    if (quotaDel != null) {
       if (!mounted) return;
-      final msg = e.toString();
+      await showQuotaExceededDialog(context, quotaDel);
+      return;
+    }
+    if (otherDelErr != null) {
+      if (!mounted) return;
+      final msg = otherDelErr.toString();
       // For 404 already-deleted, refresh so the row disappears.
       if (msg.contains('already deleted')) {
         bumpPublishedMonoTrashSurfacesRefresh(

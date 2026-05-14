@@ -112,4 +112,49 @@ void main() {
     });
     expect(p2.effectiveDisplayName, 'Creator');
   });
+
+  test('PublicCreatorProfile.fromJson nested profile and writer (M17B-2)', () {
+    final nested = PublicCreatorProfile.fromJson({
+      'userId': 'u1',
+      'profile': {'display_name': 'Nested', 'handle': 'nh'},
+      'followersCount': 0,
+      'followingCount': 0,
+      'isFollowingByMe': false,
+    });
+    expect(nested.displayName, 'Nested');
+    expect(nested.handle, 'nh');
+
+    final writer = PublicCreatorProfile.fromJson({
+      'userId': 'u2',
+      'writer': {'writerDisplayName': 'W', 'writerHandle': '@w'},
+      'followersCount': 0,
+      'followingCount': 0,
+      'isFollowingByMe': false,
+    });
+    expect(writer.displayName, 'W');
+    expect(writer.handle, '@w');
+  });
+
+  test('applyMonoWriterIdentityFallback copies feed writer fields', () {
+    const base = PublicCreatorProfile(
+      userId: 'u1',
+      handle: null,
+      displayName: null,
+      username: null,
+      avatarUrl: null,
+      coverImageUrl: null,
+      bio: 'b',
+      followersCount: 0,
+      followingCount: 0,
+      isFollowingByMe: false,
+    );
+    final m = applyMonoWriterIdentityFallback(
+      base,
+      monoWriterId: 'u1',
+      monoWriterName: 'From Feed',
+      monoWriterHandle: '@feed',
+    );
+    expect(m.displayName, 'From Feed');
+    expect(m.handle, '@feed');
+  });
 }

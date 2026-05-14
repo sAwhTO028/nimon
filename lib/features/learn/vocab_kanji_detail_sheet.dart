@@ -19,13 +19,14 @@ void showVocabKanjiDetailSheet(
     isScrollControlled: true,
     useSafeArea: true,
     showDragHandle: true,
-    backgroundColor: const Color(0xFFF6F3EA),
+    backgroundColor: Theme.of(context).colorScheme.surface,
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
     ),
     builder: (ctx) {
+      final bottom = MediaQuery.viewInsetsOf(ctx).bottom;
       return Padding(
-        padding: const EdgeInsets.fromLTRB(20, 4, 20, 16),
+        padding: EdgeInsets.fromLTRB(20, 4, 20, 16 + bottom),
         child: SingleChildScrollView(
           child: _VocabKanjiDetailSheetBody(item: item),
         ),
@@ -39,12 +40,10 @@ class _VocabKanjiDetailSheetBody extends ConsumerWidget {
 
   final VocabKanjiItem item;
 
-  static const _ink = Color(0xFF1A1917);
-  static const _inkMuted = Color(0xFF5C5A55);
-
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
+    final cs = theme.colorScheme;
     final lang = ref.watch(learnExplanationLanguageProvider);
     final meaningLine = pickSupportText(
       lang,
@@ -70,7 +69,7 @@ class _VocabKanjiDetailSheetBody extends ConsumerWidget {
           child: Text(
             item.term,
             style: theme.textTheme.headlineSmall?.copyWith(
-              color: _ink,
+              color: cs.onSurface,
               fontWeight: FontWeight.w900,
               height: 1.2,
             ),
@@ -82,7 +81,7 @@ class _VocabKanjiDetailSheetBody extends ConsumerWidget {
           child: Text(
             item.reading,
             style: theme.textTheme.titleMedium?.copyWith(
-              color: _inkMuted,
+              color: cs.onSurfaceVariant,
               fontWeight: FontWeight.w700,
               height: 1.35,
             ),
@@ -94,7 +93,7 @@ class _VocabKanjiDetailSheetBody extends ConsumerWidget {
           child: Text(
             meaningLine ?? '—',
             style: theme.textTheme.bodyLarge?.copyWith(
-              color: _ink,
+              color: cs.onSurface,
               fontWeight: FontWeight.w600,
               height: 1.45,
             ),
@@ -111,7 +110,7 @@ class _VocabKanjiDetailSheetBody extends ConsumerWidget {
                   Text(
                     exJp,
                     style: theme.textTheme.bodyLarge?.copyWith(
-                      color: _ink,
+                      color: cs.onSurface,
                       fontWeight: FontWeight.w600,
                       height: 1.45,
                     ),
@@ -125,7 +124,7 @@ class _VocabKanjiDetailSheetBody extends ConsumerWidget {
                   Text(
                     exGloss,
                     style: theme.textTheme.bodyMedium?.copyWith(
-                      color: _inkMuted,
+                      color: cs.onSurfaceVariant,
                       fontWeight: FontWeight.w500,
                       height: 1.45,
                     ),
@@ -141,7 +140,7 @@ class _VocabKanjiDetailSheetBody extends ConsumerWidget {
             child: Text(
               src,
               style: theme.textTheme.bodyMedium?.copyWith(
-                color: _inkMuted,
+                color: cs.onSurfaceVariant,
                 fontWeight: FontWeight.w600,
                 height: 1.4,
               ),
@@ -162,18 +161,17 @@ class _SheetSection extends StatelessWidget {
   final String label;
   final Widget child;
 
-  static const _inkMuted = Color(0xFF5C5A55);
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final cs = theme.colorScheme;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           label,
           style: theme.textTheme.labelLarge?.copyWith(
-            color: _inkMuted,
+            color: cs.onSurfaceVariant,
             fontWeight: FontWeight.w800,
             letterSpacing: 0.2,
           ),

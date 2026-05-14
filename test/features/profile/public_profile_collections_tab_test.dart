@@ -142,16 +142,12 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(
-        find.byKey(const Key('public_profile_mono_collections_segments')),
+        find.byKey(const ValueKey('publicProfileTabBar')),
         findsOneWidget,
       );
+      expect(find.text('No published monos yet.'), findsOneWidget);
 
-      await tester.tap(
-        find.descendant(
-          of: find.byKey(const Key('public_profile_mono_collections_segments')),
-          matching: find.text('Collections'),
-        ),
-      );
+      await tester.tap(find.widgetWithText(Tab, 'Collections'));
       await tester.pumpAndSettle();
 
       expect(find.text('No collections yet.'), findsOneWidget);
@@ -237,12 +233,7 @@ void main() {
 
       await tester.pumpAndSettle();
 
-      await tester.tap(
-        find.descendant(
-          of: find.byKey(const Key('public_profile_mono_collections_segments')),
-          matching: find.text('Collections'),
-        ),
-      );
+      await tester.tap(find.widgetWithText(Tab, 'Collections'));
       await tester.pumpAndSettle();
 
       expect(find.text('3 stories'), findsOneWidget);
@@ -260,4 +251,98 @@ void main() {
       expect(find.text('reader'), findsOneWidget);
     },
   );
+
+  testWidgets('M14I: public profile TabBar switches Monos and Collections',
+      (tester) async {
+    final router = GoRouter(
+      initialLocation: '/profile/public?userId=u1',
+      routes: [
+        GoRoute(
+          path: '/profile/public',
+          builder: (c, s) => PublicProfileScreen(
+            userId: s.uri.queryParameters['userId'],
+          ),
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          remotePublicCreatorProfileRepositoryProvider.overrideWithValue(
+            _FakePublicProfileRepo(profile: profile, monoPage: emptyMonoPage),
+          ),
+          remoteCreatorCollectionsRepositoryProvider.overrideWithValue(
+            _FakeCollRepo(collections: const []),
+          ),
+        ],
+        child: MaterialApp.router(routerConfig: router),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('publicProfileTabBar')), findsOneWidget);
+    expect(find.widgetWithText(Tab, 'Monos'), findsOneWidget);
+    expect(find.widgetWithText(Tab, 'Collections'), findsOneWidget);
+    expect(find.text('No published monos yet.'), findsOneWidget);
+
+    await tester.tap(find.widgetWithText(Tab, 'Collections'));
+    await tester.pumpAndSettle();
+    expect(find.text('No collections yet.'), findsOneWidget);
+    expect(find.text('No published monos yet.'), findsNothing);
+
+    await tester.tap(find.widgetWithText(Tab, 'Monos'));
+    await tester.pumpAndSettle();
+    expect(find.text('No published monos yet.'), findsOneWidget);
+    expect(find.text('No collections yet.'), findsNothing);
+  });
+
+  testWidgets('M14I: public profile TabBar is visible in dark theme',
+      (tester) async {
+    final darkTheme = ThemeData(
+      useMaterial3: true,
+      brightness: Brightness.dark,
+      colorScheme: ColorScheme.fromSeed(
+        seedColor: const Color(0xFF2563EB),
+        brightness: Brightness.dark,
+      ),
+    );
+
+    final router = GoRouter(
+      initialLocation: '/profile/public?userId=u1',
+      routes: [
+        GoRoute(
+          path: '/profile/public',
+          builder: (c, s) => PublicProfileScreen(
+            userId: s.uri.queryParameters['userId'],
+          ),
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          remotePublicCreatorProfileRepositoryProvider.overrideWithValue(
+            _FakePublicProfileRepo(profile: profile, monoPage: emptyMonoPage),
+          ),
+          remoteCreatorCollectionsRepositoryProvider.overrideWithValue(
+            _FakeCollRepo(collections: const []),
+          ),
+        ],
+        child: MaterialApp.router(
+          theme: darkTheme,
+          routerConfig: router,
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('publicProfileTabBar')), findsOneWidget);
+    expect(find.widgetWithText(Tab, 'Monos'), findsOneWidget);
+    expect(find.widgetWithText(Tab, 'Collections'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
 }

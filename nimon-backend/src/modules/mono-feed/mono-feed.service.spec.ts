@@ -1,8 +1,44 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { canonicalizeMediaUrl } from '../media/media-url-canonicalizer';
+import type { MediaUrlCanonicalizerService } from '../media/media-url-canonicalizer.service';
+import type { PublicWebBaseUrlService } from '../common/public-web-base-url.service';
 import { PUBLISHED_MONO_CATALOG_VISIBLE } from '../published-monos/published-mono-visibility';
 import { MonoFeedService } from './mono-feed.service';
 
+const DEFAULT_CANON_BASE = 'http://localhost:3000/uploads';
+
+function mkMedia(
+  base: string = DEFAULT_CANON_BASE,
+): MediaUrlCanonicalizerService {
+  return {
+    mediaPublicBaseUrl: () => base,
+    url: (u: string | null | undefined) => canonicalizeMediaUrl(u, base),
+  } as unknown as MediaUrlCanonicalizerService;
+}
+
+function mkPublicWeb(webBase = 'http://localhost:3000'): PublicWebBaseUrlService {
+  const b = webBase.replace(/\/+$/, '') || 'http://localhost:3000';
+  return {
+    baseUrl: () => b,
+    monoShareUrl: (id: string) => `${b}/mono/${id.trim()}`,
+  } as unknown as PublicWebBaseUrlService;
+}
+
 describe('MonoFeedService', () => {
+  const feedLocaleWhere = (
+    contentLocale: 'en' | 'my' | 'ja',
+    learningLanguage: 'ja',
+  ) => ({
+    AND: [
+      {
+        OR: [{ contentLocale }, { contentLocale: null }],
+      },
+      {
+        OR: [{ learningLanguage }, { learningLanguage: null }],
+      },
+    ],
+  });
+
   const t0 = new Date('2026-01-15T12:00:00.000Z');
   const t1 = new Date('2026-01-10T10:00:00.000Z');
   const id0 = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
@@ -30,11 +66,17 @@ describe('MonoFeedService', () => {
     },
   };
 
-  const mkSvc = () => {
+  const mkSvc = (
+    mediaBase: string = DEFAULT_CANON_BASE,
+    webBase = 'http://localhost:3000',
+  ) => {
     const findMany = jest.fn();
     const findFirst = jest.fn();
     const prisma = {
       publishedMono: { findMany, findFirst },
+      userPreference: {
+        findUnique: jest.fn().mockResolvedValue(null),
+      },
       userProfile: {
         findUnique: jest.fn().mockResolvedValue({
           displayName: 'Writer',
@@ -45,8 +87,63 @@ describe('MonoFeedService', () => {
       monoReaction: { groupBy: jest.fn().mockResolvedValue([]), count: jest.fn().mockResolvedValue(0), findMany: jest.fn().mockResolvedValue([]), findFirst: jest.fn().mockResolvedValue(null) },
       monoBookmark: { findMany: jest.fn().mockResolvedValue([]), count: jest.fn().mockResolvedValue(0) },
     } as any;
-    return { svc: new MonoFeedService(prisma), findMany, findFirst };
+    return {
+      svc: new MonoFeedService(prisma, mkMedia(mediaBase), mkPublicWeb(webBase)),
+      findMany,
+      findFirst,
+    };
   };
+
+  it('shareUrl uses NIMON_PUBLIC_WEB_BASE_URL host (not media base)', async () => {
+    const row = {
+      ...sampleRow,
+      owner: {
+        profile: {
+          displayName: 'Writer',
+          handle: '@writer',
+          avatarUrl: 'https://cdn.example/a.png',
+        },
+      },
+    };
+    const { svc, findMany } = mkSvc(
+      'http://192.168.11.5:3000/uploads',
+      'http://192.168.11.5:3000',
+    );
+    findMany.mockResolvedValue([row]);
+    const out = await svc.listFeed({ limit: 15, userId: null });
+    expect(out.items[0]!.shareUrl).toBe(
+      'http://192.168.11.5:3000/mono/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+    );
+  });
+
+  it('rewrites loopback upload coverUrl and writerAvatarUrl using MEDIA_PUBLIC_BASE_URL', async () => {
+    const row = {
+      ...sampleRow,
+      content: {
+        publishKind: 'read_only_v1',
+        core: {
+          coverImageUrl: 'http://localhost:3000/uploads/u/cover/a.webp',
+        },
+      },
+      owner: {
+        profile: {
+          displayName: 'Writer',
+          handle: '@writer',
+          avatarUrl: 'http://127.0.0.1:3000/uploads/u/cover/av.webp',
+        },
+      },
+    };
+    const { svc, findMany } = mkSvc('http://192.168.11.5:3000/uploads');
+    findMany.mockResolvedValue([row]);
+    const out = await svc.listFeed({ limit: 15, userId: null });
+    const it = out.items[0]!;
+    expect(it.coverUrl).toBe(
+      'http://192.168.11.5:3000/uploads/u/cover/a.webp',
+    );
+    expect(it.writerAvatarUrl).toBe(
+      'http://192.168.11.5:3000/uploads/u/cover/av.webp',
+    );
+  });
 
   it('list returns items with slim summary fields (no content in response)', async () => {
     const { svc, findMany } = mkSvc();
@@ -106,6 +203,7 @@ describe('MonoFeedService', () => {
         where: {
           AND: [
             PUBLISHED_MONO_CATALOG_VISIBLE,
+            feedLocaleWhere('en', 'ja'),
             { level: 'N4' },
             { category: 'Culture' },
           ],
@@ -127,6 +225,7 @@ describe('MonoFeedService', () => {
         where: {
           AND: expect.arrayContaining([
             PUBLISHED_MONO_CATALOG_VISIBLE,
+            feedLocaleWhere('en', 'ja'),
             { ownerId: sampleRow.ownerId },
           ]),
         },
@@ -141,10 +240,76 @@ describe('MonoFeedService', () => {
     expect(findMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: {
-          AND: expect.arrayContaining([PUBLISHED_MONO_CATALOG_VISIBLE]),
+          AND: expect.arrayContaining([
+            PUBLISHED_MONO_CATALOG_VISIBLE,
+            feedLocaleWhere('en', 'ja'),
+          ]),
         },
       }),
     );
+  });
+
+  it('authenticated feed uses saved preferences when params absent', async () => {
+    const { svc, findMany } = mkSvc();
+    findMany.mockResolvedValue([]);
+    (svc as any).prisma.userPreference.findUnique.mockResolvedValue({
+      contentLocale: 'my',
+      learningLanguage: 'ja',
+    });
+    await svc.listFeed({ limit: 15, userId: 'u1' });
+    expect(findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          AND: expect.arrayContaining([feedLocaleWhere('my', 'ja')]),
+        },
+      }),
+    );
+  });
+
+  it('query params override saved preferences', async () => {
+    const { svc, findMany } = mkSvc();
+    findMany.mockResolvedValue([]);
+    (svc as any).prisma.userPreference.findUnique.mockResolvedValue({
+      contentLocale: 'my',
+      learningLanguage: 'ja',
+    });
+    await svc.listFeed({
+      limit: 15,
+      userId: 'u1',
+      contentLocale: 'en',
+      learningLanguage: 'ja',
+    });
+    expect(findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          AND: expect.arrayContaining([feedLocaleWhere('en', 'ja')]),
+        },
+      }),
+    );
+  });
+
+  it('invalid stored preferences fall back to defaults (no throw)', async () => {
+    const { svc, findMany } = mkSvc();
+    findMany.mockResolvedValue([]);
+    (svc as any).prisma.userPreference.findUnique.mockResolvedValue({
+      contentLocale: 'not-a-locale',
+      learningLanguage: 'ko',
+    });
+    await svc.listFeed({ limit: 15, userId: 'u1' });
+    expect(findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          AND: expect.arrayContaining([feedLocaleWhere('en', 'ja')]),
+        },
+      }),
+    );
+  });
+
+  it('invalid query contentLocale throws', async () => {
+    const { svc } = mkSvc();
+    await expect(
+      svc.listFeed({ limit: 15, userId: null, contentLocale: 'th' }),
+    ).rejects.toBeInstanceOf(BadRequestException);
   });
 
   it('PUBLISHED_MONO_CATALOG_VISIBLE excludes trashed rows', () => {

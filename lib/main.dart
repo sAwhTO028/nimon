@@ -1,7 +1,6 @@
 import 'dart:ui' show PlatformDispatcher;
 
 import 'package:flutter/material.dart';
-import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:nimon/features/mono/mono_reader_menu_origin.dart';
@@ -39,10 +38,15 @@ import 'package:nimon/features/create/story_creator_add_tab_screen.dart';
 import 'package:nimon/features/create/story_creator_basics_screen.dart';
 import 'package:nimon/features/create/creator_back_policy.dart';
 import 'package:nimon/features/create/story_creator_sentences_screen.dart';
+import 'package:nimon/core/networking/connectivity_status.dart';
 import 'package:nimon/core/theme.dart';
 import 'package:nimon/features/settings/help_feedback_screen.dart';
-import 'package:nimon/features/settings/settings_providers.dart';
 import 'package:nimon/features/settings/settings_screen.dart';
+import 'package:nimon/features/settings/app_locale_resolver.dart';
+import 'package:nimon/features/settings/theme_mode_resolver.dart';
+import 'package:nimon/features/settings/reading_text_scale.dart';
+import 'package:nimon/features/settings/presentation/providers/user_preferences_notifier.dart';
+import 'package:nimon/l10n/app_localizations.dart';
 import 'package:nimon/ui/app_messenger.dart';
 import 'package:nimon/widgets/floating_dock_nav_bar.dart';
 
@@ -510,9 +514,21 @@ class _NimonAppState extends ConsumerState<NimonApp> {
 
   @override
   Widget build(BuildContext context) {
-    final themeMode = ref.watch(themeModeSettingProvider);
-    final appLocale = ref.watch(appLocaleSettingProvider);
-    final readingScale = ref.watch(readingTextScaleSettingProvider);
+    ref.listen<AsyncValue<NimonConnectivityStatus>>(
+      nimonConnectivityStatusProvider,
+      (previous, next) {
+        next.whenOrNull(
+          data: (status) =>
+              syncNimonNetworkOnlinePodFromStatus(ref.read, status),
+        );
+      },
+    );
+
+    final prefs = ref.watch(userPreferencesNotifierProvider);
+    final themeMode = resolveThemeModeFromPreference(prefs.prefs.themeMode);
+    final code = prefs.prefs.appLocale;
+    final Locale? appLocale = resolveMaterialLocaleFromAppLocaleCode(code);
+    final readingScale = readingTextLinearScale(prefs.prefs.readingTextSize);
 
     return MaterialApp.router(
       routerConfig: _router,
@@ -522,15 +538,8 @@ class _NimonAppState extends ConsumerState<NimonApp> {
       darkTheme: buildDarkTheme(),
       themeMode: themeMode,
       locale: appLocale,
-      supportedLocales: const [
-        Locale('en'),
-        Locale('ja'),
-      ],
-      localizationsDelegates: const [
-        GlobalMaterialLocalizations.delegate,
-        GlobalWidgetsLocalizations.delegate,
-        GlobalCupertinoLocalizations.delegate,
-      ],
+      supportedLocales: AppLocalizations.supportedLocales,
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
       builder: (context, child) {
         final mq = MediaQuery.of(context);
         return MediaQuery(

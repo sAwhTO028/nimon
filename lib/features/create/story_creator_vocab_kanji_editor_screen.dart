@@ -17,11 +17,15 @@ import 'package:nimon/features/create/creator_route_sync_listener.dart';
 import 'package:nimon/features/create/creator_workspace_step.dart';
 import 'package:nimon/features/create/story_creator_furigana_tokens.dart';
 import 'package:nimon/features/create/story_creator_models.dart';
+import 'package:nimon/features/create/widgets/creator_fit_info_bottom_sheet.dart';
+import 'package:nimon/features/create/widgets/creator_info_bottom_sheet.dart';
 import 'package:nimon/features/create/story_creator_provider.dart';
 import 'package:nimon/features/create/story_creator_review_display.dart';
 import 'package:nimon/ui/reading/nimon_furigana_preview_style.dart';
 import 'package:nimon/ui/reading/nimon_japanese_sentence_line.dart';
 import 'package:nimon/ui/widgets/nimon_circle_nav_button.dart';
+import 'package:nimon/core/design_system/nimon_color_tokens.dart';
+import 'package:nimon/features/learn/learn_creator_module_tokens.dart';
 
 /// Keeps the Story sentences host on the embedded Vocabulary panel after local edits
 /// (no navigation; no-op when not on that host).
@@ -57,10 +61,6 @@ void _retainEmbeddedVocabularyPanel(
 /// Manual V1 editor for the Vocabulary / Kanji Learn module (one story draft).
 class StoryCreatorVocabKanjiEditorScreen extends ConsumerWidget {
   const StoryCreatorVocabKanjiEditorScreen({super.key});
-
-  static const _ink = Color(0xFF1A1917);
-  static const _muted = Color(0xFF5C5A55);
-  static const _sheetBg = Color(0xFFF6F3EA);
 
   static String _normalizeSelectedTerm(String raw) {
     final t = raw.replaceAll('\n', ' ').replaceAll(RegExp(r'\s+'), ' ').trim();
@@ -267,7 +267,7 @@ class StoryCreatorVocabKanjiEditorScreen extends ConsumerWidget {
       enableDrag: true,
       useSafeArea: true,
       showDragHandle: true,
-      backgroundColor: _sheetBg,
+      backgroundColor: Theme.of(context).colors.surface,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -298,7 +298,7 @@ class StoryCreatorVocabKanjiEditorScreen extends ConsumerWidget {
       isScrollControlled: true,
       useSafeArea: true,
       showDragHandle: true,
-      backgroundColor: _sheetBg,
+      backgroundColor: Theme.of(context).colors.surface,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -316,7 +316,7 @@ class StoryCreatorVocabKanjiEditorScreen extends ConsumerWidget {
       isScrollControlled: true,
       useSafeArea: true,
       showDragHandle: true,
-      backgroundColor: _sheetBg,
+      backgroundColor: Theme.of(context).colors.surface,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -325,59 +325,21 @@ class StoryCreatorVocabKanjiEditorScreen extends ConsumerWidget {
   }
 
   static void _showVocabHowTo(BuildContext context) {
-    final theme = Theme.of(context);
-    final cs = theme.colorScheme;
-    showModalBottomSheet<void>(
+    showCreatorFitInfoBottomSheet(
       context: context,
-      showDragHandle: true,
-      isScrollControlled: true,
-      useSafeArea: true,
-      backgroundColor: cs.surface,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      builder: (ctx) {
-        final mq = MediaQuery.of(ctx);
-        return Padding(
-          padding: EdgeInsets.only(bottom: mq.viewInsets.bottom),
-          child: ConstrainedBox(
-            constraints: BoxConstraints(maxHeight: mq.size.height * 0.75),
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'How to add vocabulary / kanji',
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  _VocabLearnHowBullet(
-                    text: 'Tap Add entry.',
-                  ),
-                  _VocabLearnHowBullet(
-                    text: 'Select a word or phrase from the story.',
-                  ),
-                  _VocabLearnHowBullet(
-                    text: 'Choose Vocabulary or Kanji.',
-                  ),
-                  _VocabLearnHowBullet(
-                    text: 'Add source meaning first.',
-                  ),
-                  _VocabLearnHowBullet(
-                    text: 'Optionally add English meaning.',
-                  ),
-                  _VocabLearnHowBullet(
-                    text: 'Optionally add up to 3 example sentences.',
-                  ),
-                ],
-              ),
-            ),
-          ),
-        );
-      },
+      title: 'How to add vocabulary / kanji',
+      children: const [
+        CreatorInfoBulletColumn(
+          lines: [
+            'Tap Add entry.',
+            'Select a word or phrase from the story.',
+            'Choose Vocabulary or Kanji.',
+            'Add source meaning first.',
+            'Optionally add English meaning.',
+            'Optionally add up to 3 example sentences.',
+          ],
+        ),
+      ],
     );
   }
 
@@ -447,6 +409,7 @@ class StoryCreatorVocabKanjiEditorScreen extends ConsumerWidget {
                                   e.termJapanese,
                                   style: theme.textTheme.titleMedium?.copyWith(
                                     fontWeight: FontWeight.w800,
+                                    color: cs.onSurface,
                                   ),
                                 ),
                               ),
@@ -492,40 +455,6 @@ class StoryCreatorVocabKanjiEditorScreen extends ConsumerWidget {
   }
 }
 
-class _VocabLearnHowBullet extends StatelessWidget {
-  const _VocabLearnHowBullet({required this.text});
-
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final cs = theme.colorScheme;
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.only(top: 3),
-            child: Icon(Icons.circle, size: 8, color: cs.primary),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              text,
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: cs.onSurface,
-                height: 1.35,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 class _VocabTermEditBottomSheet extends ConsumerStatefulWidget {
   const _VocabTermEditBottomSheet({required this.existing});
 
@@ -538,9 +467,6 @@ class _VocabTermEditBottomSheet extends ConsumerStatefulWidget {
 
 class _VocabTermEditBottomSheetState
     extends ConsumerState<_VocabTermEditBottomSheet> {
-  static const _ink = Color(0xFF1A1917);
-  static const _muted = Color(0xFF5C5A55);
-
   late final TextEditingController _termCtrl;
   late final TextEditingController _readingCtrl;
   late VocabularyKanjiEntryType _type;
@@ -608,7 +534,7 @@ class _VocabTermEditBottomSheetState
             Text(
               'Edit vocabulary',
               style: theme.textTheme.titleLarge?.copyWith(
-                color: _ink,
+                color: cs.onSurface,
                 fontWeight: FontWeight.w800,
               ),
             ),
@@ -617,7 +543,7 @@ class _VocabTermEditBottomSheetState
               'Update the headword, reading, and whether this item is treated as '
               'vocabulary or kanji in Learn.',
               style: theme.textTheme.bodySmall?.copyWith(
-                color: _muted,
+                color: cs.onSurfaceVariant,
                 height: 1.35,
               ),
             ),
@@ -652,7 +578,7 @@ class _VocabTermEditBottomSheetState
             Text(
               'Type',
               style: theme.textTheme.titleSmall?.copyWith(
-                color: _ink,
+                color: cs.onSurface,
                 fontWeight: FontWeight.w800,
                 height: 1.25,
               ),
@@ -790,8 +716,6 @@ class _VocabDetailsTermHeader extends StatelessWidget {
   final ThemeData theme;
   final ColorScheme colorScheme;
 
-  static const _ink = Color(0xFF1A1917);
-
   @override
   Widget build(BuildContext context) {
     final reading = entry.reading?.trim();
@@ -812,7 +736,7 @@ class _VocabDetailsTermHeader extends StatelessWidget {
                   child: Text(
                     entry.termJapanese,
                     style: theme.textTheme.titleLarge?.copyWith(
-                      color: _ink,
+                      color: colorScheme.onSurface,
                       fontWeight: FontWeight.w800,
                       height: 1.2,
                     ),
@@ -867,9 +791,6 @@ class _VocabDetailsBottomSheet extends ConsumerStatefulWidget {
 
 class _VocabDetailsBottomSheetState
     extends ConsumerState<_VocabDetailsBottomSheet> {
-  static const _ink = Color(0xFF1A1917);
-  static const _muted = Color(0xFF5C5A55);
-
   late final _VocabDetailsDraft _draft;
   bool _sourceMeaningEnglishExpanded = false;
 
@@ -1000,7 +921,7 @@ class _VocabDetailsBottomSheetState
     Widget sectionTitle(String title) => Text(
           title,
           style: theme.textTheme.titleSmall?.copyWith(
-            color: _ink,
+            color: cs.onSurface,
             fontWeight: FontWeight.w800,
             height: 1.2,
             letterSpacing: 0.15,
@@ -1010,7 +931,7 @@ class _VocabDetailsBottomSheetState
     Widget helperText(String text) => Text(
           text,
           style: theme.textTheme.bodySmall?.copyWith(
-            color: _muted,
+            color: cs.onSurfaceVariant,
             height: 1.35,
           ),
         );
@@ -1024,12 +945,12 @@ class _VocabDetailsBottomSheetState
     }) {
       final labelStyle = secondary
           ? theme.textTheme.bodyMedium?.copyWith(
-              color: _muted,
+              color: cs.onSurfaceVariant,
               fontWeight: FontWeight.w600,
               height: 1.25,
             )
           : theme.textTheme.labelLarge?.copyWith(
-              color: _ink,
+              color: cs.onSurface,
               fontWeight: FontWeight.w800,
               height: 1.15,
             );
@@ -1079,7 +1000,7 @@ class _VocabDetailsBottomSheetState
             Text(
               'Entry details',
               style: theme.textTheme.titleLarge?.copyWith(
-                color: _ink,
+                color: cs.onSurface,
                 fontWeight: FontWeight.w800,
               ),
             ),
@@ -1302,12 +1223,9 @@ class _PairedExampleBlockCard extends StatelessWidget {
   final VoidCallback onToggleEnglish;
   final VoidCallback? onRemove;
 
-  static const _ink = Color(0xFF1A1917);
-
   @override
   Widget build(BuildContext context) {
     final hasEnglish = fields.englishCtrl.text.trim().isNotEmpty;
-    final muted = const Color(0xFF5C5A55);
     return DecoratedBox(
       decoration: BoxDecoration(
         color: colorScheme.surfaceContainerLow.withValues(alpha: 0.65),
@@ -1326,7 +1244,7 @@ class _PairedExampleBlockCard extends StatelessWidget {
                 Text(
                   'Example ${index + 1}',
                   style: theme.textTheme.titleSmall?.copyWith(
-                    color: _ink,
+                    color: colorScheme.onSurface,
                     fontWeight: FontWeight.w800,
                   ),
                 ),
@@ -1400,7 +1318,7 @@ class _PairedExampleBlockCard extends StatelessWidget {
                                   ? 'English (optional)'
                                   : 'Add English line (optional)'),
                           style: theme.textTheme.bodyMedium?.copyWith(
-                            color: muted,
+                            color: colorScheme.onSurfaceVariant,
                             fontWeight: FontWeight.w600,
                             height: 1.25,
                           ),
@@ -1494,6 +1412,7 @@ class StoryCreatorVocabKanjiModuleBody extends ConsumerWidget {
     final draft = ref.watch(storyCreatorDraftDataProvider);
     final n = ref.read(storyCreatorDraftProvider.notifier);
     final theme = Theme.of(context);
+    final cs = theme.colorScheme;
     final bottomInset = MediaQuery.paddingOf(context).bottom;
     final items = draft.vocabularyKanji.entries;
 
@@ -1515,7 +1434,7 @@ class StoryCreatorVocabKanjiModuleBody extends ConsumerWidget {
                   Text(
                     'Vocabulary / Kanji',
                     style: theme.textTheme.titleLarge?.copyWith(
-                      color: StoryCreatorVocabKanjiEditorScreen._ink,
+                      color: cs.onSurface,
                       fontWeight: FontWeight.w800,
                       height: 1.2,
                     ),
@@ -1525,7 +1444,7 @@ class StoryCreatorVocabKanjiModuleBody extends ConsumerWidget {
                 Text(
                   'Pick terms from your story, then refine details.',
                   style: theme.textTheme.bodySmall?.copyWith(
-                    color: StoryCreatorVocabKanjiEditorScreen._muted,
+                    color: cs.onSurfaceVariant,
                     height: 1.35,
                   ),
                 ),
@@ -1533,7 +1452,7 @@ class StoryCreatorVocabKanjiModuleBody extends ConsumerWidget {
                 Text(
                   'Manual vocab & kanji items',
                   style: theme.textTheme.titleLarge?.copyWith(
-                    color: StoryCreatorVocabKanjiEditorScreen._ink,
+                    color: cs.onSurface,
                     fontWeight: FontWeight.w800,
                     height: 1.2,
                   ),
@@ -1543,7 +1462,7 @@ class StoryCreatorVocabKanjiModuleBody extends ConsumerWidget {
                   'Add key terms readers should learn from this story. Meanings can be English and/or Myanmar. '
                   'At least one valid entry completes this module.',
                   style: theme.textTheme.bodyMedium?.copyWith(
-                    color: StoryCreatorVocabKanjiEditorScreen._muted,
+                    color: cs.onSurfaceVariant,
                     height: 1.45,
                   ),
                 ),
@@ -1555,7 +1474,7 @@ class StoryCreatorVocabKanjiModuleBody extends ConsumerWidget {
                     child: Text(
                       '${items.length} ${items.length == 1 ? 'item' : 'items'}',
                       style: theme.textTheme.titleSmall?.copyWith(
-                        color: StoryCreatorVocabKanjiEditorScreen._ink,
+                        color: cs.onSurface,
                         fontWeight: FontWeight.w800,
                       ),
                     ),
@@ -1786,16 +1705,16 @@ class _PickVocabularyFromStorySheetState
       StoryCreatorVocabKanjiEditorScreen._isValidVocabPick(_picked) &&
       !_duplicate;
 
-  Color _statusColor(ColorScheme cs) {
-    if (!_hasStory) return StoryCreatorVocabKanjiEditorScreen._muted;
+  Color _statusColor(NimonColorTokens tc, ColorScheme cs) {
+    if (!_hasStory) return tc.textSecondary;
     if (_picked == null || _picked!.isEmpty) {
-      return StoryCreatorVocabKanjiEditorScreen._muted;
+      return tc.textSecondary;
     }
     if (_duplicate) return cs.error;
     if (!StoryCreatorVocabKanjiEditorScreen._isValidVocabPick(_picked)) {
       return cs.error;
     }
-    return StoryCreatorVocabKanjiEditorScreen._ink;
+    return tc.textPrimary;
   }
 
   String _statusText() {
@@ -1822,6 +1741,7 @@ class _PickVocabularyFromStorySheetState
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
+    final tc = theme.colors;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1838,7 +1758,7 @@ class _PickVocabularyFromStorySheetState
                     Text(
                       'Select vocabulary from story',
                       style: theme.textTheme.titleLarge?.copyWith(
-                        color: StoryCreatorVocabKanjiEditorScreen._ink,
+                        color: tc.textPrimary,
                         fontWeight: FontWeight.w800,
                         height: 1.2,
                       ),
@@ -1849,7 +1769,7 @@ class _PickVocabularyFromStorySheetState
                           ? 'Select a word or phrase from the story, then tap Add.'
                           : 'Add sentences first, then pick a term here.',
                       style: theme.textTheme.bodySmall?.copyWith(
-                        color: StoryCreatorVocabKanjiEditorScreen._muted,
+                        color: tc.textSecondary,
                         height: 1.35,
                       ),
                     ),
@@ -1858,6 +1778,7 @@ class _PickVocabularyFromStorySheetState
               ),
               IconButton(
                 tooltip: 'Close',
+                style: IconButton.styleFrom(foregroundColor: tc.textPrimary),
                 onPressed: () =>
                     Navigator.of(context, rootNavigator: true).pop<void>(),
                 icon: const Icon(Icons.close_rounded),
@@ -1872,9 +1793,9 @@ class _PickVocabularyFromStorySheetState
             child: _hasStory
                 ? DecoratedBox(
                     decoration: BoxDecoration(
-                      color: cs.surface.withValues(alpha: 0.9),
+                      color: tc.appBackground,
                       borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: const Color(0x12000000)),
+                      border: Border.all(color: tc.border),
                     ),
                     child: Padding(
                       padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
@@ -1885,7 +1806,7 @@ class _PickVocabularyFromStorySheetState
                           _displayText,
                           onSelectionChanged: _onSelectionChanged,
                           style: theme.textTheme.bodyLarge?.copyWith(
-                            color: StoryCreatorVocabKanjiEditorScreen._ink,
+                            color: tc.textPrimary,
                             height: 1.65,
                             letterSpacing: 0.15,
                           ),
@@ -1895,11 +1816,9 @@ class _PickVocabularyFromStorySheetState
                   )
                 : DecoratedBox(
                     decoration: BoxDecoration(
-                      color: cs.surface.withValues(alpha: 0.88),
+                      color: tc.surface,
                       borderRadius: BorderRadius.circular(16),
-                      border: Border.all(
-                        color: cs.outlineVariant.withValues(alpha: 0.55),
-                      ),
+                      border: Border.all(color: tc.border),
                     ),
                     child: Padding(
                       padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
@@ -1908,7 +1827,7 @@ class _PickVocabularyFromStorySheetState
                         'Add sentences first, then come back here.',
                         style: theme.textTheme.bodyMedium?.copyWith(
                           height: 1.45,
-                          color: StoryCreatorVocabKanjiEditorScreen._muted,
+                          color: tc.textSecondary,
                         ),
                       ),
                     ),
@@ -1919,8 +1838,9 @@ class _PickVocabularyFromStorySheetState
           padding: const EdgeInsets.fromLTRB(20, 10, 20, 8),
           child: DecoratedBox(
             decoration: BoxDecoration(
-              color: cs.surfaceContainerHighest.withValues(alpha: 0.45),
+              color: tc.appBackground,
               borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: tc.border),
             ),
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
@@ -1931,7 +1851,7 @@ class _PickVocabularyFromStorySheetState
                     child: Text(
                       _statusText(),
                       style: theme.textTheme.bodySmall?.copyWith(
-                        color: _statusColor(cs),
+                        color: _statusColor(tc, cs),
                         height: 1.35,
                         fontWeight: _canAdd ? FontWeight.w700 : FontWeight.w500,
                       ),
@@ -1942,6 +1862,7 @@ class _PickVocabularyFromStorySheetState
                       style: TextButton.styleFrom(
                         visualDensity: VisualDensity.compact,
                         padding: const EdgeInsets.symmetric(horizontal: 8),
+                        foregroundColor: tc.textPrimary,
                       ),
                       onPressed: () => setState(() => _picked = null),
                       child: const Text('Clear'),
@@ -1952,7 +1873,7 @@ class _PickVocabularyFromStorySheetState
           ),
         ),
         Material(
-          color: cs.surface,
+          color: tc.surface,
           elevation: 0,
           surfaceTintColor: Colors.transparent,
           child: Column(
@@ -1961,7 +1882,7 @@ class _PickVocabularyFromStorySheetState
               Divider(
                 height: 1,
                 thickness: 1,
-                color: cs.outlineVariant.withValues(alpha: 0.35),
+                color: tc.border,
               ),
               SafeArea(
                 top: false,
@@ -1969,6 +1890,8 @@ class _PickVocabularyFromStorySheetState
                 child: Row(
                   children: [
                     TextButton(
+                      style:
+                          TextButton.styleFrom(foregroundColor: tc.textPrimary),
                       onPressed: () =>
                           Navigator.of(context, rootNavigator: true)
                               .pop<void>(),
@@ -1980,6 +1903,13 @@ class _PickVocabularyFromStorySheetState
                           ? () => Navigator.of(context, rootNavigator: true)
                               .pop<String>(_picked)
                           : null,
+                      style: FilledButton.styleFrom(
+                        backgroundColor: tc.actionPrimary,
+                        foregroundColor: theme.colorScheme.onPrimary,
+                        disabledBackgroundColor:
+                            tc.disabled.withValues(alpha: 0.35),
+                        disabledForegroundColor: tc.textSecondary,
+                      ),
                       child: const Text('Add'),
                     ),
                   ],
@@ -2000,11 +1930,12 @@ class _EmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final tc = Theme.of(context).colors;
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.8),
+        color: tc.surface.withValues(alpha: 0.94),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.black.withValues(alpha: 0.06)),
+        border: Border.all(color: tc.border),
       ),
       child: Padding(
         padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
@@ -2013,7 +1944,7 @@ class _EmptyState extends StatelessWidget {
           'Tip: meanings can be English and/or Myanmar — both are optional.',
           style: theme.textTheme.bodyMedium?.copyWith(
             height: 1.45,
-            color: const Color(0xFF5C5A55),
+            color: tc.textSecondary,
           ),
         ),
       ),
@@ -2046,23 +1977,25 @@ class _VocabKanjiEntryCard extends StatelessWidget {
   final VoidCallback onDetails;
   final Widget reorderDragStartListener;
 
-  static const _ink = Color(0xFF1A1917);
-  static const _muted = Color(0xFF5C5A55);
-
   @override
   Widget build(BuildContext context) {
     final cs = theme.colorScheme;
     final reading = entry.reading?.trim();
     final status = StoryCreatorVocabKanjiEditorScreen.glossStatusLine(entry);
+    final cardBg = learnCreatorModuleCardSurfaceColor(context);
+    final cardBorder = learnCreatorModuleCardBorderColor(context);
+    final ink = learnCreatorModulePrimaryTextColor(context);
+    final muted = learnCreatorModuleSecondaryTextColor(context);
+    final actionFg = learnCreatorModuleActionForegroundColor(context);
 
     return Card(
       margin: EdgeInsets.zero,
       elevation: 0,
-      color: cs.surface,
+      color: cardBg,
       surfaceTintColor: Colors.transparent,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(14),
-        side: BorderSide(color: cs.outlineVariant.withValues(alpha: 0.7)),
+        side: BorderSide(color: cardBorder.withValues(alpha: 0.7)),
       ),
       child: Padding(
         padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
@@ -2077,7 +2010,7 @@ class _VocabKanjiEntryCard extends StatelessWidget {
                   '${index + 1}',
                   textAlign: TextAlign.end,
                   style: theme.textTheme.labelLarge?.copyWith(
-                    color: cs.onSurfaceVariant,
+                    color: muted,
                     fontWeight: FontWeight.w700,
                     height: 1.2,
                   ),
@@ -2102,7 +2035,7 @@ class _VocabKanjiEntryCard extends StatelessWidget {
                                 child: Text(
                                   entry.termJapanese,
                                   style: theme.textTheme.titleMedium?.copyWith(
-                                    color: _ink,
+                                    color: ink,
                                     fontWeight: FontWeight.w800,
                                     height: 1.2,
                                   ),
@@ -2122,7 +2055,7 @@ class _VocabKanjiEntryCard extends StatelessWidget {
                                 child: Text(
                                   entry.type.displayLabel,
                                   style: theme.textTheme.labelSmall?.copyWith(
-                                    color: _muted,
+                                    color: muted,
                                     fontWeight: FontWeight.w800,
                                   ),
                                 ),
@@ -2173,7 +2106,7 @@ class _VocabKanjiEntryCard extends StatelessWidget {
                     Text(
                       reading,
                       style: theme.textTheme.bodyMedium?.copyWith(
-                        color: _muted,
+                        color: muted,
                         fontWeight: FontWeight.w600,
                         height: 1.3,
                       ),
@@ -2183,7 +2116,7 @@ class _VocabKanjiEntryCard extends StatelessWidget {
                   Text(
                     status,
                     style: theme.textTheme.bodySmall?.copyWith(
-                      color: cs.onSurfaceVariant.withValues(alpha: 0.82),
+                      color: muted.withValues(alpha: 0.82),
                       height: 1.25,
                     ),
                   ),
@@ -2205,6 +2138,7 @@ class _VocabKanjiEntryCard extends StatelessWidget {
                               ),
                               label: const Text('Details'),
                               style: TextButton.styleFrom(
+                                foregroundColor: actionFg,
                                 visualDensity: VisualDensity.compact,
                                 tapTargetSize: MaterialTapTargetSize.padded,
                               ),
@@ -2214,6 +2148,7 @@ class _VocabKanjiEntryCard extends StatelessWidget {
                               icon: const Icon(Icons.edit_outlined, size: 18),
                               label: const Text('Edit'),
                               style: TextButton.styleFrom(
+                                foregroundColor: actionFg,
                                 visualDensity: VisualDensity.compact,
                                 tapTargetSize: MaterialTapTargetSize.padded,
                               ),

@@ -70,6 +70,89 @@ class RemotePublicCreatorProfileRepository {
     return int.tryParse(v.toString()) ?? 0;
   }
 
+  static Map<String, Object?>? _mapLayer(Object? v) {
+    if (v is! Map) return null;
+    return Map<String, Object?>.from(
+      v.map((k, val) => MapEntry(k.toString(), val)),
+    );
+  }
+
+  /// Shallow identity fields from one JSON object (camelCase, snake_case, or
+  /// common aliases). Used for public-profile and optional nested maps.
+  static ({
+    String? displayName,
+    String? handle,
+    String? username,
+    String? bio,
+  }) _identityStringsFromMap(Map<String, Object?> m) {
+    String? pick(List<String> keys) {
+      for (final k in keys) {
+        final s = _optStr(m[k]);
+        if (s != null) return s;
+      }
+      return null;
+    }
+
+    return (
+      displayName: pick(const [
+        'displayName',
+        'display_name',
+        'name',
+        'fullName',
+        'full_name',
+        'writerDisplayName',
+        'writer_display_name',
+      ]),
+      handle: pick(const [
+        'handle',
+        'userHandle',
+        'user_handle',
+        'creatorHandle',
+        'creator_handle',
+        'writerHandle',
+        'writer_handle',
+      ]),
+      username: pick(const [
+        'username',
+        'userName',
+        'user_name',
+        'login',
+      ]),
+      bio: pick(const [
+        'bio',
+        'biography',
+        'about',
+      ]),
+    );
+  }
+
+  static ({
+    String? displayName,
+    String? handle,
+    String? username,
+    String? bio,
+  }) _mergeIdentityLayers(
+    ({
+      String? displayName,
+      String? handle,
+      String? username,
+      String? bio,
+    }) a,
+    ({
+      String? displayName,
+      String? handle,
+      String? username,
+      String? bio,
+    }) b,
+  ) {
+    return (
+      displayName: a.displayName ?? b.displayName,
+      handle: a.handle ?? b.handle,
+      username: a.username ?? b.username,
+      bio: a.bio ?? b.bio,
+    );
+  }
+
   Future<PublicCreatorProfile> fetchPublicCreatorProfile(String userId) async {
     final rid = userId.trim();
     if (rid.isEmpty) throw ArgumentError('userId is empty');
@@ -85,7 +168,14 @@ class RemotePublicCreatorProfileRepository {
     );
     _throwIfNotOk(resp);
     final m = _jsonObjectFromResponse(resp);
-    return PublicCreatorProfile.fromJson(m);
+    final out = PublicCreatorProfile.fromJson(m);
+    if (kDebugMode) {
+      debugPrint(
+        '[public-profile-identity] userId=${out.userId} displayName=${out.displayName} '
+        'handle=${out.handle} username=${out.username} bioLen=${(out.bio ?? '').length}',
+      );
+    }
+    return out;
   }
 
   Future<PageResult<MonoFeedSummaryDto>> fetchCreatorMonoPage(
@@ -141,6 +231,7 @@ class PublicCreatorProfile {
     required this.userId,
     required this.handle,
     required this.displayName,
+    this.username,
     required this.avatarUrl,
     required this.coverImageUrl,
     required this.bio,
@@ -152,6 +243,10 @@ class PublicCreatorProfile {
   final String userId;
   final String? handle;
   final String? displayName;
+
+  /// Optional login/username when the API includes it (V1 public-profile DTO
+  /// may omit this; parsed defensively for forward compatibility).
+  final String? username;
   final String? avatarUrl;
   final String? coverImageUrl;
   final String? bio;
@@ -167,21 +262,110 @@ class PublicCreatorProfile {
     return 'Creator';
   }
 
+  /// Public header primary line: display name → username → handle → Creator.
+  String get publicProfileMainDisplayName {
+    String? nz(String? s) {
+      final t = (s ?? '').trim();
+      return t.isEmpty ? null : t;
+    }
+
+    return nz(displayName) ?? nz(username) ?? nz(handle) ?? 'Creator';
+  }
+
+  /// `@handle` second line when it adds information beyond [mainDisplayName].
+  String? publicProfileSecondaryHandleLine(String mainDisplayName) {
+    String? nz(String? s) {
+      final t = (s ?? '').trim();
+      return t.isEmpty ? null : t;
+    }
+
+    final preferred = nz(handle) ?? nz(username);
+    if (preferred == null) return null;
+    var core = preferred.startsWith('@') ? preferred.substring(1) : preferred;
+    core = core.trim();
+    if (core.isEmpty) return null;
+    final atForm = '@$core';
+    final main = mainDisplayName.trim();
+    if (atForm == main) return null;
+    return atForm;
+  }
+
+  /// Writer handle for navigation (collections detail, etc.).
+  String publicProfileWriterHandleLabel(String mainDisplayName) {
+    final secondary = publicProfileSecondaryHandleLine(mainDisplayName);
+    if (secondary != null) return secondary;
+    String? nz(String? s) {
+      final t = (s ?? '').trim();
+      return t.isEmpty ? null : t;
+    }
+
+    final h = nz(handle);
+    if (h != null) {
+      final c = (h.startsWith('@') ? h.substring(1) : h).trim();
+      if (c.isEmpty) return '@reader';
+      return '@$c';
+    }
+    final u = nz(username);
+    if (u != null) {
+      final c = (u.startsWith('@') ? u.substring(1) : u).trim();
+      if (c.isEmpty) return '@reader';
+      return '@$c';
+    }
+    return '@reader';
+  }
+
   factory PublicCreatorProfile.fromJson(Map<String, Object?> json) {
-    final uid = (json['userId']?.toString() ?? '').trim();
+    final uidRaw =
+        RemotePublicCreatorProfileRepository._optStr(json['userId']) ??
+            RemotePublicCreatorProfileRepository._optStr(json['id']);
+    final uid = (uidRaw ?? '').trim();
     final isFollowing = json['isFollowingByMe'] is bool
         ? json['isFollowingByMe'] as bool
         : false;
+
+    var merged = RemotePublicCreatorProfileRepository._identityStringsFromMap(
+      json,
+    );
+    for (final layer in [
+      RemotePublicCreatorProfileRepository._mapLayer(json['profile']),
+      RemotePublicCreatorProfileRepository._mapLayer(json['writer']),
+      RemotePublicCreatorProfileRepository._mapLayer(json['user']),
+    ]) {
+      if (layer == null) continue;
+      merged = RemotePublicCreatorProfileRepository._mergeIdentityLayers(
+        merged,
+        RemotePublicCreatorProfileRepository._identityStringsFromMap(layer),
+      );
+      final userProfile =
+          RemotePublicCreatorProfileRepository._mapLayer(layer['profile']);
+      if (userProfile != null) {
+        merged = RemotePublicCreatorProfileRepository._mergeIdentityLayers(
+          merged,
+          RemotePublicCreatorProfileRepository._identityStringsFromMap(
+            userProfile,
+          ),
+        );
+      }
+    }
+
     return PublicCreatorProfile(
       userId: uid,
-      handle: RemotePublicCreatorProfileRepository._optStr(json['handle']),
-      displayName:
-          RemotePublicCreatorProfileRepository._optStr(json['displayName']),
+      handle: merged.handle,
+      displayName: merged.displayName,
+      username: merged.username,
       avatarUrl:
-          RemotePublicCreatorProfileRepository._optStr(json['avatarUrl']),
+          RemotePublicCreatorProfileRepository._optStr(json['avatarUrl']) ??
+              RemotePublicCreatorProfileRepository._optStr(
+                RemotePublicCreatorProfileRepository._mapLayer(
+                    json['profile'])?['avatarUrl'],
+              ) ??
+              RemotePublicCreatorProfileRepository._optStr(
+                RemotePublicCreatorProfileRepository._mapLayer(
+                    json['user'])?['avatarUrl'],
+              ),
       coverImageUrl:
           RemotePublicCreatorProfileRepository._optStr(json['coverImageUrl']),
-      bio: RemotePublicCreatorProfileRepository._optStr(json['bio']),
+      bio: merged.bio,
       followersCount:
           RemotePublicCreatorProfileRepository._readInt(json['followersCount']),
       followingCount:
@@ -189,4 +373,50 @@ class PublicCreatorProfile {
       isFollowingByMe: isFollowing,
     );
   }
+}
+
+/// Fills missing [PublicCreatorProfile.displayName] / [PublicCreatorProfile.handle]
+/// from the first mono row when `GET /v1/mono/feed?writerId=` still carries
+/// `writerDisplayName` / `writerHandle` (M17B-2: public-profile contract gaps).
+PublicCreatorProfile applyMonoWriterIdentityFallback(
+  PublicCreatorProfile profile, {
+  required String? monoWriterId,
+  required String monoWriterName,
+  required String monoWriterHandle,
+}) {
+  final pid = profile.userId.trim();
+  final mid = (monoWriterId ?? '').trim();
+  if (mid.isNotEmpty && mid != pid) {
+    return profile;
+  }
+
+  final hasDn = (profile.displayName ?? '').trim().isNotEmpty;
+  final hasHandle = (profile.handle ?? '').trim().isNotEmpty;
+  if (hasDn && hasHandle) {
+    return profile;
+  }
+
+  final wn = monoWriterName.trim();
+  final wh = monoWriterHandle.trim();
+  final newDn =
+      hasDn ? profile.displayName : (wn.isNotEmpty ? wn : profile.displayName);
+  final newH =
+      hasHandle ? profile.handle : (wh.isNotEmpty ? wh : profile.handle);
+
+  if (newDn == profile.displayName && newH == profile.handle) {
+    return profile;
+  }
+
+  return PublicCreatorProfile(
+    userId: profile.userId,
+    handle: newH,
+    displayName: newDn,
+    username: profile.username,
+    avatarUrl: profile.avatarUrl,
+    coverImageUrl: profile.coverImageUrl,
+    bio: profile.bio,
+    followersCount: profile.followersCount,
+    followingCount: profile.followingCount,
+    isFollowingByMe: profile.isFollowingByMe,
+  );
 }

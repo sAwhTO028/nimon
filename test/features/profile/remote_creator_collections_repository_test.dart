@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
+import 'package:nimon/core/validation/http_validation_failed_exception.dart';
 import 'package:nimon/features/profile/data/remote_creator_collections_repository.dart';
 
 Future<Map<String, String>> _auth() async =>
@@ -41,6 +42,37 @@ void main() {
       expect(cap!.method, 'GET');
       expect(cap!.url.path, endsWith('/v1/me/creator-collections'));
       expect(list.single.id, 'c1');
+    });
+
+    test(
+        'createCollection 400 validation_failed → HttpValidationFailedException',
+        () async {
+      final repo = RemoteCreatorCollectionsRepository(
+        apiBaseUrl: 'https://api.example',
+        authHeaderBuilder: _auth,
+        client: MockClient(
+          (_) async => http.Response(
+            jsonEncode({
+              'statusCode': 400,
+              'message': 'validation_failed',
+              'issues': [
+                {
+                  'code': 'collection.title.required',
+                  'field': 'collection.title',
+                  'messageKey': 'collection.title.required',
+                  'severity': 'blocking',
+                  'source': 'collection-validation',
+                },
+              ],
+            }),
+            400,
+          ),
+        ),
+      );
+      await expectLater(
+        repo.createCollection(title: ''),
+        throwsA(isA<HttpValidationFailedException>()),
+      );
     });
 
     test('createCollection POST title + parses collection envelope', () async {

@@ -8,5 +8,6 @@ final mediaUploadRepositoryProvider = Provider<MediaUploadRepository>((ref) {
   return MediaUploadRepository(
     apiBaseUrl: RemoteBackendConfig.apiBaseUrl,
     authHeaderBuilder: ref.watch(authHeaderBuilderProvider),
+    sendWithAuth401Recovery: ref.watch(nimonSendWithAuth401RecoveryProvider),
   );
 });

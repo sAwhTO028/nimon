@@ -20,6 +20,7 @@ class PublishedMonoListItemDto {
     this.writerDisplayName,
     this.writerHandle,
     this.writerAvatarUrl,
+    this.shareUrl,
   });
 
   final String id;
@@ -46,6 +47,9 @@ class PublishedMonoListItemDto {
   final String? writerDisplayName;
   final String? writerHandle;
   final String? writerAvatarUrl;
+
+  /// Canonical web share link (`NIMON_PUBLIC_WEB_BASE_URL/mono/:id`) when server sends it.
+  final String? shareUrl;
 }
 
 /// Result of `POST .../trash` or `POST .../restore`.
@@ -198,5 +202,6 @@ PublishedMonoListItemDto publishedMonoListItemDtoFromBackendJson(
     writerDisplayName: optStr(it['writerDisplayName']),
     writerHandle: optStr(it['writerHandle']),
     writerAvatarUrl: optStr(it['writerAvatarUrl']),
+    shareUrl: optStr(it['shareUrl']),
   );
 }

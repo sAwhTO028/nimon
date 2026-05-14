@@ -27,7 +27,7 @@ class SectionHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    
+
     // Determine the tap handler
     VoidCallback? tapHandler;
     if (onTap != null) {
@@ -39,7 +39,7 @@ class SectionHeader extends StatelessWidget {
     } else if (showSeeAll) {
       tapHandler = () => _showComingSoonSnackbar(context);
     }
-    
+
     return Padding(
       padding: padding,
       child: showSeeAll && tapHandler != null
@@ -87,7 +87,7 @@ class SectionHeader extends StatelessWidget {
 
   void _navigateToSeeMore(BuildContext context) {
     if (sectionKey == null) return;
-    
+
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => SeeMorePage(

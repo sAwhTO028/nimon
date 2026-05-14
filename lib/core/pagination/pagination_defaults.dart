@@ -10,5 +10,9 @@ abstract final class PaginationDefaults {
   static const int monoFeedPageLimit = 15;
 
   static const int profilePageLimit = 20;
+
+  /// Owner Profile → Published → Monos (`GET /v1/published-monos` paging only).
+  static const int profilePublishedMonoPageLimit = 10;
+
   static const int workspacePageLimit = 20;
 }

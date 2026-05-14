@@ -5,7 +5,10 @@ import 'package:http/http.dart' as http;
 import 'package:nimon/core/pagination/page_request.dart';
 import 'package:nimon/core/pagination/page_result.dart';
 import 'package:nimon/features/create/data/remote_backend_config.dart';
+import 'package:nimon/core/validation/app_quota_exceeded_exception.dart';
+import 'package:nimon/core/validation/quota_exceeded_from_json.dart';
 import 'package:nimon/features/auth/auth_strict_unauthorized.dart';
+import 'package:nimon/features/auth/authenticated_http.dart';
 import 'package:nimon/features/profile/data/published_mono_catalog_visibility_exception.dart';
 import 'package:nimon/features/profile/data/published_mono_dto.dart';
 
@@ -16,13 +19,16 @@ class RemotePublishedMonoRepository {
     required String apiBaseUrl,
     http.Client? client,
     PublishedMonoAuthHeaderBuilder? authHeaderBuilder,
-  })  : _apiBaseUrl = apiBaseUrl.replaceAll(RegExp(r'\/+$'), ''),
+    NimonSendWithAuth401Recovery? sendWithAuth401Recovery,
+  })  : _apiBaseUrl = apiBaseUrl.replaceAll(RegExp(r'/+$'), ''),
         _client = client ?? http.Client(),
-        _authHeaderBuilder = authHeaderBuilder;
+        _authHeaderBuilder = authHeaderBuilder,
+        _sendWithAuth401 = sendWithAuth401Recovery;
 
   final String _apiBaseUrl;
   final http.Client _client;
   final PublishedMonoAuthHeaderBuilder? _authHeaderBuilder;
+  final NimonSendWithAuth401Recovery? _sendWithAuth401;
 
   Future<Map<String, String>> _mergeAuth(Map<String, String> headers) async {
     final builder = _authHeaderBuilder;
@@ -30,6 +36,20 @@ class RemotePublishedMonoRepository {
     final auth = await builder();
     return {...auth, ...headers};
   }
+
+  Future<http.Response> _nimonAuthSend(
+    Uri uri,
+    Future<Map<String, String>> Function() mergeHeaders,
+    Future<http.Response> Function(Map<String, String> headers) send, {
+    bool requireAuthHeaderForRecovery = true,
+  }) =>
+      nimonSendWithOptional401Recovery(
+        _sendWithAuth401,
+        requestUri: uri,
+        mergeHeaders: mergeHeaders,
+        send: send,
+        requireAuthHeaderForRecovery: requireAuthHeaderForRecovery,
+      );
 
   bool get _strict => RemoteBackendConfig.strictRemoteDrafts;
 
@@ -47,7 +67,7 @@ class RemotePublishedMonoRepository {
 
   void _throwIfNotOk(http.Response r) {
     if (r.statusCode >= 200 && r.statusCode < 300) return;
-    notifyIfStrictUnauthorized401(r);
+    if (r.statusCode == 401) notifyIfStrictUnauthorized401(r);
     final msg = r.body.trim().isEmpty
         ? 'HTTP ${r.statusCode}'
         : 'HTTP ${r.statusCode}: ${r.body}';
@@ -69,18 +89,122 @@ class RemotePublishedMonoRepository {
   }
 
   bool _hasMoreFromJson(Map<String, Object?> m) {
-    final v = m['hasMore'];
+    final v = m['hasMore'] ?? m['has_more'];
     if (v is bool) return v;
+    if (v is num) return v != 0;
+    if (v is String) {
+      final t = v.toLowerCase().trim();
+      if (t == 'true') return true;
+      if (t == 'false') return false;
+      if (t == '1') return true;
+      if (t == '0') return false;
+    }
     return false;
   }
 
   int? _totalCountFromJson(Map<String, Object?> m) {
-    final v = m['totalCount'];
+    final v = m['totalCount'] ?? m['total_count'];
     if (v == null) return null;
     if (v is int) return v;
     if (v is double) return v.round();
     if (v is num) return v.toInt();
     return int.tryParse(v.toString());
+  }
+
+  String? _nextCursorFromJson(Map<String, Object?> m) {
+    return _optStr(
+      m['nextCursor'] ?? m['next_cursor'] ?? m['next_page_cursor'],
+    );
+  }
+
+  /// Some gateways wrap the list in `data` (object or array), or put paging in
+  /// `pagination` / `meta`. Merge those into a single map before reading `items`
+  /// and cursors (M17C-4).
+  Map<String, Object?> _normalizedPublishedMonosListJson(
+    Map<String, Object?> root,
+  ) {
+    var m = Map<String, Object?>.from(root);
+
+    void mergeSecondaryObject(Object? section) {
+      if (section is! Map) return;
+      final sm = Map<String, Object?>.from(
+        section.map((k, v) => MapEntry(k.toString(), v)),
+      );
+      for (final e in sm.entries) {
+        final k = e.key;
+        if (!m.containsKey(k) || m[k] == null) {
+          m[k] = e.value;
+        }
+      }
+    }
+
+    var topItems = m['items'];
+    if (topItems is! List) {
+      final data = m['data'];
+      if (data is List) {
+        m = {...m, 'items': data};
+      } else if (data is Map) {
+        final dm = Map<String, Object?>.from(
+          data.map((k, v) => MapEntry(k.toString(), v)),
+        );
+        if (dm['items'] is List) {
+          m = {...m, ...dm};
+        }
+      }
+    }
+
+    mergeSecondaryObject(m['pagination']);
+    final dataSibling = m['data'];
+    if (dataSibling is Map) {
+      mergeSecondaryObject(dataSibling);
+    }
+    mergeSecondaryObject(m['meta']);
+
+    return m;
+  }
+
+  /// M17C-4 / M17C-5: log raw envelope + long body prefix before merge/parse (debug only).
+  void _debugLogPublishedMonosFetchPageRaw(
+    http.Response resp,
+    Map<String, Object?> root,
+  ) {
+    if (!kDebugMode) return;
+    final keys = root.keys.map((k) => k.toString()).toList()..sort();
+    final rHm = root['hasMore'] ?? root['has_more'];
+    final rNc = root['nextCursor'] ?? root['next_cursor'];
+    final rTc = root['totalCount'] ?? root['total_count'];
+    debugPrint(
+      'RemotePublishedMonoRepository.fetchPage [RAW JSON envelope] '
+      'status=${resp.statusCode} topLevelKeys=$keys '
+      'root.hasMore|has_more=$rHm root.nextCursor|next_cursor=$rNc '
+      'root.totalCount|total_count=$rTc',
+    );
+    final data = root['data'];
+    if (data is Map) {
+      final dk = data.keys.map((k) => k.toString()).toList()..sort();
+      debugPrint(
+        'RemotePublishedMonoRepository.fetchPage [M17C-5 RAW data] keys=$dk',
+      );
+    }
+    final meta = root['meta'];
+    if (meta is Map) {
+      final mk = meta.keys.map((k) => k.toString()).toList()..sort();
+      final mHm = meta['hasMore'] ?? meta['has_more'];
+      final mNc = meta['nextCursor'] ?? meta['next_cursor'];
+      final mTc = meta['totalCount'] ?? meta['total_count'];
+      debugPrint(
+        'RemotePublishedMonoRepository.fetchPage [M17C-5 RAW meta] keys=$mk '
+        'hasMore|has_more=$mHm nextCursor|next_cursor=$mNc totalCount|total_count=$mTc',
+      );
+    }
+    final body = resp.body.trim();
+    if (body.isEmpty) return;
+    const cap = 8192;
+    final prefix = body.length <= cap ? body : '${body.substring(0, cap)}…';
+    final suffix = body.length > cap ? ' (${body.length} chars total)' : '';
+    debugPrint(
+      'RemotePublishedMonoRepository.fetchPage [M17C-5 RAW body prefix]$suffix $prefix',
+    );
   }
 
   PublishedMonoListItemDto _listItemFromMap(Map<String, Object?> it) {
@@ -103,6 +227,7 @@ class RemotePublishedMonoRepository {
       writerDisplayName: _optStr(it['writerDisplayName']),
       writerHandle: _optStr(it['writerHandle']),
       writerAvatarUrl: _optStr(it['writerAvatarUrl']),
+      shareUrl: _optStr(it['shareUrl']),
     );
   }
 
@@ -158,7 +283,7 @@ class RemotePublishedMonoRepository {
 
   Never _throwFriendlyMutationFailure(http.Response r,
       {required String fallback}) {
-    notifyIfStrictUnauthorized401(r);
+    if (r.statusCode == 401) notifyIfStrictUnauthorized401(r);
     throw StateError(_friendlyBackendUserMessage(r, fallback: fallback));
   }
 
@@ -171,7 +296,8 @@ class RemotePublishedMonoRepository {
   }
 
   PublishedMonoListResponseDto _listResponseDtoFromMap(Map<String, Object?> m) {
-    final rawItems = (m['items'] as List?) ?? const [];
+    final merged = _normalizedPublishedMonosListJson(m);
+    final rawItems = (merged['items'] as List?) ?? const [];
     final items = <PublishedMonoListItemDto>[];
     for (final x in rawItems) {
       if (x is! Map) continue;
@@ -182,9 +308,9 @@ class RemotePublishedMonoRepository {
     }
     return PublishedMonoListResponseDto(
       items: items,
-      nextCursor: _optStr(m['nextCursor']),
-      hasMore: _hasMoreFromJson(m),
-      totalCount: _totalCountFromJson(m),
+      nextCursor: _nextCursorFromJson(merged),
+      hasMore: _hasMoreFromJson(merged),
+      totalCount: _totalCountFromJson(merged),
     );
   }
 
@@ -199,7 +325,7 @@ class RemotePublishedMonoRepository {
     );
   }
 
-  Future<PublishedMonoListResponseDto> list({int limit = 50}) async {
+  Future<PublishedMonoListResponseDto> list({int limit = 20}) async {
     try {
       if (kDebugMode) {
         debugPrint(
@@ -207,7 +333,11 @@ class RemotePublishedMonoRepository {
         );
       }
       final uri = _publishedMonosListUri({'limit': '$limit'});
-      final resp = await _client.get(uri, headers: await _mergeAuth({}));
+      final resp = await _nimonAuthSend(
+        uri,
+        () => _mergeAuth({}),
+        (h) => _client.get(uri, headers: h),
+      );
       _throwIfNotOk(resp);
       final m = _jsonObjectFromResponse(resp);
       final dto = _listResponseDtoFromMap(m);
@@ -242,14 +372,33 @@ class RemotePublishedMonoRepository {
         );
       }
       final uri = _publishedMonosListUri(qp);
-      final resp = await _client.get(uri, headers: await _mergeAuth({}));
+      final resp = await _nimonAuthSend(
+        uri,
+        () => _mergeAuth({}),
+        (h) => _client.get(uri, headers: h),
+      );
       _throwIfNotOk(resp);
       final m = _jsonObjectFromResponse(resp);
+      if (kDebugMode) {
+        debugPrint(
+          'RemotePublishedMonoRepository.fetchPage: raw keys=${m.keys}',
+        );
+      }
+      _debugLogPublishedMonosFetchPageRaw(resp, m);
       final dto = _listResponseDtoFromMap(m);
       if (kDebugMode) {
-        final rawItems = (m['items'] as List?) ?? const [];
+        final merged = _normalizedPublishedMonosListJson(m);
+        final rawItems = (merged['items'] as List?) ?? const [];
+        final nc = dto.nextCursor;
+        final ncLabel = nc == null ? 'null' : (nc.isEmpty ? 'empty' : nc);
         debugPrint(
-          'RemotePublishedMonoRepository.fetchPage: JSON items=${rawItems.length} parsedDtos=${dto.items.length} hasMore=${dto.hasMore}',
+          'RemotePublishedMonoRepository.fetchPage [M17C-5 PARSED] '
+          'hasMore=${dto.hasMore} nextCursor=$ncLabel totalCount=${dto.totalCount}',
+        );
+        debugPrint(
+          'RemotePublishedMonoRepository.fetchPage: JSON items=${rawItems.length} '
+          'parsedDtos=${dto.items.length} hasMore=${dto.hasMore} '
+          'nextCursor=${nc == null ? 'null' : (nc.isEmpty ? 'empty' : 'set')} totalCount=${dto.totalCount}',
         );
       }
       return _pageResultFromListDto(dto);
@@ -276,7 +425,11 @@ class RemotePublishedMonoRepository {
         );
       }
       final uri = _publishedMonosListUri(qp);
-      final resp = await _client.get(uri, headers: await _mergeAuth({}));
+      final resp = await _nimonAuthSend(
+        uri,
+        () => _mergeAuth({}),
+        (h) => _client.get(uri, headers: h),
+      );
       _throwIfNotOk(resp);
       final m = _jsonObjectFromResponse(resp);
       final dto = _listResponseDtoFromMap(m);
@@ -300,11 +453,12 @@ class RemotePublishedMonoRepository {
     final uri = _u('/v1/published-monos/$rid/trash');
     http.Response resp;
     try {
-      resp = await _client.post(
+      resp = await _nimonAuthSend(
         uri,
-        headers: await _mergeAuth(<String, String>{
+        () => _mergeAuth(<String, String>{
           'Content-Type': 'application/json',
         }),
+        (h) => _client.post(uri, headers: h),
       );
     } catch (e, st) {
       if (kDebugMode) {
@@ -331,11 +485,12 @@ class RemotePublishedMonoRepository {
     final uri = _u('/v1/published-monos/$rid/restore');
     http.Response resp;
     try {
-      resp = await _client.post(
+      resp = await _nimonAuthSend(
         uri,
-        headers: await _mergeAuth(<String, String>{
+        () => _mergeAuth(<String, String>{
           'Content-Type': 'application/json',
         }),
+        (h) => _client.post(uri, headers: h),
       );
     } catch (e, st) {
       if (kDebugMode) {
@@ -347,6 +502,8 @@ class RemotePublishedMonoRepository {
     if (resp.statusCode >= 200 && resp.statusCode < 300) {
       return _trashMutationFromResponse(resp);
     }
+    final quota = tryParseQuotaExceededFromHttpBody(resp.body);
+    if (quota != null) throw quota;
     _throwFriendlyMutationFailure(
       resp,
       fallback: 'Could not restore this story.',
@@ -358,9 +515,11 @@ class RemotePublishedMonoRepository {
     if (rid.isEmpty) {
       throw ArgumentError('publishedMono id is empty');
     }
-    final resp = await _client.get(
-      _u('/v1/published-monos/$rid'),
-      headers: await _mergeAuth({}),
+    final detailUri = _u('/v1/published-monos/$rid');
+    final resp = await _nimonAuthSend(
+      detailUri,
+      () => _mergeAuth({}),
+      (h) => _client.get(detailUri, headers: h),
     );
     if (resp.statusCode == 404) {
       throw PublishedMonoHiddenWhileEditingException();
@@ -384,6 +543,7 @@ class RemotePublishedMonoRepository {
       updatedAt: _optStr(it['updatedAt']) ?? '',
       contentSummary: it['contentSummary'],
       content: it['content'],
+      shareUrl: _optStr(it['shareUrl']),
       writerDisplayName: _optStr(it['writerDisplayName']),
       writerHandle: _optStr(it['writerHandle']),
       writerAvatarUrl: _optStr(it['writerAvatarUrl']),
@@ -398,12 +558,16 @@ class RemotePublishedMonoRepository {
     final uri = _u('/v1/published-monos/$rid/permanent');
     http.Response resp;
     try {
-      resp = await _client.delete(
+      resp = await _nimonAuthSend(
         uri,
-        headers: await _mergeAuth(<String, String>{
+        () => _mergeAuth(<String, String>{
           'Content-Type': 'application/json',
         }),
-        body: jsonEncode(const {'confirm': 'DELETE'}),
+        (h) => _client.delete(
+          uri,
+          headers: h,
+          body: jsonEncode(const {'confirm': 'DELETE'}),
+        ),
       );
     } catch (e, st) {
       if (kDebugMode) {
@@ -420,9 +584,10 @@ class RemotePublishedMonoRepository {
       return;
     }
     if (resp.statusCode == 404) {
-      notifyIfStrictUnauthorized401(resp);
       throw StateError('This story was already deleted.');
     }
+    final quota = tryParseQuotaExceededFromHttpBody(resp.body);
+    if (quota != null) throw quota;
     _throwFriendlyMutationFailure(
       resp,
       fallback: 'Could not permanently delete this story.',

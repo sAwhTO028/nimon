@@ -1,4 +1,5 @@
 import { HttpException } from '@nestjs/common';
+import { PublishState } from '@prisma/client';
 import { StoryDraftsService } from './story-drafts.service';
 
 describe('StoryDraftsService owner scoping', () => {
@@ -47,22 +48,24 @@ describe('StoryDraftsService owner scoping', () => {
 
     expect(findFirst).toHaveBeenCalledWith({
       where: { id: 'draft-x', ownerId: ownerB },
-      select: { publishedMonoId: true },
+      select: { publishedMonoId: true, hasUnpublishedCoreChanges: true, publishState: true },
     });
     expect(deleteMany).not.toHaveBeenCalled();
   });
 
   const monoId = 'dddddddd-dddd-dddd-dddd-dddddddddddd';
 
-  it('deleteDraft rejects when draft links an active (non-trashed) published mono', async () => {
-    const findFirst = jest
-      .fn()
-      .mockResolvedValue({ publishedMonoId: monoId });
+  it('deleteDraft rejects when plain draft links an active published mono and has no unpublished edits', async () => {
+    const findFirst = jest.fn().mockResolvedValue({
+      publishedMonoId: monoId,
+      hasUnpublishedCoreChanges: false,
+      publishState: PublishState.draft,
+    });
     const deleteMany = jest.fn();
     const prisma = {
       storyDraft: { findFirst, deleteMany },
       publishedMono: {
-        findUnique: jest.fn().mockResolvedValue({ trashedAt: null }),
+        findUnique: jest.fn().mockResolvedValue({ trashedAt: null, ownerId: ownerA }),
       },
     } as any;
 
@@ -74,9 +77,11 @@ describe('StoryDraftsService owner scoping', () => {
   });
 
   it('deleteDraft allows when linked published mono is trashed', async () => {
-    const findFirst = jest
-      .fn()
-      .mockResolvedValue({ publishedMonoId: monoId });
+    const findFirst = jest.fn().mockResolvedValue({
+      publishedMonoId: monoId,
+      hasUnpublishedCoreChanges: false,
+      publishState: PublishState.draft,
+    });
     const deleteMany = jest.fn().mockResolvedValue({ count: 1 });
     const prisma = {
       storyDraft: { findFirst, deleteMany },
@@ -91,6 +96,27 @@ describe('StoryDraftsService owner scoping', () => {
 
     expect(deleteMany).toHaveBeenCalledWith({
       where: { id: 'draft-z', ownerId: ownerA },
+    });
+  });
+
+  it('deleteDraft allows when linked active mono but publishState is not plain draft (synced workspace)', async () => {
+    const findFirst = jest.fn().mockResolvedValue({
+      publishedMonoId: monoId,
+      hasUnpublishedCoreChanges: false,
+      publishState: PublishState.reading_only_published,
+    });
+    const deleteMany = jest.fn().mockResolvedValue({ count: 1 });
+    const prisma = {
+      storyDraft: { findFirst, deleteMany },
+      publishedMono: {
+        findUnique: jest.fn().mockResolvedValue({ trashedAt: null, ownerId: ownerA }),
+      },
+    } as any;
+
+    await new StoryDraftsService(prisma).deleteDraft(ownerA, 'draft-sync');
+
+    expect(deleteMany).toHaveBeenCalledWith({
+      where: { id: 'draft-sync', ownerId: ownerA },
     });
   });
 });

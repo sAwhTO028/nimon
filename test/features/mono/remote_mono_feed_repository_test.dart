@@ -177,4 +177,31 @@ void main() {
     await repo.fetchFeedPage(PageRequest(limit: 15, sort: 'recent'));
     expect(captured!.headers['authorization'], 'Bearer tok');
   });
+
+  test('fetchFeedPage surfaces nested JSON message on HTTP errors', () async {
+    final client = MockClient((request) async {
+      return http.Response(
+        jsonEncode({
+          'statusCode': 500,
+          'message': 'internal server error',
+        }),
+        500,
+        headers: {'content-type': 'application/json'},
+      );
+    });
+
+    final repo = RemoteMonoFeedRepository(
+      apiBaseUrl: 'http://127.0.0.1:9',
+      client: client,
+    );
+
+    Object? err;
+    try {
+      await repo.fetchFeedPage(PageRequest(limit: 7, sort: 'recent'));
+    } catch (e) {
+      err = e;
+    }
+    expect(err, isA<StateError>());
+    expect('$err', contains('internal server error'));
+  });
 }

@@ -1,6 +1,14 @@
-import { HttpStatus, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  HttpStatus,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
 
 import { apiError } from '../../common/api-error';
+import { PublicWebBaseUrlService } from '../common/public-web-base-url.service';
+import { MediaUrlCanonicalizerService } from '../media/media-url-canonicalizer.service';
 import { PrismaService } from '../prisma/prisma.service';
 
 import type {
@@ -17,16 +25,95 @@ import {
   publishedMonoListItemFromRow,
   type WriterProfileSlice,
 } from './published-mono-common';
+import { assertCanRevealOnePublishedTabMono } from './published-mono-published-tab-quota';
 import { PUBLISHED_MONO_CATALOG_VISIBLE } from './published-mono-visibility';
+
+import type { Prisma } from '@prisma/client';
 
 function parseTrashedQuery(raw?: string): boolean {
   const t = (raw ?? '').trim().toLowerCase();
   return t === 'true' || t === '1' || t === 'yes';
 }
 
+/** Same cursor envelope as `MonoFeedService` (`updatedAt` + `id`), base64url JSON. */
+type PublishedMonoListCursorPayload = {
+  u: string;
+  i: string;
+};
+
+const PUBLISHED_LIST_DEFAULT_LIMIT = 20;
+const PUBLISHED_LIST_MAX_LIMIT = 50;
+
+function parsePublishedListLimit(limitRaw?: string): number {
+  if (limitRaw == null || String(limitRaw).trim() === '') {
+    return PUBLISHED_LIST_DEFAULT_LIMIT;
+  }
+  const n = Number(limitRaw);
+  if (!Number.isFinite(n)) {
+    return PUBLISHED_LIST_DEFAULT_LIMIT;
+  }
+  const rounded = Math.floor(n);
+  return Math.min(Math.max(rounded, 1), PUBLISHED_LIST_MAX_LIMIT);
+}
+
+function encodePublishedListCursor(updatedAt: Date, id: string): string {
+  const payload: PublishedMonoListCursorPayload = {
+    u: updatedAt.toISOString(),
+    i: id,
+  };
+  return Buffer.from(JSON.stringify(payload), 'utf8').toString('base64url');
+}
+
+function decodePublishedListCursor(raw: string): PublishedMonoListCursorPayload {
+  let json: string;
+  try {
+    json = Buffer.from(raw, 'base64url').toString('utf8');
+  } catch {
+    throw new BadRequestException('invalid_cursor');
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(json);
+  } catch {
+    throw new BadRequestException('invalid_cursor');
+  }
+  if (
+    typeof parsed !== 'object' ||
+    parsed === null ||
+    !('u' in parsed) ||
+    !('i' in parsed)
+  ) {
+    throw new BadRequestException('invalid_cursor');
+  }
+  const u = (parsed as PublishedMonoListCursorPayload).u;
+  const i = (parsed as PublishedMonoListCursorPayload).i;
+  if (typeof u !== 'string' || typeof i !== 'string' || !u.trim() || !i.trim()) {
+    throw new BadRequestException('invalid_cursor');
+  }
+  const d = new Date(u);
+  if (Number.isNaN(d.getTime())) {
+    throw new BadRequestException('invalid_cursor');
+  }
+  return { u, i };
+}
+
+function parsePublishedListSort(sortRaw?: string): void {
+  const s = (sortRaw ?? '').trim().toLowerCase();
+  if (s === '' || s === 'latest' || s === 'recent') {
+    return;
+  }
+  throw new BadRequestException('unsupported_sort');
+}
+
 @Injectable()
 export class PublishedMonosService {
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly logger = new Logger(PublishedMonosService.name);
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly media: MediaUrlCanonicalizerService,
+    private readonly publicWeb: PublicWebBaseUrlService,
+  ) {}
 
   /**
    * Profile / "my published" list — caller must pass the authenticated owner id
@@ -53,21 +140,35 @@ export class PublishedMonosService {
     ownerId: string,
     limitRaw?: string,
     trashedRaw?: string,
+    cursorRaw?: string,
+    sortRaw?: string,
   ): Promise<PublishedMonoListResponseDto> {
-    const limitNum = limitRaw ? Number(limitRaw) : 50;
-    const take = Number.isFinite(limitNum)
-      ? Math.min(Math.max(limitNum, 1), 100)
-      : 50;
-
+    parsePublishedListSort(sortRaw);
+    const limit = parsePublishedListLimit(limitRaw);
     const trashedOnly = parseTrashedQuery(trashedRaw);
-    const where = trashedOnly
+    const whereBase: Prisma.PublishedMonoWhereInput = trashedOnly
       ? { ownerId, trashedAt: { not: null } }
       : { ownerId, ...PUBLISHED_MONO_CATALOG_VISIBLE };
 
+    const cursorTrim = (cursorRaw ?? '').trim();
+    const and: Prisma.PublishedMonoWhereInput[] = [whereBase];
+    if (cursorTrim) {
+      const { u, i } = decodePublishedListCursor(cursorTrim);
+      const cAt = new Date(u);
+      and.push({
+        OR: [
+          { updatedAt: { lt: cAt } },
+          { AND: [{ updatedAt: cAt }, { id: { lt: i } }] },
+        ],
+      });
+    }
+    const where: Prisma.PublishedMonoWhereInput =
+      and.length === 1 ? and[0]! : { AND: and };
+
     const rows = await this.prisma.publishedMono.findMany({
       where,
-      orderBy: { updatedAt: 'desc' },
-      take,
+      orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
+      take: limit + 1,
       select: {
         id: true,
         ownerId: true,
@@ -81,12 +182,48 @@ export class PublishedMonosService {
       },
     });
 
+    const hasMore = rows.length > limit;
+    const pageRows = hasMore ? rows.slice(0, limit) : rows;
+
+    const totalCount: number | null =
+      !trashedOnly && !cursorTrim
+        ? await this.prisma.publishedMono.count({ where: whereBase })
+        : null;
+
     const writer = await this.writerProfile(ownerId);
-    const items = rows.map((row) =>
-      attachWriterProfileToListItem(publishedMonoListItemFromRow(row), writer),
+    const base = this.media.mediaPublicBaseUrl();
+    const items = pageRows.map((row) => ({
+      ...attachWriterProfileToListItem(
+        publishedMonoListItemFromRow(row, base),
+        writer,
+        base,
+      ),
+      shareUrl: this.publicWeb.monoShareUrl(row.id),
+    }));
+
+    const last = pageRows[pageRows.length - 1];
+    const nextCursor =
+      hasMore && last ? encodePublishedListCursor(last.updatedAt, last.id) : null;
+
+    const result: PublishedMonoListResponseDto = {
+      items,
+      nextCursor,
+      hasMore,
+      totalCount,
+    };
+
+    // M17C-5 TEMP: runtime truth for GET /v1/published-monos (remove after diagnosis).
+    this.logger.log(
+      `[M17C-5] route=GET /v1/published-monos listPublishedMonos ` +
+        `userId=${ownerId} limit=${limit} limitRaw=${String(limitRaw ?? '')} ` +
+        `cursor=${cursorTrim.length ? cursorTrim : 'null'} trashed=${trashedOnly} ` +
+        `rowsFetched=${rows.length} itemsReturned=${items.length} hasMore=${String(hasMore)} ` +
+        `nextCursor=${nextCursor == null ? 'null' : 'non-null'} ` +
+        `totalCount=${totalCount == null ? 'null' : String(totalCount)} ` +
+        `responseKeys=${Object.keys(result).sort().join(',')}`,
     );
 
-    return { items, nextCursor: null };
+    return result;
   }
 
   /**
@@ -116,7 +253,11 @@ export class PublishedMonosService {
     }
 
     const writer = await this.writerProfile(ownerId);
-    return attachWriterProfileToDetail(publishedMonoDetailFromRow(m), writer);
+    const base = this.media.mediaPublicBaseUrl();
+    return {
+      ...attachWriterProfileToDetail(publishedMonoDetailFromRow(m, base), writer, base),
+      shareUrl: this.publicWeb.monoShareUrl(m.id),
+    };
   }
 
   /** Idempotent: already trashed rows return existing `trashedAt`. */
@@ -168,6 +309,12 @@ export class PublishedMonosService {
         'Published mono is not in Trash',
       );
     }
+    await assertCanRevealOnePublishedTabMono(
+      this.prisma,
+      ownerId,
+      { tag: 'restore-quota', publishedMonoId: rid },
+      (line) => this.logger.log(line),
+    );
     await this.prisma.publishedMono.updateMany({
       where: { id: rid, ownerId },
       data: { trashedAt: null },

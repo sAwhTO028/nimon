@@ -19,11 +19,11 @@ class AppThemeTokens {
   static const Color success = Color(0xFF2FB171);
   static const Color warning = Color(0xFFF0B400);
   static const Color danger = Color(0xFFE25454);
-  
+
   // Icon colors
   static const Color iconInactive = Color(0xFF3A3D45);
   static const Color bookmarkActive = Color(0xFFFF5A5A);
-  
+
   // Glass button styling
   static const Color glassBackground = Color(0xB3FFFFFF); // #FFFFFFB3
   static const Color glassBorder = Color(0x40FFFFFF); // #FFFFFF40
@@ -32,13 +32,15 @@ class AppThemeTokens {
 class StoryDetailScreen extends StatefulWidget {
   final StoryRepo repo;
   final String storyId;
-  const StoryDetailScreen({super.key, required this.repo, required this.storyId});
+  const StoryDetailScreen(
+      {super.key, required this.repo, required this.storyId});
 
   @override
   State<StoryDetailScreen> createState() => _StoryDetailScreenState();
 }
 
-class _StoryDetailScreenState extends State<StoryDetailScreen> with TickerProviderStateMixin {
+class _StoryDetailScreenState extends State<StoryDetailScreen>
+    with TickerProviderStateMixin {
   late Future<Story?> _storyF;
   late Future<List<Episode>> _epsF;
   late AnimationController _animController;
@@ -52,7 +54,7 @@ class _StoryDetailScreenState extends State<StoryDetailScreen> with TickerProvid
     super.initState();
     _storyF = widget.repo.getStoryById(widget.storyId);
     _epsF = widget.repo.getEpisodesByStory(widget.storyId);
-    
+
     // Screen enter animation: cover fade-in + small rise
     _animController = AnimationController(
       vsync: this,
@@ -85,7 +87,8 @@ class _StoryDetailScreenState extends State<StoryDetailScreen> with TickerProvid
       builder: (context, snap) {
         final story = snap.data;
         if (story == null) {
-          return const Scaffold(body: Center(child: CircularProgressIndicator()));
+          return const Scaffold(
+              body: Center(child: CircularProgressIndicator()));
         }
         return Scaffold(
           backgroundColor: const Color(0xFFF9F9FB), // Updated background
@@ -96,35 +99,36 @@ class _StoryDetailScreenState extends State<StoryDetailScreen> with TickerProvid
               SafeArea(
                 top: true,
                 child: SingleChildScrollView(
-                  padding: const EdgeInsets.only(top: 72), // Space for fixed header
+                  padding:
+                      const EdgeInsets.only(top: 72), // Space for fixed header
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16), // Global horizontal padding
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16), // Global horizontal padding
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                      
-                      // Book cover with animation
-                      SlideTransition(
-                        position: _slideAnimation,
-                        child: FadeTransition(
-                          opacity: _fadeAnimation,
-                          child: _hero(story),
+                        // Book cover with animation
+                        SlideTransition(
+                          position: _slideAnimation,
+                          child: FadeTransition(
+                            opacity: _fadeAnimation,
+                            child: _hero(story),
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 16),
-                      
-                      // Title block
-                      _titleBlock(story),
-                      const SizedBox(height: 12),
-                      
-                      // Fixed 4 tags row
-                      _fixedTagsRow(story),
-                      const SizedBox(height: 16),
-                      
-                      // "What's inside" accordion
-                      _whatsInsideAccordion(story),
-                      const SizedBox(height: 24),
-                      
+                        const SizedBox(height: 16),
+
+                        // Title block
+                        _titleBlock(story),
+                        const SizedBox(height: 12),
+
+                        // Fixed 4 tags row
+                        _fixedTagsRow(story),
+                        const SizedBox(height: 16),
+
+                        // "What's inside" accordion
+                        _whatsInsideAccordion(story),
+                        const SizedBox(height: 24),
+
                         // Episodes section
                         _episodesSection(context),
                       ],
@@ -132,7 +136,7 @@ class _StoryDetailScreenState extends State<StoryDetailScreen> with TickerProvid
                   ),
                 ),
               ),
-              
+
               // Fixed header overlay
               Positioned(
                 top: 0,
@@ -177,7 +181,7 @@ class _StoryDetailScreenState extends State<StoryDetailScreen> with TickerProvid
                   ),
                 ),
               ),
-              
+
               // Right cluster - pinned to true top-right
               Row(
                 mainAxisSize: MainAxisSize.min,
@@ -198,7 +202,8 @@ class _StoryDetailScreenState extends State<StoryDetailScreen> with TickerProvid
                     width: 44,
                     height: 44,
                     child: _buildGlassButton(
-                      icon: _isFavorite ? Icons.bookmark : Icons.bookmark_border,
+                      icon:
+                          _isFavorite ? Icons.bookmark : Icons.bookmark_border,
                       onTap: _toggleFavorite,
                       semanticLabel: _isFavorite ? 'ブックマーク解除' : 'ブックマークに追加',
                       isActive: _isFavorite,
@@ -227,178 +232,177 @@ class _StoryDetailScreenState extends State<StoryDetailScreen> with TickerProvid
 
   /// Book cover - matching Recommend Stories dimensions (140x210dp)
   Widget _hero(Story s) => Center(
-    child: Container(
-      margin: const EdgeInsets.only(top: 16),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            blurRadius: 12,
-            offset: const Offset(0, 4),
-            color: Colors.black.withOpacity(0.10), // Subtle shadow
-          ),
-        ],
-      ),
-      child: SizedBox(
-        width: 140, // Matching BookCoverCard.md width
-        height: 210, // Matching BookCoverCard.md height (140 * 3/2 = 210)
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(12),
-          child: s.coverUrl != null
-                ? Image.network(
-                  s.coverUrl!,
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => Container(
-                    color: AppThemeTokens.surfaceVariant,
-                    child: Icon(
-                      Icons.book_outlined,
-                      size: 64,
-                      color: AppThemeTokens.onSurfaceVariant,
-                    ),
-                  ),
-                )
-              : Container(
-                  color: AppThemeTokens.surfaceVariant,
-                  child: Icon(
-                    Icons.book_outlined,
-                    size: 64,
-                    color: AppThemeTokens.onSurfaceVariant,
-                  ),
-                ),
+        child: Container(
+          margin: const EdgeInsets.only(top: 16),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            boxShadow: [
+              BoxShadow(
+                blurRadius: 12,
+                offset: const Offset(0, 4),
+                color: Colors.black.withOpacity(0.10), // Subtle shadow
               ),
+            ],
+          ),
+          child: SizedBox(
+            width: 140, // Matching BookCoverCard.md width
+            height: 210, // Matching BookCoverCard.md height (140 * 3/2 = 210)
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: s.coverUrl != null
+                  ? Image.network(
+                      s.coverUrl!,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => Container(
+                        color: AppThemeTokens.surfaceVariant,
+                        child: Icon(
+                          Icons.book_outlined,
+                          size: 64,
+                          color: AppThemeTokens.onSurfaceVariant,
+                        ),
+                      ),
+                    )
+                  : Container(
+                      color: AppThemeTokens.surfaceVariant,
+                      child: Icon(
+                        Icons.book_outlined,
+                        size: 64,
+                        color: AppThemeTokens.onSurfaceVariant,
+                      ),
+                    ),
             ),
-    ),
-  );
+          ),
+        ),
+      );
 
   /// Title block - centered without edit icon
   Widget _titleBlock(Story s) => Column(
-    children: [
-      // Story Title: 22sp, weight 700, center, letterSpacing +0.2
-      Text(
-        s.title,
-        textAlign: TextAlign.center,
-        style: const TextStyle(
-          fontSize: 22, // 22sp
-          fontWeight: FontWeight.w700, // Weight 700
-          color: Color(0xFF282A2E), // onSurface
-          letterSpacing: 0.2, // +0.2
-          height: 1.3,
-        ),
-      ),
-      
-      const SizedBox(height: 6), // Top margin 6dp
-      
-      // Meta line: "N5 • 430 likes" → 14sp, onSurfaceVariant, center
-      Text(
-        '${s.jlptLevel} • ${s.likes} likes',
-        textAlign: TextAlign.center,
-        style: const TextStyle(
-          fontSize: 14, // 14sp
-          color: Color(0x99000000), // onSurfaceVariant
-          height: 1.4,
-        ),
-      ),
-    ],
-  );
-  
+        children: [
+          // Story Title: 22sp, weight 700, center, letterSpacing +0.2
+          Text(
+            s.title,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              fontSize: 22, // 22sp
+              fontWeight: FontWeight.w700, // Weight 700
+              color: Color(0xFF282A2E), // onSurface
+              letterSpacing: 0.2, // +0.2
+              height: 1.3,
+            ),
+          ),
+
+          const SizedBox(height: 6), // Top margin 6dp
+
+          // Meta line: "N5 • 430 likes" → 14sp, onSurfaceVariant, center
+          Text(
+            '${s.jlptLevel} • ${s.likes} likes',
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              fontSize: 14, // 14sp
+              color: Color(0x99000000), // onSurfaceVariant
+              height: 1.4,
+            ),
+          ),
+        ],
+      );
 
   /// Fixed 4 stat cards row - N5, Love, CM Name, Premium
   Widget _fixedTagsRow(Story s) => Column(
-    children: [
-      // Section margin top 12dp, bottom 8dp
-      const SizedBox(height: 12),
-      
-      // Responsive layout: single row for normal screens, wrap for narrow screens
-      LayoutBuilder(
-        builder: (context, constraints) {
-          final screenWidth = constraints.maxWidth;
-          final horizontalPadding = 32.0; // 16dp * 2
-          final gap = 8.0;
-          
-          // Calculate card width for 4 cards in a row
-          final cardWidth = (screenWidth - horizontalPadding - gap * 3) / 4;
-          
-          // For very narrow screens (< 320dp), use Wrap with 2 rows
-          if (screenWidth < 320) {
-            return Wrap(
-              spacing: gap,
-              runSpacing: 8,
-          children: [
-                _buildStatCard(
-                  icon: Icons.school_outlined,
-                  value: "N5",
-                  caption: "Level",
-                  width: cardWidth,
-                ),
-                _buildStatCard(
-                  icon: Icons.favorite_border,
-                  value: "Love",
-                  caption: "Category",
-                  width: cardWidth,
-                ),
-                _buildStatCard(
-                  icon: Icons.groups_2_outlined,
-                  value: "CM Name",
-                  caption: "Community",
-                  width: cardWidth,
-                ),
-                _buildStatCard(
-                  icon: Icons.lock_outline,
-                  value: "Premium",
-                  caption: "Unlock",
-                  width: cardWidth,
-                ),
-              ],
-            );
-          }
-          
-          // Single row layout for normal screens
-          return Row(
-            children: [
-              Expanded(
-                child: _buildStatCard(
-                  icon: Icons.school_outlined,
-                  value: "N5",
-                  caption: "Level",
-                  width: cardWidth,
-                ),
-              ),
-              SizedBox(width: gap),
-              Expanded(
-                child: _buildStatCard(
-                  icon: Icons.favorite_border,
-                  value: "Love",
-                  caption: "Category",
-                  width: cardWidth,
-                ),
-              ),
-              SizedBox(width: gap),
-              Expanded(
-                child: _buildStatCard(
-                  icon: Icons.groups_2_outlined,
-                  value: "CM Name",
-                  caption: "Community",
-                  width: cardWidth,
-                ),
-              ),
-              SizedBox(width: gap),
-              Expanded(
-                child: _buildStatCard(
-                  icon: Icons.lock_outline,
-                  value: "Premium",
-                  caption: "Unlock",
-                  width: cardWidth,
-                ),
-              ),
-            ],
-          );
-        },
-      ),
-      
-      const SizedBox(height: 8), // Section margin bottom 8dp
-    ],
-  );
-  
+        children: [
+          // Section margin top 12dp, bottom 8dp
+          const SizedBox(height: 12),
+
+          // Responsive layout: single row for normal screens, wrap for narrow screens
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final screenWidth = constraints.maxWidth;
+              final horizontalPadding = 32.0; // 16dp * 2
+              final gap = 8.0;
+
+              // Calculate card width for 4 cards in a row
+              final cardWidth = (screenWidth - horizontalPadding - gap * 3) / 4;
+
+              // For very narrow screens (< 320dp), use Wrap with 2 rows
+              if (screenWidth < 320) {
+                return Wrap(
+                  spacing: gap,
+                  runSpacing: 8,
+                  children: [
+                    _buildStatCard(
+                      icon: Icons.school_outlined,
+                      value: "N5",
+                      caption: "Level",
+                      width: cardWidth,
+                    ),
+                    _buildStatCard(
+                      icon: Icons.favorite_border,
+                      value: "Love",
+                      caption: "Category",
+                      width: cardWidth,
+                    ),
+                    _buildStatCard(
+                      icon: Icons.groups_2_outlined,
+                      value: "CM Name",
+                      caption: "Community",
+                      width: cardWidth,
+                    ),
+                    _buildStatCard(
+                      icon: Icons.lock_outline,
+                      value: "Premium",
+                      caption: "Unlock",
+                      width: cardWidth,
+                    ),
+                  ],
+                );
+              }
+
+              // Single row layout for normal screens
+              return Row(
+                children: [
+                  Expanded(
+                    child: _buildStatCard(
+                      icon: Icons.school_outlined,
+                      value: "N5",
+                      caption: "Level",
+                      width: cardWidth,
+                    ),
+                  ),
+                  SizedBox(width: gap),
+                  Expanded(
+                    child: _buildStatCard(
+                      icon: Icons.favorite_border,
+                      value: "Love",
+                      caption: "Category",
+                      width: cardWidth,
+                    ),
+                  ),
+                  SizedBox(width: gap),
+                  Expanded(
+                    child: _buildStatCard(
+                      icon: Icons.groups_2_outlined,
+                      value: "CM Name",
+                      caption: "Community",
+                      width: cardWidth,
+                    ),
+                  ),
+                  SizedBox(width: gap),
+                  Expanded(
+                    child: _buildStatCard(
+                      icon: Icons.lock_outline,
+                      value: "Premium",
+                      caption: "Unlock",
+                      width: cardWidth,
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
+
+          const SizedBox(height: 8), // Section margin bottom 8dp
+        ],
+      );
+
   /// Compact stat card for single row layout
   Widget _buildStatCard({
     required IconData icon,
@@ -408,7 +412,7 @@ class _StoryDetailScreenState extends State<StoryDetailScreen> with TickerProvid
   }) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
-    
+
     return ConstrainedBox(
       constraints: const BoxConstraints(
         minWidth: 44,
@@ -418,37 +422,38 @@ class _StoryDetailScreenState extends State<StoryDetailScreen> with TickerProvid
         width: width,
         height: 80, // Fixed height: 80dp
         child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 8), // Vertical padding: 8dp
-      decoration: BoxDecoration(
+          padding:
+              const EdgeInsets.symmetric(vertical: 8), // Vertical padding: 8dp
+          decoration: BoxDecoration(
             color: colorScheme.surface, // White background
             borderRadius: BorderRadius.circular(12), // Border radius: 12dp
             border: Border.all(
               color: colorScheme.outlineVariant, // Theme-aware border color
               width: 1,
             ),
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: () => ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('Stat: $value')),
           ),
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: () => ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('Stat: $value')),
+              ),
               borderRadius: BorderRadius.circular(12),
               child: Semantics(
                 label: '$value $caption',
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              mainAxisSize: MainAxisSize.min,
-              children: [
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
                     // Icon at the top
-                Icon(
-                  icon,
+                    Icon(
+                      icon,
                       size: 18, // Icon size: 18dp
                       color: colorScheme.onSurfaceVariant,
-                ),
+                    ),
                     const SizedBox(height: 4), // 4dp gap
                     // Value in the middle
-                Text(
+                    Text(
                       value,
                       style: TextStyle(
                         fontSize: 12, // fontSize: 12sp
@@ -457,23 +462,24 @@ class _StoryDetailScreenState extends State<StoryDetailScreen> with TickerProvid
                         color: colorScheme.onSurface,
                       ),
                       textAlign: TextAlign.center,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                     const SizedBox(height: 2), // 2dp gap
                     // Label at the bottom
-                Text(
+                    Text(
                       caption,
                       style: TextStyle(
                         fontSize: 10, // fontSize: 10sp
                         fontWeight: FontWeight.w400, // regular
-                        color: colorScheme.onSurfaceVariant.withOpacity(0.6), // 60% opacity
+                        color: colorScheme.onSurfaceVariant
+                            .withOpacity(0.6), // 60% opacity
                       ),
                       textAlign: TextAlign.center,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -485,48 +491,48 @@ class _StoryDetailScreenState extends State<StoryDetailScreen> with TickerProvid
 
   /// "What's inside" accordion with description
   Widget _whatsInsideAccordion(Story s) => Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      // Section title: "What's inside" → 16sp, weight 600, margin top 8dp
-      const Padding(
-        padding: EdgeInsets.only(top: 8),
-        child: Text(
-          "What's inside",
-          style: TextStyle(
-            fontSize: 16, // 16sp
-            fontWeight: FontWeight.w600, // Weight 600
-            color: Color(0xFF282A2E), // onSurface
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Section title: "What's inside" → 16sp, weight 600, margin top 8dp
+          const Padding(
+            padding: EdgeInsets.only(top: 8),
+            child: Text(
+              "What's inside",
+              style: TextStyle(
+                fontSize: 16, // 16sp
+                fontWeight: FontWeight.w600, // Weight 600
+                color: Color(0xFF282A2E), // onSurface
+              ),
+            ),
           ),
-        ),
-      ),
-      
-      const SizedBox(height: 8), // Divider line spacing
-      
-      // Description container with accordion behavior
-      Container(
-        decoration: BoxDecoration(
-          color: AppThemeTokens.surfaceVariant, // surfaceVariant background
-          border: Border.all(
-            color: const Color(0xFFE9E9EC), // Card border
-            width: 1,
+
+          const SizedBox(height: 8), // Divider line spacing
+
+          // Description container with accordion behavior
+          Container(
+            decoration: BoxDecoration(
+              color: AppThemeTokens.surfaceVariant, // surfaceVariant background
+              border: Border.all(
+                color: const Color(0xFFE9E9EC), // Card border
+                width: 1,
+              ),
+              borderRadius: BorderRadius.circular(12), // 12dp radius
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: AnimatedCrossFade(
+                duration: const Duration(milliseconds: 200),
+                crossFadeState: _isDescriptionExpanded
+                    ? CrossFadeState.showSecond
+                    : CrossFadeState.showFirst,
+                firstChild: _buildCollapsedDescription(s.description),
+                secondChild: _buildExpandedDescription(s.description),
+              ),
+            ),
           ),
-          borderRadius: BorderRadius.circular(12), // 12dp radius
-        ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(12),
-          child: AnimatedCrossFade(
-            duration: const Duration(milliseconds: 200),
-            crossFadeState: _isDescriptionExpanded
-                ? CrossFadeState.showSecond
-                : CrossFadeState.showFirst,
-            firstChild: _buildCollapsedDescription(s.description),
-            secondChild: _buildExpandedDescription(s.description),
-          ),
-        ),
-      ),
-    ],
-  );
-  
+        ],
+      );
+
   /// Collapsed description - 3 lines with ellipsis and "See more"
   Widget _buildCollapsedDescription(String description) {
     return Padding(
@@ -564,12 +570,12 @@ class _StoryDetailScreenState extends State<StoryDetailScreen> with TickerProvid
 
   /// Expanded description - full text with "See less"
   Widget _buildExpandedDescription(String description) {
-        return Padding(
+    return Padding(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 12), // Padding 12-16dp
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
             description,
             style: const TextStyle(
               fontSize: 14, // 14-15sp
@@ -594,54 +600,55 @@ class _StoryDetailScreenState extends State<StoryDetailScreen> with TickerProvid
       ),
     );
   }
-  
-  
+
   /// Episodes section - CardView with outlined cards
   Widget _episodesSection(BuildContext context) => Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      // Section title: "Episodes" → 17sp, weight 600, margin top 20-24dp, bottom 8dp
-      const Padding(
-        padding: EdgeInsets.only(top: 24, bottom: 8), // Margin top 20-24dp, bottom 8dp
-        child: Text(
-          'Episodes',
-          style: TextStyle(
-            fontSize: 17, // 17sp
-            fontWeight: FontWeight.w600, // Weight 600
-            color: Color(0xFF282A2E), // onSurface
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Section title: "Episodes" → 17sp, weight 600, margin top 20-24dp, bottom 8dp
+          const Padding(
+            padding: EdgeInsets.only(
+                top: 24, bottom: 8), // Margin top 20-24dp, bottom 8dp
+            child: Text(
+              'Episodes',
+              style: TextStyle(
+                fontSize: 17, // 17sp
+                fontWeight: FontWeight.w600, // Weight 600
+                color: Color(0xFF282A2E), // onSurface
+              ),
+            ),
           ),
-        ),
-      ),
-      
-      // Episodes list
-      FutureBuilder<List<Episode>>(
-        future: _epsF,
-        builder: (context, s2) {
-          final eps = s2.data ?? const <Episode>[];
-          return Column(
-            children: eps
-                .map((e) => Padding(
-                  padding: const EdgeInsets.only(bottom: 16), // Industry standard 16dp gap
-                  child: _buildEpisodeCard(context, e),
-                ))
-                .toList(),
-          );
-        },
-      ),
-    ],
-  );
-  
+
+          // Episodes list
+          FutureBuilder<List<Episode>>(
+            future: _epsF,
+            builder: (context, s2) {
+              final eps = s2.data ?? const <Episode>[];
+              return Column(
+                children: eps
+                    .map((e) => Padding(
+                          padding: const EdgeInsets.only(
+                              bottom: 16), // Industry standard 16dp gap
+                          child: _buildEpisodeCard(context, e),
+                        ))
+                    .toList(),
+              );
+            },
+          ),
+        ],
+      );
+
   /// Generate episode title with number and descriptive title
   String _getEpisodeTitle(Episode episode) {
     // If episode has a title, use it
     if (episode.title != null && episode.title!.isNotEmpty) {
       return "Episode ${episode.index} - ${episode.title}";
     }
-    
+
     // Mock episode titles - in real app, these would come from episode data
     final episodeTitles = [
       "Rainy Day in Kyoto",
-      "Morning Conversations", 
+      "Morning Conversations",
       "The Tea House Meeting",
       "Walking Through Gardens",
       "Evening Reflections",
@@ -651,7 +658,7 @@ class _StoryDetailScreenState extends State<StoryDetailScreen> with TickerProvid
       "Sunset Memories",
       "New Beginnings",
     ];
-    
+
     // Use episode index to determine title
     final episodeIndex = episode.index % episodeTitles.length;
     return "Episode ${episode.index} - ${episodeTitles[episodeIndex]}";
@@ -660,13 +667,24 @@ class _StoryDetailScreenState extends State<StoryDetailScreen> with TickerProvid
   /// Generate episode date based on episode index
   String _getEpisodeDate(Episode episode) {
     final now = DateTime.now();
-    final episodeDate = now.subtract(Duration(days: episode.index * 3)); // 3 days between episodes
-    
+    final episodeDate = now
+        .subtract(Duration(days: episode.index * 3)); // 3 days between episodes
+
     final months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec'
     ];
-    
+
     return "${episodeDate.day} ${months[episodeDate.month - 1]} ${episodeDate.year}";
   }
 
@@ -674,7 +692,7 @@ class _StoryDetailScreenState extends State<StoryDetailScreen> with TickerProvid
   Widget _buildMetaChipsRow(Episode episode) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
-    
+
     return Semantics(
       label: 'Episode ${episode.index} - Rating 8.7 - 4.2K likes',
       child: Wrap(
@@ -695,13 +713,13 @@ class _StoryDetailScreenState extends State<StoryDetailScreen> with TickerProvid
   Widget _buildRatingChip() {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
-    
+
     return IgnorePointer(
       child: Container(
         height: 24,
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
         decoration: BoxDecoration(
-          color: colorScheme.brightness == Brightness.light 
+          color: colorScheme.brightness == Brightness.light
               ? const Color(0xFFF3F4F6) // Light mode background
               : const Color(0xFF2A2E35), // Dark mode background
           borderRadius: BorderRadius.circular(12),
@@ -733,7 +751,7 @@ class _StoryDetailScreenState extends State<StoryDetailScreen> with TickerProvid
   Widget _buildLikesChip() {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
-    
+
     return IgnorePointer(
       child: Container(
         height: 24,
@@ -742,7 +760,7 @@ class _StoryDetailScreenState extends State<StoryDetailScreen> with TickerProvid
           color: Colors.transparent,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
-            color: colorScheme.brightness == Brightness.light 
+            color: colorScheme.brightness == Brightness.light
                 ? const Color(0xFFE5E7EB) // Light mode border
                 : const Color(0xFF374151), // Dark mode border
             width: 1,
@@ -780,7 +798,8 @@ class _StoryDetailScreenState extends State<StoryDetailScreen> with TickerProvid
           color: const Color(0xFFE9E9EC), // Card border
           width: 1,
         ),
-        borderRadius: BorderRadius.circular(16), // Industry standard 16dp radius
+        borderRadius:
+            BorderRadius.circular(16), // Industry standard 16dp radius
         boxShadow: [
           BoxShadow(
             blurRadius: 8,
@@ -808,8 +827,10 @@ class _StoryDetailScreenState extends State<StoryDetailScreen> with TickerProvid
                       child: Text(
                         _getEpisodeTitle(episode), // Dynamic episode title
                         style: const TextStyle(
-                          fontWeight: FontWeight.w600, // Semi-bold for better hierarchy
-                          fontSize: 17, // Slightly larger for better readability
+                          fontWeight:
+                              FontWeight.w600, // Semi-bold for better hierarchy
+                          fontSize:
+                              17, // Slightly larger for better readability
                           color: Color(0xFF282A2E), // Primary text color
                           height: 1.3, // Better line height
                         ),
@@ -817,7 +838,7 @@ class _StoryDetailScreenState extends State<StoryDetailScreen> with TickerProvid
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
-                    
+
                     // Date - right
                     Text(
                       _getEpisodeDate(episode),
@@ -829,9 +850,9 @@ class _StoryDetailScreenState extends State<StoryDetailScreen> with TickerProvid
                     ),
                   ],
                 ),
-                
+
                 const SizedBox(height: 16), // Industry standard 16dp spacing
-                
+
                 // Bottom: Creator (left) + Meta chips (right)
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -867,7 +888,7 @@ class _StoryDetailScreenState extends State<StoryDetailScreen> with TickerProvid
                         ),
                       ],
                     ),
-                    
+
                     // Right: Meta chips row (date • rating • likes)
                     _buildMetaChipsRow(episode),
                   ],
@@ -879,8 +900,7 @@ class _StoryDetailScreenState extends State<StoryDetailScreen> with TickerProvid
       ),
     );
   }
-  
-  
+
   /// Glass button - 44x44 circular Material button with premium styling
   Widget _buildGlassButton({
     required IconData icon,
@@ -908,7 +928,7 @@ class _StoryDetailScreenState extends State<StoryDetailScreen> with TickerProvid
             child: Icon(
               icon,
               size: 22,
-              color: isActive 
+              color: isActive
                   ? AppThemeTokens.bookmarkActive // #FF5A5A (active)
                   : const Color(0xFF3A3D45), // #3A3D45 (inactive)
             ),
@@ -925,7 +945,8 @@ class _StoryDetailScreenState extends State<StoryDetailScreen> with TickerProvid
     });
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(_isFavorite ? 'Added to favorites ♥' : 'Removed from favorites'),
+        content: Text(
+            _isFavorite ? 'Added to favorites ♥' : 'Removed from favorites'),
         duration: const Duration(seconds: 2),
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),

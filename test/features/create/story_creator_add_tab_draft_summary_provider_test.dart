@@ -54,6 +54,10 @@ class _SpyDraftRepo implements StoryDraftRepository {
   Future<void> deleteDraft(String draftId) => throw StateError('loadDraft');
 
   @override
+  Future<bool> discardPublishedEditStaging(String draftId) =>
+      throw StateError('loadDraft');
+
+  @override
   Future<void> ensureResumeMetaInitialized(String draftId) =>
       throw StateError('loadDraft');
 

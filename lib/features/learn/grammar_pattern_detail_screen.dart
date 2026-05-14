@@ -5,6 +5,8 @@ import 'package:nimon/features/learn/grammar_pattern.dart';
 import 'package:nimon/features/learn/learn_catalog_content_gate.dart';
 import 'package:nimon/features/learn/learn_explanation_language.dart';
 import 'package:nimon/features/learn/learn_explanation_language_provider.dart';
+import 'package:nimon/features/learn/learn_creator_module_tokens.dart';
+import 'package:nimon/features/learn/learn_module_surface_tokens.dart';
 import 'package:nimon/features/learn/learn_support_text.dart';
 import 'package:nimon/ui/widgets/nimon_circle_nav_button.dart';
 
@@ -19,26 +21,21 @@ class GrammarPatternDetailScreen extends ConsumerWidget {
   final String contentId;
   final GrammarPattern? pattern;
 
-  static const _bg = Color(0xFFF6F3EA);
-  static const _ink = Color(0xFF1A1917);
-  static const _inkMuted = Color(0xFF5C5A55);
   static const _cardRadius = 16.0;
-  static const _wrongBg = Color(0xFFFFF0F0);
-  static const _wrongBorder = Color(0x33CC0000);
-  static const _okBg = Color(0xFFF0FAF4);
-  static const _okBorder = Color(0x3316A34A);
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final pageBg = learnModuleListPageBackground(context);
     final bottomInset = MediaQuery.paddingOf(context).bottom;
     final p = pattern;
     final lang = ref.watch(learnExplanationLanguageProvider);
 
     return Scaffold(
-      backgroundColor: _bg,
+      backgroundColor: pageBg,
       appBar: AppBar(
-        backgroundColor: _bg,
+        backgroundColor: pageBg,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
         scrolledUnderElevation: 0,
@@ -52,7 +49,7 @@ class GrammarPatternDetailScreen extends ConsumerWidget {
                     ? 'No grammar pattern was opened for this story. '
                         'Go back and choose a pattern from the list.'
                     : 'No pattern data.',
-                style: theme.textTheme.bodyLarge?.copyWith(color: _ink),
+                style: theme.textTheme.bodyLarge?.copyWith(color: cs.onSurface),
               ),
             )
           : SingleChildScrollView(
@@ -75,7 +72,7 @@ class GrammarPatternDetailScreen extends ConsumerWidget {
                           ) ??
                           '—',
                       style: theme.textTheme.bodyLarge?.copyWith(
-                        color: _ink,
+                        color: cs.onSurface,
                         height: 1.45,
                         fontWeight: FontWeight.w500,
                       ),
@@ -87,7 +84,7 @@ class GrammarPatternDetailScreen extends ConsumerWidget {
                     child: Text(
                       p.form,
                       style: theme.textTheme.titleSmall?.copyWith(
-                        color: _ink,
+                        color: cs.onSurface,
                         fontWeight: FontWeight.w800,
                         height: 1.35,
                         letterSpacing: 0.2,
@@ -105,7 +102,7 @@ class GrammarPatternDetailScreen extends ConsumerWidget {
                           ) ??
                           '—',
                       style: theme.textTheme.bodyMedium?.copyWith(
-                        color: _ink,
+                        color: cs.onSurface,
                         height: 1.45,
                         fontWeight: FontWeight.w500,
                       ),
@@ -137,7 +134,7 @@ class GrammarPatternDetailScreen extends ConsumerWidget {
                       child: Text(
                         _relatedNoteForLearner(p, lang)!,
                         style: theme.textTheme.bodyMedium?.copyWith(
-                          color: _inkMuted,
+                          color: cs.onSurfaceVariant,
                           height: 1.45,
                           fontWeight: FontWeight.w500,
                         ),
@@ -173,6 +170,7 @@ class _HeaderSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = theme.colorScheme;
     return _SurfaceCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -180,7 +178,7 @@ class _HeaderSection extends StatelessWidget {
           Text(
             title,
             style: theme.textTheme.headlineSmall?.copyWith(
-              color: GrammarPatternDetailScreen._ink,
+              color: cs.onSurface,
               fontWeight: FontWeight.w900,
               height: 1.15,
             ),
@@ -189,7 +187,7 @@ class _HeaderSection extends StatelessWidget {
           Text(
             'Grammar Pattern',
             style: theme.textTheme.labelLarge?.copyWith(
-              color: GrammarPatternDetailScreen._inkMuted,
+              color: cs.onSurfaceVariant,
               fontWeight: FontWeight.w700,
               letterSpacing: 0.2,
             ),
@@ -214,7 +212,7 @@ class _SectionHeading extends StatelessWidget {
     return Text(
       text,
       style: theme.textTheme.titleSmall?.copyWith(
-        color: GrammarPatternDetailScreen._ink,
+        color: theme.colorScheme.onSurface,
         fontWeight: FontWeight.w800,
       ),
     );
@@ -240,7 +238,7 @@ class _LabeledSection extends StatelessWidget {
           Text(
             label,
             style: theme.textTheme.labelLarge?.copyWith(
-              color: GrammarPatternDetailScreen._inkMuted,
+              color: theme.colorScheme.onSurfaceVariant,
               fontWeight: FontWeight.w800,
               letterSpacing: 0.15,
             ),
@@ -268,6 +266,7 @@ class _ExampleCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = theme.colorScheme;
     final gloss = pickSupportText(
       explanationLanguage,
       en: example.englishGloss,
@@ -281,7 +280,7 @@ class _ExampleCard extends StatelessWidget {
           Text(
             '$index.',
             style: theme.textTheme.labelSmall?.copyWith(
-              color: GrammarPatternDetailScreen._inkMuted,
+              color: cs.onSurfaceVariant,
               fontWeight: FontWeight.w800,
             ),
           ),
@@ -289,7 +288,7 @@ class _ExampleCard extends StatelessWidget {
           Text(
             example.japanese,
             style: theme.textTheme.bodyLarge?.copyWith(
-              color: GrammarPatternDetailScreen._ink,
+              color: cs.onSurface,
               fontWeight: FontWeight.w600,
               height: 1.4,
             ),
@@ -299,7 +298,7 @@ class _ExampleCard extends StatelessWidget {
             Text(
               gloss,
               style: theme.textTheme.bodyMedium?.copyWith(
-                color: GrammarPatternDetailScreen._inkMuted,
+                color: cs.onSurfaceVariant,
                 height: 1.45,
                 fontWeight: FontWeight.w500,
               ),
@@ -327,7 +326,7 @@ class _MistakesBlock extends StatelessWidget {
         child: Text(
           '—',
           style: theme.textTheme.bodyMedium?.copyWith(
-            color: GrammarPatternDetailScreen._inkMuted,
+            color: theme.colorScheme.onSurfaceVariant,
           ),
         ),
       );
@@ -358,14 +357,27 @@ class _MistakeRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final wrongFill = isDark
+        ? cs.errorContainer.withValues(alpha: 0.45)
+        : const Color(0xFFFFF0F0);
+    final wrongBorder =
+        isDark ? cs.error.withValues(alpha: 0.45) : const Color(0x33CC0000);
+    final okFill = isDark
+        ? cs.tertiaryContainer.withValues(alpha: 0.45)
+        : const Color(0xFFF0FAF4);
+    final okBorder =
+        isDark ? cs.tertiary.withValues(alpha: 0.45) : const Color(0x3316A34A);
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         _MistakeLine(
           prefix: '✗',
           text: mistake.incorrect,
-          fill: GrammarPatternDetailScreen._wrongBg,
-          border: GrammarPatternDetailScreen._wrongBorder,
+          fill: wrongFill,
+          border: wrongBorder,
           theme: theme,
           strong: true,
         ),
@@ -373,8 +385,8 @@ class _MistakeRow extends StatelessWidget {
         _MistakeLine(
           prefix: '✓',
           text: mistake.correct,
-          fill: GrammarPatternDetailScreen._okBg,
-          border: GrammarPatternDetailScreen._okBorder,
+          fill: okFill,
+          border: okBorder,
           theme: theme,
           strong: false,
         ),
@@ -415,7 +427,7 @@ class _MistakeLine extends StatelessWidget {
           Text(
             prefix,
             style: theme.textTheme.titleMedium?.copyWith(
-              color: GrammarPatternDetailScreen._ink,
+              color: theme.colorScheme.onSurface,
               fontWeight: FontWeight.w900,
               height: 1.2,
             ),
@@ -425,7 +437,7 @@ class _MistakeLine extends StatelessWidget {
             child: Text(
               text,
               style: theme.textTheme.bodyMedium?.copyWith(
-                color: GrammarPatternDetailScreen._ink,
+                color: theme.colorScheme.onSurface,
                 height: 1.4,
                 fontWeight: strong ? FontWeight.w700 : FontWeight.w600,
               ),
@@ -448,10 +460,10 @@ class _SurfaceCard extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.9),
+        color: learnCreatorModuleCardSurfaceColor(context),
         borderRadius:
             BorderRadius.circular(GrammarPatternDetailScreen._cardRadius),
-        border: Border.all(color: const Color(0x14000000)),
+        border: Border.all(color: learnCreatorModuleCardBorderColor(context)),
       ),
       child: child,
     );

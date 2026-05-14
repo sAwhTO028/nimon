@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:nimon/features/learn/learn_catalog_content_gate.dart';
+import 'package:nimon/features/learn/learn_creator_module_tokens.dart';
 import 'package:nimon/features/learn/learn_explanation_language_provider.dart';
+import 'package:nimon/features/learn/learn_module_surface_tokens.dart';
 import 'package:nimon/features/learn/quiz_flow_theme.dart';
 import 'package:nimon/features/learn/quiz_mcq.dart';
 import 'package:nimon/features/learn/quiz_mock_bank.dart';
@@ -19,10 +21,6 @@ class QuizPlayScreen extends ConsumerStatefulWidget {
 
   final String contentId;
   final QuizSessionStartArgs? args;
-
-  static const _bg = QuizFlowTheme.pageBg;
-  static const _ink = QuizFlowTheme.ink;
-  static const _inkMuted = QuizFlowTheme.inkMuted;
 
   @override
   ConsumerState<QuizPlayScreen> createState() => _QuizPlayScreenState();
@@ -106,6 +104,8 @@ class _QuizPlayScreenState extends ConsumerState<QuizPlayScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final pageBg = learnModuleListPageBackground(context);
     final a = widget.args;
     final q = _current;
     final bottomInset = MediaQuery.paddingOf(context).bottom;
@@ -118,9 +118,9 @@ class _QuizPlayScreenState extends ConsumerState<QuizPlayScreen> {
               'for this story.'
           : 'Missing quiz session. Go back and tap Start Quiz again.';
       return Scaffold(
-        backgroundColor: QuizPlayScreen._bg,
+        backgroundColor: pageBg,
         appBar: AppBar(
-          backgroundColor: QuizPlayScreen._bg,
+          backgroundColor: pageBg,
           leading: NimonBackButton(onPressed: () => context.pop()),
         ),
         body: Padding(
@@ -128,7 +128,7 @@ class _QuizPlayScreenState extends ConsumerState<QuizPlayScreen> {
           child: Text(
             missingMsg,
             style: theme.textTheme.bodyLarge?.copyWith(
-              color: QuizPlayScreen._inkMuted,
+              color: cs.onSurfaceVariant,
             ),
           ),
         ),
@@ -143,9 +143,9 @@ class _QuizPlayScreenState extends ConsumerState<QuizPlayScreen> {
               'includes quiz items.'
           : 'No questions for this category.';
       return Scaffold(
-        backgroundColor: QuizPlayScreen._bg,
+        backgroundColor: pageBg,
         appBar: AppBar(
-          backgroundColor: QuizPlayScreen._bg,
+          backgroundColor: pageBg,
           leading: NimonBackButton(onPressed: () => context.pop()),
         ),
         body: Padding(
@@ -153,7 +153,7 @@ class _QuizPlayScreenState extends ConsumerState<QuizPlayScreen> {
           child: Text(
             emptyMsg,
             style: theme.textTheme.bodyLarge?.copyWith(
-              color: QuizPlayScreen._inkMuted,
+              color: cs.onSurfaceVariant,
             ),
           ),
         ),
@@ -165,7 +165,7 @@ class _QuizPlayScreenState extends ConsumerState<QuizPlayScreen> {
     final progress = n / total;
 
     return Scaffold(
-      backgroundColor: QuizPlayScreen._bg,
+      backgroundColor: pageBg,
       body: SafeArea(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -181,7 +181,7 @@ class _QuizPlayScreenState extends ConsumerState<QuizPlayScreen> {
                   Text(
                     'QUIZ',
                     style: theme.textTheme.titleLarge?.copyWith(
-                      color: QuizPlayScreen._ink,
+                      color: cs.onSurface,
                       fontWeight: FontWeight.w800,
                       letterSpacing: 0.6,
                     ),
@@ -223,17 +223,16 @@ class _QuizPlayScreenState extends ConsumerState<QuizPlayScreen> {
                           width: double.infinity,
                           padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
                           decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.75),
+                            color: cs.surfaceContainerLow,
                             borderRadius: BorderRadius.circular(12),
                             border: Border.all(
-                              color:
-                                  QuizPlayScreen._ink.withValues(alpha: 0.08),
+                              color: cs.outlineVariant.withValues(alpha: 0.45),
                             ),
                           ),
                           child: Text(
                             explanationLine,
                             style: theme.textTheme.bodySmall?.copyWith(
-                              color: QuizPlayScreen._inkMuted,
+                              color: cs.onSurfaceVariant,
                               height: 1.45,
                               fontWeight: FontWeight.w500,
                             ),
@@ -249,8 +248,8 @@ class _QuizPlayScreenState extends ConsumerState<QuizPlayScreen> {
                       onPressed: _next,
                       style: FilledButton.styleFrom(
                         padding: const EdgeInsets.symmetric(vertical: 16),
-                        backgroundColor: QuizFlowTheme.primary,
-                        foregroundColor: QuizFlowTheme.onPrimary,
+                        backgroundColor: cs.primary,
+                        foregroundColor: cs.onPrimary,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(_radius),
                         ),
@@ -259,7 +258,7 @@ class _QuizPlayScreenState extends ConsumerState<QuizPlayScreen> {
                         _index >= total - 1 ? 'See results' : 'Next question',
                         style: theme.textTheme.titleSmall?.copyWith(
                           fontWeight: FontWeight.w800,
-                          color: QuizFlowTheme.onPrimary,
+                          color: cs.onPrimary,
                         ),
                       ),
                     ),
@@ -292,26 +291,26 @@ class _QuizQuestionPanel extends StatelessWidget {
   final String prompt;
   final ThemeData theme;
 
-  static const _ink = QuizFlowTheme.ink;
-  static const _inkSoft = QuizFlowTheme.inkMuted;
-
   /// Matches option cards (`_OptionTile`) for one aligned column.
   static const _cardRadius = _QuizPlayScreenState._radius;
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       width: double.infinity,
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: learnCreatorModuleCardSurfaceColor(context),
         borderRadius: BorderRadius.circular(_cardRadius),
-        border: Border.all(color: _ink.withValues(alpha: 0.08)),
+        border: Border.all(color: learnCreatorModuleCardBorderColor(context)),
         boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.06),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
-          ),
+          if (!isDark)
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.06),
+              blurRadius: 12,
+              offset: const Offset(0, 4),
+            ),
         ],
       ),
       padding: const EdgeInsets.fromLTRB(18, 18, 18, 22),
@@ -325,21 +324,24 @@ class _QuizQuestionPanel extends StatelessWidget {
                 padding:
                     const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFF5F2EC),
+                  color: cs.surfaceContainerHighest,
                   borderRadius: BorderRadius.circular(999),
-                  border: Border.all(color: _ink.withValues(alpha: 0.08)),
+                  border: Border.all(
+                    color: cs.outlineVariant.withValues(alpha: 0.5),
+                  ),
                   boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.06),
-                      blurRadius: 6,
-                      offset: const Offset(0, 2),
-                    ),
+                    if (!isDark)
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.06),
+                        blurRadius: 6,
+                        offset: const Offset(0, 2),
+                      ),
                   ],
                 ),
                 child: Text(
                   categoryLabel,
                   style: theme.textTheme.labelMedium?.copyWith(
-                    color: _inkSoft,
+                    color: learnCreatorModuleSecondaryTextColor(context),
                     fontWeight: FontWeight.w800,
                     letterSpacing: 0.15,
                   ),
@@ -349,7 +351,7 @@ class _QuizQuestionPanel extends StatelessWidget {
               Text(
                 '$questionNumber / $total',
                 style: theme.textTheme.labelLarge?.copyWith(
-                  color: _ink.withValues(alpha: 0.72),
+                  color: cs.onSurface.withValues(alpha: 0.72),
                   fontWeight: FontWeight.w900,
                   letterSpacing: 0.3,
                 ),
@@ -362,15 +364,15 @@ class _QuizQuestionPanel extends StatelessWidget {
             child: LinearProgressIndicator(
               value: progress,
               minHeight: 5,
-              backgroundColor: _ink.withValues(alpha: 0.08),
-              color: QuizFlowTheme.progressFill,
+              backgroundColor: cs.outlineVariant.withValues(alpha: 0.35),
+              color: cs.primary,
             ),
           ),
           const SizedBox(height: 20),
           Text(
             'Question',
             style: theme.textTheme.labelSmall?.copyWith(
-              color: _inkSoft.withValues(alpha: 0.9),
+              color: cs.onSurfaceVariant.withValues(alpha: 0.9),
               fontWeight: FontWeight.w800,
               letterSpacing: 1.2,
             ),
@@ -379,7 +381,7 @@ class _QuizQuestionPanel extends StatelessWidget {
           Text(
             prompt,
             style: theme.textTheme.titleMedium?.copyWith(
-              color: _ink,
+              color: learnCreatorModulePrimaryTextColor(context),
               fontWeight: FontWeight.w700,
               height: 1.45,
             ),
@@ -401,10 +403,21 @@ class _FeedbackBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final accent = isCorrect ? QuizFlowTheme.success : QuizFlowTheme.error;
-    final fill = isCorrect ? QuizFlowTheme.successBg : QuizFlowTheme.errorBg;
-    final border =
-        isCorrect ? QuizFlowTheme.successBorder : QuizFlowTheme.errorBorder;
+    final cs = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final accent = isCorrect
+        ? (isDark ? cs.tertiary : QuizFlowTheme.success)
+        : (isDark ? cs.error : QuizFlowTheme.error);
+    final fill = isCorrect
+        ? (isDark
+            ? cs.tertiaryContainer.withValues(alpha: 0.55)
+            : QuizFlowTheme.successBg)
+        : (isDark
+            ? cs.errorContainer.withValues(alpha: 0.55)
+            : QuizFlowTheme.errorBg);
+    final border = isCorrect
+        ? (isDark ? cs.tertiary : QuizFlowTheme.successBorder)
+        : (isDark ? cs.error : QuizFlowTheme.errorBorder);
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
@@ -455,68 +468,101 @@ class _OptionTile extends StatelessWidget {
   final int correctIndex;
   final VoidCallback onTap;
 
-  static const _ink = QuizFlowTheme.ink;
   static const _radius = 16.0;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
     final isSelected = selectedIndex == index;
     final isCorrect = index == correctIndex;
 
-    Color borderColor = _ink.withValues(alpha: 0.1);
-    Color bg = Colors.white;
+    Color borderColor = cs.outlineVariant.withValues(alpha: 0.45);
+    Color bg = learnCreatorModuleCardSurfaceColor(context);
     double borderWidth = 1.5;
-    List<BoxShadow> shadows = [
-      BoxShadow(
-        color: Colors.black.withValues(alpha: 0.05),
-        blurRadius: 10,
-        offset: const Offset(0, 3),
-      ),
-    ];
-    Color badgeFill = const Color(0xFFF0EBE3);
-    Color badgeBorder = _ink.withValues(alpha: 0.08);
-    Color badgeText = _ink.withValues(alpha: 0.5);
+    List<BoxShadow> shadows = isDark
+        ? const <BoxShadow>[]
+        : [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.05),
+              blurRadius: 10,
+              offset: const Offset(0, 3),
+            ),
+          ];
+    Color badgeFill = cs.surfaceContainerHighest;
+    Color badgeBorder = cs.outlineVariant.withValues(alpha: 0.4);
+    Color badgeText = cs.onSurfaceVariant;
     Widget? trailing;
 
     if (revealed) {
-      shadows = [
-        BoxShadow(
-          color: Colors.black.withValues(alpha: 0.04),
-          blurRadius: 8,
-          offset: const Offset(0, 2),
-        ),
-      ];
+      shadows = isDark
+          ? const <BoxShadow>[]
+          : [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.04),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+            ];
       if (isCorrect) {
-        borderColor = QuizFlowTheme.successBorder;
-        bg = QuizFlowTheme.successBg;
-        borderWidth = 2;
-        badgeFill = QuizFlowTheme.success.withValues(alpha: 0.14);
-        badgeBorder = QuizFlowTheme.successBorder.withValues(alpha: 0.65);
-        badgeText = QuizFlowTheme.success;
-        trailing = Icon(
-          Icons.check_rounded,
-          color: QuizFlowTheme.success,
-          size: 22,
-        );
+        if (isDark) {
+          borderColor = cs.tertiary.withValues(alpha: 0.65);
+          bg = cs.tertiaryContainer.withValues(alpha: 0.45);
+          borderWidth = 2;
+          badgeFill = cs.tertiary.withValues(alpha: 0.2);
+          badgeBorder = cs.tertiary.withValues(alpha: 0.5);
+          badgeText = cs.onTertiaryContainer;
+          trailing = Icon(
+            Icons.check_rounded,
+            color: cs.tertiary,
+            size: 22,
+          );
+        } else {
+          borderColor = QuizFlowTheme.successBorder;
+          bg = QuizFlowTheme.successBg;
+          borderWidth = 2;
+          badgeFill = QuizFlowTheme.success.withValues(alpha: 0.14);
+          badgeBorder = QuizFlowTheme.successBorder.withValues(alpha: 0.65);
+          badgeText = QuizFlowTheme.success;
+          trailing = Icon(
+            Icons.check_rounded,
+            color: QuizFlowTheme.success,
+            size: 22,
+          );
+        }
       } else if (isSelected) {
-        borderColor = QuizFlowTheme.errorBorder;
-        bg = QuizFlowTheme.errorBg;
-        borderWidth = 2;
-        badgeFill = QuizFlowTheme.error.withValues(alpha: 0.12);
-        badgeBorder = QuizFlowTheme.errorBorder.withValues(alpha: 0.7);
-        badgeText = QuizFlowTheme.error;
-        trailing = Icon(
-          Icons.close_rounded,
-          color: QuizFlowTheme.error,
-          size: 22,
-        );
+        if (isDark) {
+          borderColor = cs.error.withValues(alpha: 0.65);
+          bg = cs.errorContainer.withValues(alpha: 0.45);
+          borderWidth = 2;
+          badgeFill = cs.error.withValues(alpha: 0.18);
+          badgeBorder = cs.error.withValues(alpha: 0.55);
+          badgeText = cs.onErrorContainer;
+          trailing = Icon(
+            Icons.close_rounded,
+            color: cs.error,
+            size: 22,
+          );
+        } else {
+          borderColor = QuizFlowTheme.errorBorder;
+          bg = QuizFlowTheme.errorBg;
+          borderWidth = 2;
+          badgeFill = QuizFlowTheme.error.withValues(alpha: 0.12);
+          badgeBorder = QuizFlowTheme.errorBorder.withValues(alpha: 0.7);
+          badgeText = QuizFlowTheme.error;
+          trailing = Icon(
+            Icons.close_rounded,
+            color: QuizFlowTheme.error,
+            size: 22,
+          );
+        }
       } else {
-        borderColor = _ink.withValues(alpha: 0.06);
-        bg = const Color(0xFFFAFAF8);
+        borderColor = cs.outlineVariant.withValues(alpha: 0.35);
+        bg = isDark ? cs.surfaceContainerLow : const Color(0xFFFAFAF8);
         borderWidth = 1;
-        badgeFill = _ink.withValues(alpha: 0.05);
-        badgeText = _ink.withValues(alpha: 0.35);
+        badgeFill = cs.onSurface.withValues(alpha: 0.06);
+        badgeText = cs.onSurface.withValues(alpha: 0.35);
       }
     }
 
@@ -559,7 +605,7 @@ class _OptionTile extends StatelessWidget {
                 child: Text(
                   text,
                   style: theme.textTheme.bodyLarge?.copyWith(
-                    color: _ink,
+                    color: learnCreatorModulePrimaryTextColor(context),
                     fontWeight: FontWeight.w600,
                     height: 1.35,
                   ),

@@ -10,6 +10,7 @@ final remoteCreatorCollectionsRepositoryProvider =
   return RemoteCreatorCollectionsRepository(
     apiBaseUrl: RemoteBackendConfig.apiBaseUrl,
     authHeaderBuilder: ref.watch(authHeaderBuilderProvider),
+    sendWithAuth401Recovery: ref.watch(nimonSendWithAuth401RecoveryProvider),
   );
 });
 

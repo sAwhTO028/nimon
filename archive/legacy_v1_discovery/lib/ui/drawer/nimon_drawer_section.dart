@@ -36,10 +36,10 @@ class NimonDrawerSection extends StatelessWidget {
     final type = theme.type;
 
     final sectionStyle = type.metadata(theme, wc).copyWith(
-      color: theme.colorScheme.onSurface.withValues(alpha: 0.62),
-      letterSpacing: 0.08,
-      fontWeight: FontWeight.w700,
-    );
+          color: theme.colorScheme.onSurface.withValues(alpha: 0.62),
+          letterSpacing: 0.08,
+          fontWeight: FontWeight.w700,
+        );
 
     return Padding(
       padding: EdgeInsets.symmetric(vertical: s.x3),
@@ -92,12 +92,12 @@ class _DrawerRow extends StatelessWidget {
     final type = theme.type;
 
     final textStyle = type.sectionTitle(theme, wc).copyWith(
-      fontSize: wc == NimonWidthClass.compact ? 16 : 17,
-      fontWeight: FontWeight.w600,
-      color: action.destructive
-          ? theme.colorScheme.error
-          : theme.colorScheme.onSurface,
-    );
+          fontSize: wc == NimonWidthClass.compact ? 16 : 17,
+          fontWeight: FontWeight.w600,
+          color: action.destructive
+              ? theme.colorScheme.error
+              : theme.colorScheme.onSurface,
+        );
 
     final iconColor = action.destructive
         ? theme.colorScheme.error
@@ -137,4 +137,3 @@ class _DrawerRow extends StatelessWidget {
     );
   }
 }
-

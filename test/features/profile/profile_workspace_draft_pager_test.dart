@@ -53,6 +53,10 @@ class _StubWorkspaceDraftRepository implements StoryDraftRepository {
   Future<void> deleteDraft(String draftId) => throw UnimplementedError();
 
   @override
+  Future<bool> discardPublishedEditStaging(String draftId) =>
+      throw UnimplementedError();
+
+  @override
   Future<void> ensureResumeMetaInitialized(String draftId) =>
       throw UnimplementedError();
 

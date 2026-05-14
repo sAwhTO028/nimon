@@ -1,4 +1,7 @@
-import { UnsupportedMediaTypeException } from '@nestjs/common';
+import {
+  BadRequestException,
+  UnsupportedMediaTypeException,
+} from '@nestjs/common';
 import type { MulterMemoryUploadedFile } from './media-upload.types';
 import type { MediaStorage } from './media-storage';
 import { MediaService } from './media.service';
@@ -211,6 +214,47 @@ describe('MediaService', () => {
         }),
       );
     }
+  });
+
+  it('saveCover rejects oversized file with validation_failed', async () => {
+    const prev = process.env.MEDIA_COVER_MAX_BYTES;
+    process.env.MEDIA_COVER_MAX_BYTES = '10';
+    mockStorage.save.mockResolvedValue({
+      key: `${userId}/cover/x.png`,
+      url: `http://localhost:3000/uploads/x`,
+    });
+
+    const f = mockFile({
+      mimetype: 'image/png',
+      size: 500,
+      buffer: Buffer.alloc(500),
+    });
+
+    try {
+      await svc().saveCover(userId, f);
+      throw new Error('expected BadRequestException');
+    } catch (e) {
+      expect(e).toBeInstanceOf(BadRequestException);
+      const body = (e as BadRequestException).getResponse() as Record<
+        string,
+        unknown
+      >;
+      expect(body['message']).toBe('validation_failed');
+      const issues = body['issues'] as Array<{ field?: string }>;
+      expect(issues[0].field).toBe('coverImage');
+    } finally {
+      process.env.MEDIA_COVER_MAX_BYTES = prev ?? '10485760';
+    }
+    expect(mockStorage.save).not.toHaveBeenCalled();
+  });
+
+  it('storage failure is not validation_failed', async () => {
+    mockStorage.save.mockRejectedValueOnce(new Error('disk full'));
+    const f = mockFile({
+      mimetype: 'image/png',
+      buffer: Buffer.from('12345678'),
+    });
+    await expect(svc().saveCover(userId, f)).rejects.toThrow('disk full');
   });
 
   it('saveAudio rejects application/octet-stream with file.pdf', async () => {

@@ -1,8 +1,9 @@
 // tool/unused_files.dart
 import 'dart:io';
 
-final ignoreDirs = RegExp(r'/(gen|build|l10n|.dart_tool|test|ios|android|web|macos|windows|linux)/');
-final ignoreExt   = RegExp(r'\.(g|freezed)\.dart$');
+final ignoreDirs = RegExp(
+    r'/(gen|build|l10n|.dart_tool|test|ios|android|web|macos|windows|linux)/');
+final ignoreExt = RegExp(r'\.(g|freezed)\.dart$');
 
 void main(List<String> args) {
   final root = Directory('lib');
@@ -12,16 +13,18 @@ void main(List<String> args) {
   }
 
   print('Scanning lib directory...');
-  
+
   // 1) Collect all dart files
   final files = <String>[];
   for (final f in root.listSync(recursive: true).whereType<File>()) {
     final p = f.path.replaceAll('\\', '/');
-    if (p.endsWith('.dart') && !ignoreDirs.hasMatch(p) && !ignoreExt.hasMatch(p)) {
+    if (p.endsWith('.dart') &&
+        !ignoreDirs.hasMatch(p) &&
+        !ignoreExt.hasMatch(p)) {
       files.add(p);
     }
   }
-  
+
   print('Found ${files.length} Dart files');
 
   // 2) Build import graph
@@ -32,7 +35,7 @@ void main(List<String> args) {
   for (final p in files) {
     try {
       final content = File(p).readAsStringSync();
-      
+
       // Find import statements - simple line by line approach
       final lines = content.split('\n');
       for (final line in lines) {
@@ -45,9 +48,10 @@ void main(List<String> args) {
             final singleQuoteStart = trimmed.indexOf("'");
             final singleQuoteEnd = trimmed.lastIndexOf("'");
             if (singleQuoteStart != -1 && singleQuoteEnd != -1) {
-              final path = trimmed.substring(singleQuoteStart + 1, singleQuoteEnd);
+              final path =
+                  trimmed.substring(singleQuoteStart + 1, singleQuoteEnd);
               String normalizedPath;
-              
+
               if (path.startsWith('package:')) {
                 final pkg = path.split(':').last;
                 normalizedPath = 'lib/$pkg';
@@ -55,9 +59,10 @@ void main(List<String> args) {
                 // relative import
                 final base = File(p).parent.path;
                 final abs = File(norm('$base/$path')).path;
-                normalizedPath = norm(abs).replaceAll(RegExp(r'^.*?/lib/'), 'lib/');
+                normalizedPath =
+                    norm(abs).replaceAll(RegExp(r'^.*?/lib/'), 'lib/');
               }
-              
+
               if (normalizedPath.endsWith('.dart')) {
                 allImports.add(normalizedPath);
               }
@@ -65,7 +70,7 @@ void main(List<String> args) {
           } else {
             final path = trimmed.substring(quoteStart + 1, quoteEnd);
             String normalizedPath;
-            
+
             if (path.startsWith('package:')) {
               final pkg = path.split(':').last;
               normalizedPath = 'lib/$pkg';
@@ -73,9 +78,10 @@ void main(List<String> args) {
               // relative import
               final base = File(p).parent.path;
               final abs = File(norm('$base/$path')).path;
-              normalizedPath = norm(abs).replaceAll(RegExp(r'^.*?/lib/'), 'lib/');
+              normalizedPath =
+                  norm(abs).replaceAll(RegExp(r'^.*?/lib/'), 'lib/');
             }
-            
+
             if (normalizedPath.endsWith('.dart')) {
               allImports.add(normalizedPath);
             }
@@ -91,7 +97,8 @@ void main(List<String> args) {
   final candidates = files.where((p) {
     if (p.endsWith('main.dart')) return false;
     return !allImports.contains(p);
-  }).toList()..sort();
+  }).toList()
+    ..sort();
 
   // 4) Print report
   stdout.writeln('--- Unused file candidates (${candidates.length}) ---');
@@ -99,5 +106,6 @@ void main(List<String> args) {
     stdout.writeln(c);
   }
   stdout.writeln('-------------------------------------------');
-  stdout.writeln('NOTE: This is static. Router/dynamic usage may not be detected. Review before delete.');
+  stdout.writeln(
+      'NOTE: This is static. Router/dynamic usage may not be detected. Review before delete.');
 }

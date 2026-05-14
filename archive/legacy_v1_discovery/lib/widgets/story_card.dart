@@ -19,7 +19,7 @@ class StoryCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    
+
     return Card(
       elevation: 2,
       shadowColor: theme.colorScheme.shadow.withOpacity(0.1),
@@ -35,7 +35,7 @@ class StoryCard extends StatelessWidget {
           children: [
             // Story cover image
             _buildCoverImage(context),
-            
+
             // Story details
             Padding(
               padding: const EdgeInsets.all(16),
@@ -52,9 +52,9 @@ class StoryCard extends StatelessWidget {
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                   ),
-                  
+
                   const SizedBox(height: 8),
-                  
+
                   // Author and level
                   Row(
                     children: [
@@ -73,10 +73,11 @@ class StoryCard extends StatelessWidget {
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
-                      
+
                       // JLPT Level chip
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 2),
                         decoration: BoxDecoration(
                           color: _getLevelColor(story.jlptLevel, theme),
                           borderRadius: BorderRadius.circular(12),
@@ -92,10 +93,10 @@ class StoryCard extends StatelessWidget {
                       ),
                     ],
                   ),
-                  
+
                   if (showStats) ...[
                     const SizedBox(height: 12),
-                    
+
                     // Stats row
                     Row(
                       children: [
@@ -112,9 +113,9 @@ class StoryCard extends StatelessWidget {
                             color: theme.colorScheme.onSurfaceVariant,
                           ),
                         ),
-                        
+
                         const SizedBox(width: 16),
-                        
+
                         // Episodes count
                         Icon(
                           Icons.library_books_outlined,
@@ -128,18 +129,21 @@ class StoryCard extends StatelessWidget {
                             color: theme.colorScheme.onSurfaceVariant,
                           ),
                         ),
-                        
+
                         const Spacer(),
-                        
+
                         // Category
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 2),
                           decoration: BoxDecoration(
                             color: theme.colorScheme.surfaceContainerHighest,
                             borderRadius: BorderRadius.circular(8),
                           ),
                           child: Text(
-                            story.tags.isNotEmpty ? story.tags.first : 'General',
+                            story.tags.isNotEmpty
+                                ? story.tags.first
+                                : 'General',
                             style: theme.textTheme.labelSmall?.copyWith(
                               color: theme.colorScheme.onSurfaceVariant,
                               fontSize: 10,
@@ -160,7 +164,7 @@ class StoryCard extends StatelessWidget {
 
   Widget _buildCoverImage(BuildContext context) {
     final theme = Theme.of(context);
-    
+
     Widget imageWidget = Container(
       height: 160,
       width: double.infinity,

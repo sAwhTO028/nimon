@@ -50,12 +50,29 @@ class RemoteMonoFeedRepository implements MonoFeedRepository {
     throw StateError('Expected JSON object response');
   }
 
+  String _formatHttpError(http.Response r) {
+    final code = r.statusCode;
+    final raw = r.body.trim();
+    if (raw.isEmpty) return 'HTTP $code';
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is Map) {
+        final m = decoded['message'];
+        if (m != null && '$m'.trim().isNotEmpty) {
+          return 'HTTP $code: $m';
+        }
+        final codeStr = decoded['code'];
+        if (codeStr != null && '$codeStr'.trim().isNotEmpty) {
+          return 'HTTP $code ($codeStr)';
+        }
+      }
+    } catch (_) {}
+    return raw.length > 280 ? '${raw.substring(0, 280)}…' : 'HTTP $code: $raw';
+  }
+
   void _throwIfNotOk(http.Response r) {
     if (r.statusCode >= 200 && r.statusCode < 300) return;
-    final msg = r.body.trim().isEmpty
-        ? 'HTTP ${r.statusCode}'
-        : 'HTTP ${r.statusCode}: ${r.body}';
-    throw StateError(msg);
+    throw StateError(_formatHttpError(r));
   }
 
   static String? _optStr(Object? v) {

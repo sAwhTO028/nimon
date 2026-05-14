@@ -1,11 +1,26 @@
 import {
+  BadRequestException,
   ConflictException,
   ForbiddenException,
   NotFoundException,
 } from '@nestjs/common';
 
+import { QuotaExceededException } from '../../common/limits/quota-exceeded.exception';
+import { FREE_TIER_QUOTA_KEYS, FREE_TIER_QUOTAS } from '../../common/limits/free-tier-quotas';
+
+import { canonicalizeMediaUrl } from '../media/media-url-canonicalizer';
+import type { MediaUrlCanonicalizerService } from '../media/media-url-canonicalizer.service';
 import { PUBLISHED_MONO_CATALOG_VISIBLE } from '../published-monos/published-mono-visibility';
 import { CreatorCollectionsService } from './creator-collections.service';
+
+function mkMedia(
+  base = 'http://localhost:3000/uploads',
+): MediaUrlCanonicalizerService {
+  return {
+    mediaPublicBaseUrl: () => base,
+    url: (u: string | null | undefined) => canonicalizeMediaUrl(u, base),
+  } as unknown as MediaUrlCanonicalizerService;
+}
 
 describe('CreatorCollectionsService', () => {
   const ownerId = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
@@ -32,7 +47,7 @@ describe('CreatorCollectionsService', () => {
       creatorMonoCollectionItem: { groupBy, findMany: jest.fn().mockResolvedValue([]) },
     } as any;
 
-    const out = await new CreatorCollectionsService(prisma).listMine(ownerId);
+    const out = await new CreatorCollectionsService(prisma, mkMedia()).listMine(ownerId);
 
     expect(findMany).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -51,7 +66,55 @@ describe('CreatorCollectionsService', () => {
     expect(out.collections[0].itemCount).toBe(3);
   });
 
-  it('create trims title and defaults visibility public', async () => {
+  it('create rejects empty name with validation_failed', async () => {
+    const prisma = { creatorMonoCollection: {} } as any;
+    try {
+      await new CreatorCollectionsService(prisma, mkMedia()).create(ownerId, {
+        title: '   ',
+        description: null,
+        coverImageUrl: null,
+        visibility: 'public',
+        sortOrder: 0,
+      } as any);
+      throw new Error('expected BadRequestException');
+    } catch (e) {
+      expect(e).toBeInstanceOf(BadRequestException);
+      const body = (e as BadRequestException).getResponse() as Record<
+        string,
+        unknown
+      >;
+      expect(body['message']).toBe('validation_failed');
+      const issues = body['issues'] as Array<{ field?: string }>;
+      expect(issues.some((i) => i.field === 'collection.title')).toBe(true);
+    }
+  });
+
+  it('create throws quota when user already has 10 collections', async () => {
+    const prisma = {
+      creatorMonoCollection: {
+        count: jest.fn().mockResolvedValue(10),
+        create: jest.fn(),
+      },
+    } as any;
+
+    try {
+      await new CreatorCollectionsService(prisma, mkMedia()).create(ownerId, {
+        title: 'Eleventh',
+      } as any);
+      throw new Error('expected QuotaExceededException');
+    } catch (e) {
+      expect(e).toBeInstanceOf(QuotaExceededException);
+      expect((e as QuotaExceededException).getResponse()).toEqual({
+        code: 'quota_exceeded',
+        key: FREE_TIER_QUOTA_KEYS.collections,
+        limit: FREE_TIER_QUOTAS.collections,
+        current: 10,
+      });
+    }
+    expect(prisma.creatorMonoCollection.create).not.toHaveBeenCalled();
+  });
+
+  it('create succeeds when user has 9 collections', async () => {
     const create = jest.fn().mockResolvedValue({
       id: collId,
       ownerId,
@@ -63,9 +126,15 @@ describe('CreatorCollectionsService', () => {
       createdAt: new Date(),
       updatedAt: new Date(),
     });
-    const prisma = { creatorMonoCollection: { create }, creatorMonoCollectionItem: { groupBy: jest.fn() } } as any;
+    const prisma = {
+      creatorMonoCollection: {
+        create,
+        count: jest.fn().mockResolvedValue(9),
+      },
+      creatorMonoCollectionItem: { groupBy: jest.fn() },
+    } as any;
 
-    await new CreatorCollectionsService(prisma).create(ownerId, {
+    await new CreatorCollectionsService(prisma, mkMedia()).create(ownerId, {
       title: '  Hello  ',
     } as any);
 
@@ -83,7 +152,7 @@ describe('CreatorCollectionsService', () => {
     const prisma = { creatorMonoCollection: { findFirst } } as any;
 
     await expect(
-      new CreatorCollectionsService(prisma).updateMine(ownerId, collId, {
+      new CreatorCollectionsService(prisma, mkMedia()).updateMine(ownerId, collId, {
         title: 'x',
       } as any),
     ).rejects.toBeInstanceOf(NotFoundException);
@@ -99,7 +168,7 @@ describe('CreatorCollectionsService', () => {
     } as any;
 
     await expect(
-      new CreatorCollectionsService(prisma).deleteMine(ownerId, collId),
+      new CreatorCollectionsService(prisma, mkMedia()).deleteMine(ownerId, collId),
     ).rejects.toBeInstanceOf(NotFoundException);
   });
 
@@ -112,7 +181,7 @@ describe('CreatorCollectionsService', () => {
       creatorMonoCollectionItem: { count },
     } as any;
 
-    await new CreatorCollectionsService(prisma).deleteMine(ownerId, collId);
+    await new CreatorCollectionsService(prisma, mkMedia()).deleteMine(ownerId, collId);
 
     expect(deleteMany).toHaveBeenCalledWith({
       where: { id: collId, ownerId },
@@ -129,7 +198,7 @@ describe('CreatorCollectionsService', () => {
     } as any;
 
     await expect(
-      new CreatorCollectionsService(prisma).deleteMine(ownerId, collId),
+      new CreatorCollectionsService(prisma, mkMedia()).deleteMine(ownerId, collId),
     ).rejects.toBeInstanceOf(ConflictException);
     expect(deleteMany).not.toHaveBeenCalled();
   });
@@ -143,7 +212,7 @@ describe('CreatorCollectionsService', () => {
     } as any;
 
     await expect(
-      new CreatorCollectionsService(prisma).addItemMine(ownerId, collId, monoId),
+      new CreatorCollectionsService(prisma, mkMedia()).addItemMine(ownerId, collId, monoId),
     ).rejects.toBeInstanceOf(ForbiddenException);
 
     expect(findFirstMono).toHaveBeenCalledWith({
@@ -172,7 +241,7 @@ describe('CreatorCollectionsService', () => {
         }),
     } as any;
 
-    const out = await new CreatorCollectionsService(prisma).addItemMine(ownerId, collId, monoId);
+    const out = await new CreatorCollectionsService(prisma, mkMedia()).addItemMine(ownerId, collId, monoId);
 
     expect(out.created).toBe(false);
     expect(out.itemId).toBe('item-1');
@@ -194,6 +263,7 @@ describe('CreatorCollectionsService', () => {
       creatorMonoCollectionItem: {
         findFirst: findFirstItem,
         aggregate,
+        count: jest.fn().mockResolvedValue(5),
         create: jest.fn(),
         update,
       },
@@ -203,7 +273,7 @@ describe('CreatorCollectionsService', () => {
         }),
     } as any;
 
-    const out = await new CreatorCollectionsService(prisma).addItemMine(ownerId, collId, monoId);
+    const out = await new CreatorCollectionsService(prisma, mkMedia()).addItemMine(ownerId, collId, monoId);
     expect(out.created).toBe(true);
     expect(update).toHaveBeenCalled();
   });
@@ -225,6 +295,7 @@ describe('CreatorCollectionsService', () => {
       creatorMonoCollectionItem: {
         findMany: findManyExisting,
         aggregate,
+        count: jest.fn().mockResolvedValue(0),
         create,
         update,
       },
@@ -234,7 +305,7 @@ describe('CreatorCollectionsService', () => {
         }),
     } as any;
 
-    const out = await new CreatorCollectionsService(prisma).bulkAddItemsMine(ownerId, collId, {
+    const out = await new CreatorCollectionsService(prisma, mkMedia()).bulkAddItemsMine(ownerId, collId, {
       publishedMonoIds: [monoId, otherOwner, monoId],
     });
 
@@ -259,6 +330,7 @@ describe('CreatorCollectionsService', () => {
       creatorMonoCollectionItem: {
         findMany: findManyExisting,
         aggregate,
+        count: jest.fn().mockResolvedValue(0),
         create: jest.fn(),
         update,
       },
@@ -268,7 +340,7 @@ describe('CreatorCollectionsService', () => {
         }),
     } as any;
 
-    const out = await new CreatorCollectionsService(prisma).bulkAddItemsMine(ownerId, collId, {
+    const out = await new CreatorCollectionsService(prisma, mkMedia()).bulkAddItemsMine(ownerId, collId, {
       publishedMonoIds: [monoId],
     });
     expect(out.inserted).toBe(1);
@@ -285,7 +357,7 @@ describe('CreatorCollectionsService', () => {
       },
     } as any;
 
-    await new CreatorCollectionsService(prisma).listPublicForUser(ownerId);
+    await new CreatorCollectionsService(prisma, mkMedia()).listPublicForUser(ownerId);
 
     expect(findMany).toHaveBeenCalledWith({
       where: { ownerId, visibility: 'public' },
@@ -331,7 +403,7 @@ describe('CreatorCollectionsService', () => {
       creatorMonoCollectionItem: { groupBy, findMany: findManyItems },
     } as any;
 
-    const out = await new CreatorCollectionsService(prisma).listMine(ownerId);
+    const out = await new CreatorCollectionsService(prisma, mkMedia()).listMine(ownerId);
     expect(out.collections[0].coverImageUrl).toBe('https://img.test/x.png');
   });
 
@@ -373,7 +445,7 @@ describe('CreatorCollectionsService', () => {
       creatorMonoCollectionItem: { groupBy, findMany: findManyItems },
     } as any;
 
-    const out = await new CreatorCollectionsService(prisma).listMine(ownerId);
+    const out = await new CreatorCollectionsService(prisma, mkMedia()).listMine(ownerId);
     expect(out.collections[0].coverImageUrl).toBe('https://img.test/explicit.png');
   });
 
@@ -390,7 +462,7 @@ describe('CreatorCollectionsService', () => {
       userProfile: { findUnique: jest.fn().mockResolvedValue(null) },
     } as any;
 
-    await new CreatorCollectionsService(prisma).listPublicCollectionMonos(ownerId, collId);
+    await new CreatorCollectionsService(prisma, mkMedia()).listPublicCollectionMonos(ownerId, collId);
 
     expect(findMany).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -410,7 +482,7 @@ describe('CreatorCollectionsService', () => {
     } as any;
 
     await expect(
-      new CreatorCollectionsService(prisma).listPublicCollectionMonos(ownerId, collId),
+      new CreatorCollectionsService(prisma, mkMedia()).listPublicCollectionMonos(ownerId, collId),
     ).rejects.toBeInstanceOf(NotFoundException);
   });
 
@@ -449,10 +521,68 @@ describe('CreatorCollectionsService', () => {
       },
     } as any;
 
-    const out = await new CreatorCollectionsService(prisma).listPublicCollectionMonos(ownerId, collId);
+    const out = await new CreatorCollectionsService(prisma, mkMedia()).listPublicCollectionMonos(ownerId, collId);
     expect(out.items).toHaveLength(1);
     expect(out.items[0]?.writerDisplayName).toBe('Author');
     expect(out.items[0]?.writerHandle).toBe('auth_one');
     expect(out.items[0]?.writerAvatarUrl).toBe('https://avatar.test/a.png');
+  });
+
+  it('addItemMine blocks move into target when target already has 30 items', async () => {
+    const findFirstColl = jest.fn().mockResolvedValue({ id: collId, ownerId });
+    const findFirstMono = jest.fn().mockResolvedValue({ id: monoId, ownerId });
+    const findFirstItem = jest
+      .fn()
+      .mockResolvedValue({ id: 'item-1', publishedMonoId: monoId, collectionId: 'old-coll' });
+    const aggregate = jest.fn().mockResolvedValue({ _max: { sortOrder: 0 } });
+    const prisma = {
+      creatorMonoCollection: { findFirst: findFirstColl },
+      publishedMono: { findFirst: findFirstMono },
+      creatorMonoCollectionItem: {
+        findFirst: findFirstItem,
+        aggregate,
+        count: jest.fn().mockResolvedValue(30),
+        update: jest.fn(),
+        create: jest.fn(),
+      },
+      $transaction: async (fn: any) =>
+        await fn({
+          creatorMonoCollectionItem: prisma.creatorMonoCollectionItem,
+        }),
+    } as any;
+
+    await expect(
+      new CreatorCollectionsService(prisma, mkMedia()).addItemMine(ownerId, collId, monoId),
+    ).rejects.toBeInstanceOf(QuotaExceededException);
+    expect(prisma.creatorMonoCollectionItem.update).not.toHaveBeenCalled();
+  });
+
+  it('bulkAdd blocks when adding would exceed 30 items in target', async () => {
+    const findFirstColl = jest.fn().mockResolvedValue({ id: collId, ownerId });
+    const publishedMonoFindMany = jest.fn().mockResolvedValue([{ id: monoId }]);
+    const findManyExisting = jest.fn().mockResolvedValue([]);
+    const aggregate = jest.fn().mockResolvedValue({ _max: { sortOrder: 0 } });
+    const prisma = {
+      creatorMonoCollection: { findFirst: findFirstColl },
+      publishedMono: { findMany: publishedMonoFindMany },
+      creatorMonoCollectionItem: {
+        findMany: findManyExisting,
+        aggregate,
+        count: jest.fn().mockResolvedValue(30),
+        create: jest.fn(),
+        update: jest.fn(),
+      },
+      $transaction: async (fn: any) =>
+        await fn({
+          creatorMonoCollectionItem: prisma.creatorMonoCollectionItem,
+        }),
+    } as any;
+
+    await expect(
+      new CreatorCollectionsService(prisma, mkMedia()).bulkAddItemsMine(ownerId, collId, {
+        publishedMonoIds: [monoId],
+      }),
+    ).rejects.toBeInstanceOf(QuotaExceededException);
+    expect(prisma.creatorMonoCollectionItem.create).not.toHaveBeenCalled();
   });
 });

@@ -13,7 +13,8 @@ class ContinueReadingAccordion extends StatefulWidget {
   final List<Episode> episodes;
 
   @override
-  State<ContinueReadingAccordion> createState() => _ContinueReadingAccordionState();
+  State<ContinueReadingAccordion> createState() =>
+      _ContinueReadingAccordionState();
 }
 
 class _ContinueReadingAccordionState extends State<ContinueReadingAccordion>
@@ -77,9 +78,9 @@ class _ContinueReadingAccordionState extends State<ContinueReadingAccordion>
                     child: Text(
                       'Continue Reading',
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w600,
-                      ),
+                            fontSize: 18,
+                            fontWeight: FontWeight.w600,
+                          ),
                     ),
                   ),
                   // Chevron icon
@@ -126,7 +127,9 @@ class _ContinueReadingAccordionState extends State<ContinueReadingAccordion>
 
     // Show actual content - episode cards like Popular Mono writer's collections
     return SizedBox(
-      height: 116 * 3 / 2, // Calculate height from BookCoverCard.sm width and aspect ratio
+      height: 116 *
+          3 /
+          2, // Calculate height from BookCoverCard.sm width and aspect ratio
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         itemCount: widget.episodes.length,
@@ -141,7 +144,7 @@ class _ContinueReadingAccordionState extends State<ContinueReadingAccordion>
 
   Widget _buildEpisodeCard(BuildContext context, Episode episode) {
     final cs = Theme.of(context).colorScheme;
-    
+
     // Placeholder metadata since Episode doesn't link Story details directly
     const defaultCategory = 'Love';
     const jlpt = 'N5';
@@ -158,7 +161,8 @@ class _ContinueReadingAccordionState extends State<ContinueReadingAccordion>
         child: Card(
           elevation: 3,
           clipBehavior: Clip.antiAlias,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -169,7 +173,8 @@ class _ContinueReadingAccordionState extends State<ContinueReadingAccordion>
                 padding: const EdgeInsets.symmetric(horizontal: 8),
                 child: Row(
                   children: [
-                    const CircleAvatar(radius: 10, child: Icon(Icons.person, size: 14)),
+                    const CircleAvatar(
+                        radius: 10, child: Icon(Icons.person, size: 14)),
                     const SizedBox(width: 6),
                     Expanded(
                       child: Text(
@@ -180,12 +185,14 @@ class _ContinueReadingAccordionState extends State<ContinueReadingAccordion>
                       ),
                     ),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 6, vertical: 2),
                       decoration: BoxDecoration(
                         color: cs.primaryContainer,
                         borderRadius: BorderRadius.circular(999),
                       ),
-                      child: Text(jlpt, style: Theme.of(context).textTheme.labelSmall),
+                      child: Text(jlpt,
+                          style: Theme.of(context).textTheme.labelSmall),
                     ),
                   ],
                 ),
@@ -201,7 +208,8 @@ class _ContinueReadingAccordionState extends State<ContinueReadingAccordion>
               Container(
                 height: 48,
                 color: cs.surfaceVariant,
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -214,10 +222,11 @@ class _ContinueReadingAccordionState extends State<ContinueReadingAccordion>
                     const Spacer(),
                     Row(
                       children: [
-                        Icon(Icons.favorite_rounded, size: 16, color: cs.secondary),
+                        Icon(Icons.favorite_rounded,
+                            size: 16, color: cs.secondary),
                         const SizedBox(width: 6),
-                        Text('${(likes / 1000).toStringAsFixed(1)}K', 
-                             style: Theme.of(context).textTheme.labelMedium),
+                        Text('${(likes / 1000).toStringAsFixed(1)}K',
+                            style: Theme.of(context).textTheme.labelMedium),
                       ],
                     ),
                   ],
@@ -232,7 +241,9 @@ class _ContinueReadingAccordionState extends State<ContinueReadingAccordion>
 
   Widget _buildSkeleton() {
     return SizedBox(
-      height: 116 * 3 / 2, // Calculate height from BookCoverCard.sm width and aspect ratio
+      height: 116 *
+          3 /
+          2, // Calculate height from BookCoverCard.sm width and aspect ratio
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         itemCount: 3,

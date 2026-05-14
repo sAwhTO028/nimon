@@ -95,7 +95,8 @@ class PremiumBanner extends StatelessWidget {
                   style: FilledButton.styleFrom(
                     backgroundColor: cs.onPrimary,
                     foregroundColor: cs.primary,
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 14, vertical: 10),
                     textStyle: textTheme.labelLarge,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(10),

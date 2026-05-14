@@ -1,10 +1,14 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { MediaUrlCanonicalizerService } from '../media/media-url-canonicalizer.service';
 import { PrismaService } from '../prisma/prisma.service';
 import type { PublicCreatorProfileResponseDto } from './users.dto';
 
 @Injectable()
 export class UsersService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly media: MediaUrlCanonicalizerService,
+  ) {}
 
   async getPublicCreatorProfile(opts: {
     targetUserId: string;
@@ -48,8 +52,8 @@ export class UsersService {
       userId: user.id,
       handle: user.profile?.handle ?? null,
       displayName: user.profile?.displayName ?? null,
-      avatarUrl: user.profile?.avatarUrl ?? null,
-      coverImageUrl: (user.profile as any)?.coverImageUrl ?? null,
+      avatarUrl: this.media.url(user.profile?.avatarUrl ?? null),
+      coverImageUrl: this.media.url((user.profile as any)?.coverImageUrl ?? null),
       bio: user.profile?.bio ?? null,
       followersCount,
       followingCount,

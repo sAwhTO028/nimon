@@ -2,7 +2,10 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart' show debugPrint, kDebugMode;
 import 'package:http/http.dart' as http;
+import 'package:nimon/core/validation/http_validation_failed_exception.dart';
+import 'package:nimon/core/validation/validation_issue_from_json.dart';
 import 'package:nimon/features/auth/auth_strict_unauthorized.dart';
+import 'package:nimon/features/auth/authenticated_http.dart';
 import 'package:nimon/features/create/data/remote_backend_config.dart';
 
 typedef MeProfileAuthHeaderBuilder = Future<Map<String, String>> Function();
@@ -130,19 +133,34 @@ class RemoteMeProfileRepository implements MeProfileRepository {
     required String apiBaseUrl,
     http.Client? client,
     required MeProfileAuthHeaderBuilder authHeaderBuilder,
+    NimonSendWithAuth401Recovery? sendWithAuth401Recovery,
   })  : _apiBaseUrl = apiBaseUrl.replaceAll(RegExp(r'/+$'), ''),
         _client = client ?? http.Client(),
-        _authHeaderBuilder = authHeaderBuilder;
+        _authHeaderBuilder = authHeaderBuilder,
+        _sendWithAuth401 = sendWithAuth401Recovery;
 
   final String _apiBaseUrl;
   final http.Client _client;
   final MeProfileAuthHeaderBuilder _authHeaderBuilder;
+  final NimonSendWithAuth401Recovery? _sendWithAuth401;
 
   bool get _strict => RemoteBackendConfig.strictRemoteDrafts;
 
   Uri _u(String path) => Uri.parse('$_apiBaseUrl$path');
 
   Future<Map<String, String>> _auth() async => await _authHeaderBuilder();
+
+  Future<http.Response> _nimonAuthSend(
+    Uri uri,
+    Future<Map<String, String>> Function() mergeHeaders,
+    Future<http.Response> Function(Map<String, String> headers) send,
+  ) =>
+      nimonSendWithOptional401Recovery(
+        _sendWithAuth401,
+        requestUri: uri,
+        mergeHeaders: mergeHeaders,
+        send: send,
+      );
 
   Map<String, Object?> _jsonObject(http.Response r) {
     final body = r.body.trim();
@@ -155,8 +173,13 @@ class RemoteMeProfileRepository implements MeProfileRepository {
   }
 
   Never _throwMapped(http.Response r, {required String fallback}) {
-    notifyIfStrictUnauthorized401(r);
+    if (r.statusCode == 401) notifyIfStrictUnauthorized401(r);
     _logErrorIfDebug(r);
+
+    final vf = tryParseValidationIssuesFromHttpBody(r.body);
+    if (vf != null && vf.isNotEmpty) {
+      throw HttpValidationFailedException(vf);
+    }
 
     if (r.statusCode == 401) {
       throw StateError('Sign in required.');
@@ -219,15 +242,18 @@ class RemoteMeProfileRepository implements MeProfileRepository {
     try {
       final uri = _u('/v1/me/profile');
       if (kDebugMode) debugPrint('RemoteMeProfileRepository: GET $uri');
-      final resp = await _client.get(
+      final resp = await _nimonAuthSend(
         uri,
-        headers: {
+        () async => <String, String>{
           ...await _auth(),
           'Accept': 'application/json',
         },
+        (h) => _client.get(uri, headers: h),
       );
       _ensure2xx(resp, fallback: 'Could not load profile.');
       return _parseProfileEnvelope(_jsonObject(resp));
+    } on HttpValidationFailedException {
+      rethrow;
     } catch (e, st) {
       if (kDebugMode) debugPrint('fetchMyProfile error: $e\n$st');
       if (_strict) rethrow;
@@ -254,14 +280,14 @@ class RemoteMeProfileRepository implements MeProfileRepository {
         if (coverImageUrl != null) 'coverImageUrl': coverImageUrl,
         if (bio != null) 'bio': bio,
       };
-      final resp = await _client.patch(
+      final resp = await _nimonAuthSend(
         uri,
-        headers: {
+        () async => <String, String>{
           ...await _auth(),
           'Accept': 'application/json',
           'Content-Type': 'application/json',
         },
-        body: jsonEncode(body),
+        (h) => _client.patch(uri, headers: h, body: jsonEncode(body)),
       );
       _ensure2xx(
         resp,
@@ -269,6 +295,8 @@ class RemoteMeProfileRepository implements MeProfileRepository {
       );
       return _parseProfileEnvelope(_jsonObject(resp));
     } on StateError {
+      rethrow;
+    } on HttpValidationFailedException {
       rethrow;
     } catch (e, st) {
       if (kDebugMode) debugPrint('patchMyProfile error: $e\n$st');

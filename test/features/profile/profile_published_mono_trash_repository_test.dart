@@ -4,7 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:nimon/core/pagination/page_request.dart';
-import 'package:nimon/features/profile/data/published_mono_dto.dart';
+import 'package:nimon/core/validation/app_quota_exceeded_exception.dart';
 import 'package:nimon/features/profile/data/remote_published_mono_repository.dart';
 
 Map<String, Object?> get _row => <String, Object?>{
@@ -107,6 +107,42 @@ void main() {
             contains('not in Trash'),
           ),
         ),
+      );
+    });
+
+    test('restore throws AppQuotaExceededException on 403 quota body',
+        () async {
+      final repo = RemotePublishedMonoRepository(
+        apiBaseUrl: 'https://api.example',
+        client: MockClient(
+          (_) async => http.Response(
+            '{"code":"quota_exceeded","key":"published_mono_limit_reached","limit":30,"current":30}',
+            403,
+            headers: const {'content-type': 'application/json'},
+          ),
+        ),
+      );
+      await expectLater(
+        repo.restorePublishedMono('pm_1'),
+        throwsA(isA<AppQuotaExceededException>()),
+      );
+    });
+
+    test('permanent delete throws AppQuotaExceededException on 403 quota body',
+        () async {
+      final repo = RemotePublishedMonoRepository(
+        apiBaseUrl: 'https://api.example',
+        client: MockClient(
+          (_) async => http.Response(
+            '{"code":"quota_exceeded","key":"published_mono_limit_reached","limit":30,"current":30}',
+            403,
+            headers: const {'content-type': 'application/json'},
+          ),
+        ),
+      );
+      await expectLater(
+        repo.permanentlyDeletePublishedMono('pm_1'),
+        throwsA(isA<AppQuotaExceededException>()),
       );
     });
   });

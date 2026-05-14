@@ -1,6 +1,9 @@
+import 'dart:async' show unawaited;
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:nimon/features/learn/quiz_flow_theme.dart';
+import 'package:nimon/features/learn/learn_module_surface_tokens.dart';
+import 'package:nimon/features/learn/learn_quiz_navigation.dart';
 import 'package:nimon/features/learn/quiz_session.dart';
 import 'package:nimon/ui/widgets/nimon_circle_nav_button.dart';
 
@@ -15,28 +18,33 @@ class QuizResultScreen extends StatelessWidget {
   final String contentId;
   final QuizResultSummary? summary;
 
-  static const _bg = QuizFlowTheme.pageBg;
-  static const _ink = QuizFlowTheme.ink;
-  static const _inkMuted = QuizFlowTheme.inkMuted;
   static const _radius = 14.0;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final pageBg = learnModuleListPageBackground(context);
     final s = summary;
     final bottomInset = MediaQuery.paddingOf(context).bottom;
+    final successTone = theme.brightness == Brightness.dark
+        ? cs.tertiary
+        : const Color(0xFF16A34A);
+    final errorTone = theme.brightness == Brightness.dark
+        ? cs.error
+        : const Color(0xFFDC2626);
 
     return Scaffold(
-      backgroundColor: _bg,
+      backgroundColor: pageBg,
       appBar: AppBar(
-        backgroundColor: _bg,
+        backgroundColor: pageBg,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
         leading: NimonBackButton(onPressed: () => context.pop()),
         title: Text(
           'Quiz results',
           style: theme.textTheme.titleLarge?.copyWith(
-            color: _ink,
+            color: cs.onSurface,
             fontWeight: FontWeight.w800,
           ),
         ),
@@ -47,7 +55,9 @@ class QuizResultScreen extends StatelessWidget {
               padding: const EdgeInsets.all(20),
               child: Text(
                 'No result data.',
-                style: theme.textTheme.bodyLarge?.copyWith(color: _inkMuted),
+                style: theme.textTheme.bodyLarge?.copyWith(
+                  color: cs.onSurfaceVariant,
+                ),
               ),
             )
           : ListView(
@@ -56,7 +66,7 @@ class QuizResultScreen extends StatelessWidget {
                 Text(
                   '${s.scorePercent}%',
                   style: theme.textTheme.displaySmall?.copyWith(
-                    color: _ink,
+                    color: cs.onSurface,
                     fontWeight: FontWeight.w900,
                     height: 1.1,
                   ),
@@ -65,7 +75,7 @@ class QuizResultScreen extends StatelessWidget {
                 Text(
                   'Score',
                   style: theme.textTheme.labelLarge?.copyWith(
-                    color: _inkMuted,
+                    color: cs.onSurfaceVariant,
                     fontWeight: FontWeight.w800,
                   ),
                 ),
@@ -73,14 +83,14 @@ class QuizResultScreen extends StatelessWidget {
                 _StatRow(
                   label: 'Correct',
                   value: '${s.correct}',
-                  valueColor: QuizFlowTheme.success,
+                  valueColor: successTone,
                   theme: theme,
                 ),
                 const SizedBox(height: 12),
                 _StatRow(
                   label: 'Wrong',
                   value: '${s.wrong}',
-                  valueColor: QuizFlowTheme.error,
+                  valueColor: errorTone,
                   theme: theme,
                 ),
                 const SizedBox(height: 12),
@@ -93,7 +103,7 @@ class QuizResultScreen extends StatelessWidget {
                 Text(
                   'Category',
                   style: theme.textTheme.labelLarge?.copyWith(
-                    color: _inkMuted,
+                    color: cs.onSurfaceVariant,
                     fontWeight: FontWeight.w800,
                   ),
                 ),
@@ -101,7 +111,7 @@ class QuizResultScreen extends StatelessWidget {
                 Text(
                   s.category.displayLabel,
                   style: theme.textTheme.titleMedium?.copyWith(
-                    color: _ink,
+                    color: cs.onSurface,
                     fontWeight: FontWeight.w800,
                   ),
                 ),
@@ -110,8 +120,8 @@ class QuizResultScreen extends StatelessWidget {
                   onPressed: () => context.go('/learn/$contentId/quiz'),
                   style: FilledButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 16),
-                    backgroundColor: QuizFlowTheme.primary,
-                    foregroundColor: QuizFlowTheme.onPrimary,
+                    backgroundColor: cs.primary,
+                    foregroundColor: cs.onPrimary,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(_radius),
                     ),
@@ -120,19 +130,26 @@ class QuizResultScreen extends StatelessWidget {
                     'Retry',
                     style: theme.textTheme.titleSmall?.copyWith(
                       fontWeight: FontWeight.w800,
-                      color: QuizFlowTheme.onPrimary,
+                      color: cs.onPrimary,
                     ),
                   ),
                 ),
                 const SizedBox(height: 12),
                 OutlinedButton(
-                  onPressed: () => context.go('/learn/$contentId'),
+                  onPressed: () => unawaited(
+                    navigateQuizResultBackToLearnHub(
+                      GoRouter.of(context),
+                      contentId,
+                    ),
+                  ),
                   style: OutlinedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 16),
-                    foregroundColor: _ink,
-                    backgroundColor: QuizFlowTheme.secondaryFill,
-                    side: const BorderSide(
-                      color: QuizFlowTheme.secondaryBorder,
+                    foregroundColor: cs.onSurface,
+                    backgroundColor: cs.surfaceContainerHighest.withValues(
+                      alpha: theme.brightness == Brightness.dark ? 0.35 : 0.65,
+                    ),
+                    side: BorderSide(
+                      color: cs.outlineVariant,
                       width: 1,
                     ),
                     shape: RoundedRectangleBorder(
@@ -143,7 +160,7 @@ class QuizResultScreen extends StatelessWidget {
                     'Back to Learn',
                     style: theme.textTheme.titleSmall?.copyWith(
                       fontWeight: FontWeight.w800,
-                      color: _ink,
+                      color: cs.onSurface,
                     ),
                   ),
                 ),
@@ -166,25 +183,23 @@ class _StatRow extends StatelessWidget {
   final ThemeData theme;
   final Color? valueColor;
 
-  static const _ink = QuizFlowTheme.ink;
-  static const _inkMuted = QuizFlowTheme.inkMuted;
-
   @override
   Widget build(BuildContext context) {
+    final cs = theme.colorScheme;
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
         Text(
           label,
           style: theme.textTheme.bodyLarge?.copyWith(
-            color: _inkMuted,
+            color: cs.onSurfaceVariant,
             fontWeight: FontWeight.w600,
           ),
         ),
         Text(
           value,
           style: theme.textTheme.titleMedium?.copyWith(
-            color: valueColor ?? _ink,
+            color: valueColor ?? cs.onSurface,
             fontWeight: FontWeight.w800,
           ),
         ),

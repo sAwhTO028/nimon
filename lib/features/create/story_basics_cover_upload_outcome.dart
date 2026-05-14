@@ -1,3 +1,5 @@
+import 'package:flutter/widgets.dart';
+import 'package:nimon/core/media/media_upload_error_mapper.dart';
 import 'package:nimon/features/create/data/media_upload_repository.dart';
 
 /// Result of attempting to upload a gallery pick to the M5c media API.
@@ -23,26 +25,42 @@ class StoryBasicsCoverUploadOutcome {
       StoryBasicsCoverUploadOutcome._(inlineHint: inlineHint);
 }
 
-/// Maps [MediaUploadException] to an optional inline hint (never duplicates “sign in” for network).
-String? coverUploadFailureInlineHint(MediaUploadException e) {
-  final sc = e.statusCode;
-  final msg = e.userMessage.toLowerCase();
+/// Maps upload failures to an optional inline hint (never duplicates “sign in” for network).
+String? coverUploadFailureInlineHint(Object error) {
+  final msg = mediaUploadUserMessage(
+    error,
+    surface: MediaUploadSurface.storyCover,
+  ).toLowerCase();
   if (msg.contains('sign in') || msg.contains('session expired')) {
     return null;
   }
   if (msg.contains('could not reach') ||
       msg.contains('connection') ||
-      msg.contains('network')) {
+      msg.contains('network') ||
+      msg.contains('internet')) {
     return 'Upload failed. Try again.';
   }
-  if (sc == 413) {
-    return 'Image is too large.';
+  return msg.length > 80 ? '${msg.substring(0, 77)}…' : msg;
+}
+
+/// Same as [coverUploadFailureInlineHint] but uses localized validation/media copy.
+String? coverUploadFailureInlineHintLocalized(
+  BuildContext context,
+  Object error,
+) {
+  final msg = mediaUploadUserMessageLocalized(
+    context,
+    error,
+    surface: MediaUploadSurface.storyCover,
+  ).toLowerCase();
+  if (msg.contains('sign in') || msg.contains('session expired')) {
+    return null;
   }
-  if (sc == 415) {
-    return 'This format is not supported.';
-  }
-  if (sc == 400) {
+  if (msg.contains('could not reach') ||
+      msg.contains('connection') ||
+      msg.contains('network') ||
+      msg.contains('internet')) {
     return 'Upload failed. Try again.';
   }
-  return 'Upload failed. Try again.';
+  return msg.length > 80 ? '${msg.substring(0, 77)}…' : msg;
 }

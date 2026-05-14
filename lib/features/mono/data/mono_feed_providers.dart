@@ -1,7 +1,8 @@
+import 'dart:async' show unawaited;
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:nimon/core/pagination/page_request.dart';
 import 'package:nimon/core/pagination/paginated_state.dart';
-import 'package:nimon/core/pagination/pagination_defaults.dart';
 import 'package:nimon/features/auth/auth_providers.dart';
 import 'package:nimon/features/create/data/remote_backend_config.dart';
 import 'package:nimon/features/mono/data/mono_feed_repository.dart';
@@ -24,6 +25,7 @@ final remoteFollowingMonoFeedRepositoryProvider =
   return RemoteFollowingMonoFeedRepository(
     apiBaseUrl: RemoteBackendConfig.apiBaseUrl,
     authHeaderBuilder: ref.watch(authHeaderBuilderProvider),
+    sendWithAuth401Recovery: ref.watch(nimonSendWithAuth401RecoveryProvider),
   );
 });
 
@@ -32,6 +34,7 @@ final remoteMonoSocialRepositoryProvider =
   return RemoteMonoSocialRepository(
     apiBaseUrl: RemoteBackendConfig.apiBaseUrl,
     authHeaderBuilder: ref.watch(authHeaderBuilderProvider),
+    sendWithAuth401Recovery: ref.watch(nimonSendWithAuth401RecoveryProvider),
   );
 });
 
@@ -40,6 +43,7 @@ final remoteUserFollowRepositoryProvider =
   return RemoteUserFollowRepository(
     apiBaseUrl: RemoteBackendConfig.apiBaseUrl,
     authHeaderBuilder: ref.watch(authHeaderBuilderProvider),
+    sendWithAuth401Recovery: ref.watch(nimonSendWithAuth401RecoveryProvider),
   );
 });
 
@@ -55,6 +59,13 @@ final followingMonoFeedPagerProvider = StateNotifierProvider<
   ),
 );
 
+/// M11g: Reels pagination policy (see docs/M11_SETTINGS_FOUNDATION_DECISION_SPEC.md).
+abstract final class MonoReelsPaginationPolicy {
+  static const int initialLimit = 7;
+  static const int nextLimit = 10;
+  static const int prefetchRemainingThreshold = 3;
+}
+
 /// Pager for `GET /v1/mono/feed`. Filters are optional (M3c can wire UI).
 class MonoFeedPager extends StateNotifier<PaginatedState<MonoFeedSummaryDto>> {
   MonoFeedPager(this._repo)
@@ -66,13 +77,35 @@ class MonoFeedPager extends StateNotifier<PaginatedState<MonoFeedSummaryDto>> {
   String? _filterLevel;
   String? _filterCategory;
 
+  String? _lastLoadMoreCursor;
+
   /// Updates facet filters for subsequent [loadFirstPage] / [refresh] / [loadMore].
   void setFilters({String? level, String? category}) {
     _filterLevel = level;
     _filterCategory = category;
   }
 
+  /// Called from the reels UI on index changes to prefetch the next page.
+  ///
+  /// Policy:
+  /// - prefetch when remaining <= 3
+  /// - never prefetch while busy
+  /// - avoid re-requesting the same cursor repeatedly
+  void maybePrefetch(int currentIndex) {
+    final remaining = state.items.length - currentIndex - 1;
+    if (remaining > MonoReelsPaginationPolicy.prefetchRemainingThreshold) {
+      return;
+    }
+    if (!state.canLoadMore) return;
+    final cursor = state.nextCursor;
+    if (cursor == null || cursor.isEmpty) return;
+    if (_lastLoadMoreCursor == cursor) return;
+    _lastLoadMoreCursor = cursor;
+    unawaited(loadMore());
+  }
+
   Future<void> loadFirstPage() async {
+    _lastLoadMoreCursor = null;
     final myEpoch = state.requestEpoch + 1;
     state = state.copyWith(
       requestEpoch: myEpoch,
@@ -83,7 +116,7 @@ class MonoFeedPager extends StateNotifier<PaginatedState<MonoFeedSummaryDto>> {
     try {
       final result = await _repo.fetchFeedPage(
         PageRequest(
-          limit: PaginationDefaults.monoFeedPageLimit,
+          limit: MonoReelsPaginationPolicy.initialLimit,
           sort: 'recent',
         ),
         level: _filterLevel,
@@ -107,6 +140,7 @@ class MonoFeedPager extends StateNotifier<PaginatedState<MonoFeedSummaryDto>> {
   }
 
   Future<void> refresh() async {
+    _lastLoadMoreCursor = null;
     final myEpoch = state.requestEpoch + 1;
     state = state.copyWith(
       requestEpoch: myEpoch,
@@ -118,7 +152,7 @@ class MonoFeedPager extends StateNotifier<PaginatedState<MonoFeedSummaryDto>> {
     try {
       final result = await _repo.fetchFeedPage(
         PageRequest(
-          limit: PaginationDefaults.monoFeedPageLimit,
+          limit: MonoReelsPaginationPolicy.initialLimit,
           sort: 'recent',
         ),
         level: _filterLevel,
@@ -145,20 +179,26 @@ class MonoFeedPager extends StateNotifier<PaginatedState<MonoFeedSummaryDto>> {
     if (!state.canLoadMore) return;
     final myEpoch = state.requestEpoch;
     final cursor = state.nextCursor;
+    if (cursor == null || cursor.isEmpty) return;
     state = state.copyWith(isLoadingMore: true);
     try {
       final result = await _repo.fetchFeedPage(
         PageRequest(
           cursor: cursor,
-          limit: PaginationDefaults.monoFeedPageLimit,
+          limit: MonoReelsPaginationPolicy.nextLimit,
           sort: 'recent',
         ),
         level: _filterLevel,
         category: _filterCategory,
       );
       if (state.requestEpoch != myEpoch) return;
+      final seen = <String>{for (final it in state.items) it.monoId};
+      final appended = <MonoFeedSummaryDto>[
+        ...state.items,
+        ...result.items.where((it) => seen.add(it.monoId)),
+      ];
       state = state.copyWith(
-        items: [...state.items, ...result.items],
+        items: appended,
         nextCursor: result.nextCursor,
         hasMore: result.hasMore,
         error: null,
@@ -181,7 +221,23 @@ class FollowingMonoFeedPager
 
   final MonoFeedRepository _repo;
 
+  String? _lastLoadMoreCursor;
+
+  void maybePrefetch(int currentIndex) {
+    final remaining = state.items.length - currentIndex - 1;
+    if (remaining > MonoReelsPaginationPolicy.prefetchRemainingThreshold) {
+      return;
+    }
+    if (!state.canLoadMore) return;
+    final cursor = state.nextCursor;
+    if (cursor == null || cursor.isEmpty) return;
+    if (_lastLoadMoreCursor == cursor) return;
+    _lastLoadMoreCursor = cursor;
+    unawaited(loadMore());
+  }
+
   Future<void> loadFirstPage() async {
+    _lastLoadMoreCursor = null;
     final myEpoch = state.requestEpoch + 1;
     state = state.copyWith(
       requestEpoch: myEpoch,
@@ -192,7 +248,7 @@ class FollowingMonoFeedPager
     try {
       final result = await _repo.fetchFeedPage(
         PageRequest(
-          limit: PaginationDefaults.monoFeedPageLimit,
+          limit: MonoReelsPaginationPolicy.initialLimit,
           sort: 'recent',
         ),
       );
@@ -211,6 +267,7 @@ class FollowingMonoFeedPager
   }
 
   Future<void> refresh() async {
+    _lastLoadMoreCursor = null;
     final myEpoch = state.requestEpoch + 1;
     state = state.copyWith(
       requestEpoch: myEpoch,
@@ -222,7 +279,7 @@ class FollowingMonoFeedPager
     try {
       final result = await _repo.fetchFeedPage(
         PageRequest(
-          limit: PaginationDefaults.monoFeedPageLimit,
+          limit: MonoReelsPaginationPolicy.initialLimit,
           sort: 'recent',
         ),
       );
@@ -244,18 +301,24 @@ class FollowingMonoFeedPager
     if (!state.canLoadMore) return;
     final myEpoch = state.requestEpoch;
     final cursor = state.nextCursor;
+    if (cursor == null || cursor.isEmpty) return;
     state = state.copyWith(isLoadingMore: true);
     try {
       final result = await _repo.fetchFeedPage(
         PageRequest(
           cursor: cursor,
-          limit: PaginationDefaults.monoFeedPageLimit,
+          limit: MonoReelsPaginationPolicy.nextLimit,
           sort: 'recent',
         ),
       );
       if (state.requestEpoch != myEpoch) return;
+      final seen = <String>{for (final it in state.items) it.monoId};
+      final appended = <MonoFeedSummaryDto>[
+        ...state.items,
+        ...result.items.where((it) => seen.add(it.monoId)),
+      ];
       state = state.copyWith(
-        items: [...state.items, ...result.items],
+        items: appended,
         nextCursor: result.nextCursor,
         hasMore: result.hasMore,
         error: null,

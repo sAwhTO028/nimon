@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart' show kDebugMode, debugPrint;
 import 'package:http/http.dart' as http;
 import 'package:nimon/core/pagination/page_request.dart';
 import 'package:nimon/core/pagination/page_result.dart';
+import 'package:nimon/features/auth/authenticated_http.dart';
 
 typedef UserFollowAuthHeaderBuilder = Future<Map<String, String>> Function();
 
@@ -12,13 +13,16 @@ class RemoteUserFollowRepository {
     required String apiBaseUrl,
     required UserFollowAuthHeaderBuilder authHeaderBuilder,
     http.Client? client,
+    NimonSendWithAuth401Recovery? sendWithAuth401Recovery,
   })  : _apiBaseUrl = apiBaseUrl.replaceAll(RegExp(r'/+$'), ''),
         _authHeaderBuilder = authHeaderBuilder,
-        _client = client ?? http.Client();
+        _client = client ?? http.Client(),
+        _sendWithAuth401 = sendWithAuth401Recovery;
 
   final String _apiBaseUrl;
   final UserFollowAuthHeaderBuilder _authHeaderBuilder;
   final http.Client _client;
+  final NimonSendWithAuth401Recovery? _sendWithAuth401;
 
   Uri _u(String path) => Uri.parse('$_apiBaseUrl$path');
 
@@ -67,6 +71,20 @@ class RemoteUserFollowRepository {
     };
   }
 
+  Future<http.Response> _nimonAuthSend(
+    Uri uri,
+    Future<Map<String, String>> Function() mergeHeaders,
+    Future<http.Response> Function(Map<String, String> headers) send, {
+    bool requireAuthHeaderForRecovery = true,
+  }) =>
+      nimonSendWithOptional401Recovery(
+        _sendWithAuth401,
+        requestUri: uri,
+        mergeHeaders: mergeHeaders,
+        send: send,
+        requireAuthHeaderForRecovery: requireAuthHeaderForRecovery,
+      );
+
   Never _mapHttpError(http.Response r) {
     final raw = r.body.trim();
     if (r.statusCode == 401) {
@@ -92,12 +110,13 @@ class RemoteUserFollowRepository {
     if (kDebugMode) {
       debugPrint('RemoteUserFollowRepository.followUser: POST $uri');
     }
-    final resp = await _client.post(
+    final resp = await _nimonAuthSend(
       uri,
-      headers: {
+      () async => <String, String>{
         ...await _authHeadersOrThrow(),
         'Accept': 'application/json',
       },
+      (h) => _client.post(uri, headers: h),
     );
     if (resp.statusCode < 200 || resp.statusCode >= 300) _mapHttpError(resp);
     final m = _jsonObjectFromResponse(resp);
@@ -111,12 +130,13 @@ class RemoteUserFollowRepository {
     if (kDebugMode) {
       debugPrint('RemoteUserFollowRepository.unfollowUser: DELETE $uri');
     }
-    final resp = await _client.delete(
+    final resp = await _nimonAuthSend(
       uri,
-      headers: {
+      () async => <String, String>{
         ...await _authHeadersOrThrow(),
         'Accept': 'application/json',
       },
+      (h) => _client.delete(uri, headers: h),
     );
     if (resp.statusCode < 200 || resp.statusCode >= 300) _mapHttpError(resp);
     final m = _jsonObjectFromResponse(resp);
@@ -137,12 +157,13 @@ class RemoteUserFollowRepository {
     if (kDebugMode) {
       debugPrint('RemoteUserFollowRepository.fetchFollowingPage: GET $uri');
     }
-    final resp = await _client.get(
+    final resp = await _nimonAuthSend(
       uri,
-      headers: {
+      () async => <String, String>{
         ...await _authHeadersOrThrow(),
         'Accept': 'application/json',
       },
+      (h) => _client.get(uri, headers: h),
     );
     if (resp.statusCode < 200 || resp.statusCode >= 300) _mapHttpError(resp);
     final m = _jsonObjectFromResponse(resp);
@@ -186,9 +207,11 @@ class RemoteUserFollowRepository {
     if (kDebugMode) {
       debugPrint('RemoteUserFollowRepository.fetchFollowersPage: GET $uri');
     }
-    final resp = await _client.get(
+    final resp = await _nimonAuthSend(
       uri,
-      headers: await _acceptHeadersOptionalAuth(),
+      _acceptHeadersOptionalAuth,
+      (h) => _client.get(uri, headers: h),
+      requireAuthHeaderForRecovery: true,
     );
     if (resp.statusCode < 200 || resp.statusCode >= 300) {
       _mapHttpError(resp);

@@ -46,7 +46,7 @@ class CommunityCollectionCard extends StatelessWidget {
       onTap: () {
         // Add haptic feedback
         HapticFeedback.lightImpact();
-        
+
         // Navigate to story details
         Navigator.pushNamed(
           context,
@@ -97,7 +97,8 @@ class CommunityCollectionCard extends StatelessWidget {
                                 height: 72,
                                 color: color.surfaceContainerLow,
                                 child: const Center(
-                                  child: CircularProgressIndicator(strokeWidth: 2),
+                                  child:
+                                      CircularProgressIndicator(strokeWidth: 2),
                                 ),
                               );
                             },
@@ -107,7 +108,8 @@ class CommunityCollectionCard extends StatelessWidget {
                                 height: 72,
                                 color: color.surfaceContainerLow,
                                 child: const Center(
-                                  child: Icon(Icons.book, size: 24, color: Colors.grey),
+                                  child: Icon(Icons.book,
+                                      size: 24, color: Colors.grey),
                                 ),
                               );
                             },
@@ -167,41 +169,45 @@ class CommunityCollectionCard extends StatelessWidget {
                   ],
                 ),
                 const SizedBox(height: 12),
-              // Latest Episodes section with progress indicator
-              Row(
-                children: [
-                  Text(
-                    'Latest Episodes',
-                    style: theme.textTheme.titleMedium,
-                  ),
-                  const Spacer(),
-                  // Progress indicator showing completion
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: color.primaryContainer.withOpacity(0.3),
-                      borderRadius: BorderRadius.circular(12),
+                // Latest Episodes section with progress indicator
+                Row(
+                  children: [
+                    Text(
+                      'Latest Episodes',
+                      style: theme.textTheme.titleMedium,
                     ),
-                    child: Text(
-                      '${episodes.length}/$totalEpisodes',
-                      style: theme.textTheme.labelSmall?.copyWith(
-                        color: color.onPrimaryContainer,
-                        fontWeight: FontWeight.w600,
+                    const Spacer(),
+                    // Progress indicator showing completion
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: color.primaryContainer.withOpacity(0.3),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        '${episodes.length}/$totalEpisodes',
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: color.onPrimaryContainer,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                     ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
+                  ],
+                ),
+                const SizedBox(height: 8),
                 // Episodes list - use Flexible to prevent overflow
                 Flexible(
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
-                    children: episodes.take(3).map((episode) => _EpisodeTile(
-                      episode: episode,
-                      storyTitle: title,
-                      jlptLevel: jlptLevel,
-                    )).toList(),
+                    children: episodes
+                        .take(3)
+                        .map((episode) => _EpisodeTile(
+                              episode: episode,
+                              storyTitle: title,
+                              jlptLevel: jlptLevel,
+                            ))
+                        .toList(),
                   ),
                 ),
                 const SizedBox(height: 4), // Minimal bottom padding
@@ -260,7 +266,7 @@ class _EpisodeTile extends StatelessWidget {
       onTap: () {
         // Add haptic feedback
         HapticFeedback.selectionClick();
-        
+
         // Navigate to reader view
         Navigator.pushNamed(
           context,
@@ -310,7 +316,8 @@ class _EpisodeTile extends StatelessWidget {
                     height: 36,
                     color: color.surfaceContainerLow,
                     child: const Center(
-                      child: Icon(Icons.play_circle_outline, size: 14, color: Colors.grey),
+                      child: Icon(Icons.play_circle_outline,
+                          size: 14, color: Colors.grey),
                     ),
                   );
                 },
@@ -333,12 +340,12 @@ class _EpisodeTile extends StatelessWidget {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
               decoration: BoxDecoration(
-                color: episode.episodeNumber <= 3 
-                    ? color.primaryContainer 
+                color: episode.episodeNumber <= 3
+                    ? color.primaryContainer
                     : color.surfaceContainerLow,
                 borderRadius: BorderRadius.circular(999),
-                border: episode.episodeNumber <= 3 
-                    ? null 
+                border: episode.episodeNumber <= 3
+                    ? null
                     : Border.all(color: color.outline.withOpacity(0.3)),
               ),
               child: Row(
@@ -354,8 +361,8 @@ class _EpisodeTile extends StatelessWidget {
                   Text(
                     'Ep ${episode.episodeNumber}',
                     style: theme.textTheme.labelSmall?.copyWith(
-                      color: episode.episodeNumber <= 3 
-                          ? color.onPrimaryContainer 
+                      color: episode.episodeNumber <= 3
+                          ? color.onPrimaryContainer
                           : color.onSurfaceVariant,
                       fontWeight: FontWeight.w600,
                       fontSize: 10,

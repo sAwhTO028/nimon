@@ -26,14 +26,14 @@ function normalizeHandle(v: unknown): string | null | undefined {
 export class PatchMeProfileDto {
   @IsOptional()
   @IsString()
-  @MaxLength(80)
+  @MaxLength(30)
   @Transform(({ value }) => trimOrNull(value))
   displayName?: string | null;
 
   @IsOptional()
   @IsString()
-  @MaxLength(20)
-  @Matches(/^[a-z0-9_]{3,20}$/, { message: 'handle_invalid' })
+  @MaxLength(24)
+  @Matches(/^[a-z0-9_.]{3,24}$/, { message: 'handle_invalid' })
   @Transform(({ value }) => normalizeHandle(value))
   handle?: string | null;
 
@@ -59,7 +59,7 @@ export class PatchMeProfileDto {
 
   @IsOptional()
   @IsString()
-  @MaxLength(240)
+  @MaxLength(150)
   @Transform(({ value }) => trimOrNull(value))
   bio?: string | null;
 }

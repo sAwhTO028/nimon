@@ -1,3 +1,7 @@
+import {
+  canonicalizeMediaUrl,
+  clonePublishedContentWithCanonicalMedia,
+} from '../media/media-url-canonicalizer';
 import type { PublishedMonoListItemDto, PublishedMonoDetailDto } from './published-monos.dto';
 
 /** Subset of UserProfile used to stamp writer identity onto mono DTOs (M9f). */
@@ -10,20 +14,22 @@ export type WriterProfileSlice = {
 export function attachWriterProfileToListItem(
   item: PublishedMonoListItemDto,
   writer: WriterProfileSlice | null,
+  mediaPublicBaseUrl: string,
 ): PublishedMonoListItemDto {
   return {
     ...item,
     writerDisplayName: writer?.displayName ?? null,
     writerHandle: writer?.handle ?? null,
-    writerAvatarUrl: writer?.avatarUrl ?? null,
+    writerAvatarUrl: canonicalizeMediaUrl(writer?.avatarUrl ?? null, mediaPublicBaseUrl),
   };
 }
 
 export function attachWriterProfileToDetail(
   detail: PublishedMonoDetailDto,
   writer: WriterProfileSlice | null,
+  mediaPublicBaseUrl: string,
 ): PublishedMonoDetailDto {
-  const stamped = attachWriterProfileToListItem(detail, writer);
+  const stamped = attachWriterProfileToListItem(detail, writer, mediaPublicBaseUrl);
   return { ...stamped, content: detail.content };
 }
 
@@ -63,7 +69,7 @@ export function publishedMonoListItemFromRow(m: {
   createdAt: Date;
   updatedAt: Date;
   content: unknown;
-}): PublishedMonoListItemDto {
+}, mediaPublicBaseUrl: string): PublishedMonoListItemDto {
   const content = (m.content ?? {}) as any;
   const sourceDraftId =
     typeof content?.sourceDraftId === 'string' ? content.sourceDraftId : null;
@@ -77,10 +83,11 @@ export function publishedMonoListItemFromRow(m: {
         }
       : null;
   const core = content?.core && typeof content.core === 'object' ? content.core : {};
-  const coverImageUrl =
+  const rawCover =
     typeof core?.coverImageUrl === 'string' && core.coverImageUrl.trim() !== ''
       ? core.coverImageUrl.trim()
       : null;
+  const coverImageUrl = canonicalizeMediaUrl(rawCover, mediaPublicBaseUrl);
   const durationKey = typeof core?.targetDurationBandKey === 'string' ? core.targetDurationBandKey : null;
   const targetDurationLabel = durationLabelFromKey(durationKey);
 
@@ -117,9 +124,10 @@ export function publishedMonoDetailFromRow(
     updatedAt: Date;
     content: unknown;
   },
+  mediaPublicBaseUrl: string,
 ): PublishedMonoDetailDto {
   return {
-    ...publishedMonoListItemFromRow(m),
-    content: m.content,
+    ...publishedMonoListItemFromRow(m, mediaPublicBaseUrl),
+    content: clonePublishedContentWithCanonicalMedia(m.content, mediaPublicBaseUrl),
   };
 }

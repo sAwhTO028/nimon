@@ -14,6 +14,10 @@ import 'package:nimon/features/create/creator_learn_mode_sync.dart';
 import 'package:nimon/features/create/creator_progress_drawer.dart';
 import 'package:nimon/features/create/creator_route_sync_listener.dart';
 import 'package:nimon/features/create/creator_workspace_step.dart';
+import 'package:nimon/core/validation/protected_action.dart';
+import 'package:nimon/core/validation/protected_action_guard.dart';
+import 'package:nimon/core/validation/localized_validation_messages.dart';
+import 'package:nimon/core/media/media_upload_error_mapper.dart';
 import 'package:nimon/features/create/data/media_upload_repository.dart';
 import 'package:nimon/features/create/data/media_upload_repository_provider.dart';
 import 'package:nimon/features/create/story_creator_models.dart';
@@ -24,9 +28,6 @@ import 'package:nimon/ui/widgets/nimon_circle_nav_button.dart';
 /// V1 creator editor for one story-level audio asset (public **http(s) URL** first for remote sync).
 class StoryCreatorAudioEditorScreen extends ConsumerWidget {
   const StoryCreatorAudioEditorScreen({super.key});
-
-  static const _ink = Color(0xFF1A1917);
-  static const _muted = Color(0xFF5C5A55);
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -173,6 +174,12 @@ class StoryCreatorAudioEditorScreen extends ConsumerWidget {
     WidgetRef ref, {
     StoryAudioAsset? existing,
   }) async {
+    if (!await ensureProtectedActionAllowed(
+      context,
+      action: ProtectedActionType.uploadMedia,
+    )) {
+      return;
+    }
     final n = ref.read(storyCreatorDraftProvider.notifier);
     final initialUrl = (existing != null && existing.hasUploadedSourceUrl)
         ? (existing.sourceUrl ?? '').trim()
@@ -186,7 +193,7 @@ class StoryCreatorAudioEditorScreen extends ConsumerWidget {
       isScrollControlled: true,
       useSafeArea: true,
       showDragHandle: true,
-      backgroundColor: const Color(0xFFF6F3EA),
+      backgroundColor: Theme.of(context).colorScheme.surface,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -196,7 +203,14 @@ class StoryCreatorAudioEditorScreen extends ConsumerWidget {
           if (t == null || t.accessToken.trim().isEmpty) {
             if (ctx.mounted) {
               ScaffoldMessenger.of(ctx).showSnackBar(
-                const SnackBar(content: Text('Sign in to upload media.')),
+                SnackBar(
+                  content: Text(
+                    validationMessageKeyLocalized(
+                      ctx,
+                      'protected.uploadMedia.login',
+                    ),
+                  ),
+                ),
               );
             }
             return null;
@@ -209,10 +223,18 @@ class StoryCreatorAudioEditorScreen extends ConsumerWidget {
                   path: file.path,
                   bytes: file.bytes,
                 );
-          } on MediaUploadException catch (e) {
+          } catch (e) {
             if (ctx.mounted) {
               ScaffoldMessenger.of(ctx).showSnackBar(
-                SnackBar(content: Text(e.userMessage)),
+                SnackBar(
+                  content: Text(
+                    mediaUploadUserMessageLocalized(
+                      ctx,
+                      e,
+                      surface: MediaUploadSurface.listeningAudio,
+                    ),
+                  ),
+                ),
               );
             }
             return null;
@@ -278,6 +300,7 @@ class StoryCreatorListeningModuleBody extends ConsumerWidget {
     final draft = ref.watch(storyCreatorDraftDataProvider);
     final n = ref.read(storyCreatorDraftProvider.notifier);
     final theme = Theme.of(context);
+    final cs = theme.colorScheme;
     final bottomInset = MediaQuery.paddingOf(context).bottom;
     final a = draft.audio.storyAudio;
     final hasAudio = a?.isValidV1 == true;
@@ -291,7 +314,7 @@ class StoryCreatorListeningModuleBody extends ConsumerWidget {
                 ? 'Listening / Pronunciation'
                 : 'Story-level audio (one file)',
             style: theme.textTheme.titleLarge?.copyWith(
-              color: StoryCreatorAudioEditorScreen._ink,
+              color: cs.onSurface,
               fontWeight: FontWeight.w800,
               height: 1.2,
             ),
@@ -302,7 +325,7 @@ class StoryCreatorListeningModuleBody extends ConsumerWidget {
           'Upload story audio for Full Learn, or leave empty for reading-only. '
           'Supported: mp3, m4a, wav',
           style: theme.textTheme.bodyMedium?.copyWith(
-            color: StoryCreatorAudioEditorScreen._muted,
+            color: cs.onSurfaceVariant,
             height: 1.45,
           ),
         ),
@@ -406,11 +429,14 @@ class _EmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = theme.colorScheme;
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.8),
+        color: cs.surfaceContainerHigh,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.black.withValues(alpha: 0.06)),
+        border: Border.all(
+          color: cs.outlineVariant.withValues(alpha: 0.45),
+        ),
       ),
       child: Padding(
         padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
@@ -422,7 +448,7 @@ class _EmptyState extends StatelessWidget {
               style: theme.textTheme.titleSmall?.copyWith(
                 height: 1.2,
                 fontWeight: FontWeight.w800,
-                color: const Color(0xFF1A1917),
+                color: cs.onSurface,
               ),
             ),
             const SizedBox(height: 8),
@@ -431,7 +457,7 @@ class _EmptyState extends StatelessWidget {
               'Supported: mp3, m4a, wav',
               style: theme.textTheme.bodyMedium?.copyWith(
                 height: 1.45,
-                color: const Color(0xFF5C5A55),
+                color: cs.onSurfaceVariant,
               ),
             ),
           ],
@@ -447,11 +473,9 @@ class _AudioSummaryCard extends StatelessWidget {
   final StoryAudioAsset asset;
   final ThemeData theme;
 
-  static const _ink = Color(0xFF1A1917);
-  static const _muted = Color(0xFF5C5A55);
-
   @override
   Widget build(BuildContext context) {
+    final cs = theme.colorScheme;
     final name = (asset.displayName ?? '').trim();
     final fileName = (asset.localFileName ?? '').trim();
     final url = (asset.sourceUrl ?? '').trim();
@@ -477,9 +501,11 @@ class _AudioSummaryCard extends StatelessWidget {
 
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.86),
+        color: cs.surfaceContainerHigh,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0x14000000)),
+        border: Border.all(
+          color: cs.outlineVariant.withValues(alpha: 0.45),
+        ),
       ),
       child: Padding(
         padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
@@ -489,7 +515,7 @@ class _AudioSummaryCard extends StatelessWidget {
             Text(
               'Current audio',
               style: theme.textTheme.labelLarge?.copyWith(
-                color: _ink,
+                color: cs.onSurface,
                 fontWeight: FontWeight.w800,
               ),
             ),
@@ -498,7 +524,7 @@ class _AudioSummaryCard extends StatelessWidget {
               Text(
                 name,
                 style: theme.textTheme.titleSmall?.copyWith(
-                  color: _ink,
+                  color: cs.onSurface,
                   fontWeight: FontWeight.w800,
                 ),
               ),
@@ -507,7 +533,7 @@ class _AudioSummaryCard extends StatelessWidget {
             Text(
               subtitleLine(),
               style: theme.textTheme.bodySmall?.copyWith(
-                color: _muted,
+                color: cs.onSurfaceVariant,
                 height: 1.4,
               ),
             ),
@@ -519,13 +545,13 @@ class _AudioSummaryCard extends StatelessWidget {
                       ? Icons.cloud_done_rounded
                       : Icons.attachment_rounded,
                   size: 18,
-                  color: _muted,
+                  color: cs.onSurfaceVariant,
                 ),
                 const SizedBox(width: 8),
                 Text(
                   status,
                   style: theme.textTheme.bodySmall?.copyWith(
-                    color: _muted,
+                    color: cs.onSurfaceVariant,
                     fontWeight: FontWeight.w800,
                   ),
                 ),
@@ -535,7 +561,7 @@ class _AudioSummaryCard extends StatelessWidget {
                   Text(
                     '• ${_formatBytes(asset.localSizeBytes!)}',
                     style: theme.textTheme.bodySmall?.copyWith(
-                      color: _muted,
+                      color: cs.onSurfaceVariant,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
@@ -546,12 +572,16 @@ class _AudioSummaryCard extends StatelessWidget {
               const SizedBox(height: 10),
               Row(
                 children: [
-                  const Icon(Icons.schedule_rounded, size: 18, color: _muted),
+                  Icon(
+                    Icons.schedule_rounded,
+                    size: 18,
+                    color: cs.onSurfaceVariant,
+                  ),
                   const SizedBox(width: 8),
                   Text(
                     durLabel(dur),
                     style: theme.textTheme.bodySmall?.copyWith(
-                      color: _muted,
+                      color: cs.onSurfaceVariant,
                       fontWeight: FontWeight.w700,
                     ),
                   ),

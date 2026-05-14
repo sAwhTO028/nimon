@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:nimon/features/learn/learn_explanation_language.dart';
+import 'package:nimon/features/learn/learn_module_surface_tokens.dart';
 import 'package:nimon/features/learn/learn_explanation_language_provider.dart';
 import 'package:nimon/ui/widgets/nimon_circle_nav_button.dart';
 
@@ -35,8 +36,6 @@ class LearnHubScreen extends ConsumerStatefulWidget {
 }
 
 class _LearnHubScreenState extends ConsumerState<LearnHubScreen> {
-  static const _bg = Color(0xFFF6F3EA);
-  static const _ink = Color(0xFF1A1917);
   static const _cardRadius = 18.0;
 
   @override
@@ -69,7 +68,10 @@ class _LearnHubScreenState extends ConsumerState<LearnHubScreen> {
         },
         loadingBuilder: (context, child, progress) {
           if (progress == null) return child;
-          return const ColoredBox(color: Color(0x14000000));
+          final cs = Theme.of(context).colorScheme;
+          return ColoredBox(
+            color: cs.surfaceContainerHighest.withValues(alpha: 0.35),
+          );
         },
       );
     } else if (fallback != null) {
@@ -79,7 +81,10 @@ class _LearnHubScreenState extends ConsumerState<LearnHubScreen> {
         alignment: Alignment.center,
       );
     } else {
-      img = const ColoredBox(color: Color(0x14000000));
+      final cs = Theme.of(context).colorScheme;
+      img = ColoredBox(
+        color: cs.surfaceContainerHighest.withValues(alpha: 0.35),
+      );
     }
 
     return ClipRRect(
@@ -96,8 +101,8 @@ class _LearnHubScreenState extends ConsumerState<LearnHubScreen> {
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
                   colors: [
-                    Colors.black.withOpacity(0.10),
-                    Colors.black.withOpacity(0.22),
+                    Colors.black.withValues(alpha: 0.10),
+                    Colors.black.withValues(alpha: 0.22),
                   ],
                 ),
               ),
@@ -115,8 +120,9 @@ class _LearnHubScreenState extends ConsumerState<LearnHubScreen> {
     VoidCallback? onTap,
   }) {
     final theme = Theme.of(context);
+    final cs = theme.colorScheme;
     return Material(
-      color: Colors.white.withOpacity(0.86),
+      color: learnModuleListCardFill(context),
       elevation: 0,
       borderRadius: BorderRadius.circular(_cardRadius),
       child: InkWell(
@@ -130,10 +136,10 @@ class _LearnHubScreenState extends ConsumerState<LearnHubScreen> {
         child: Container(
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(_cardRadius),
-            border: Border.all(color: const Color(0x14000000)),
+            border: Border.all(color: learnModuleListCardBorder(context)),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.05),
+                color: cs.shadow.withValues(alpha: 0.08),
                 blurRadius: 18,
                 offset: const Offset(0, 10),
               ),
@@ -148,17 +154,17 @@ class _LearnHubScreenState extends ConsumerState<LearnHubScreen> {
                   width: 44,
                   height: 44,
                   decoration: BoxDecoration(
-                    color: const Color(0x0A000000),
+                    color: cs.surfaceContainerHighest.withValues(alpha: 0.45),
                     borderRadius: BorderRadius.circular(14),
                   ),
-                  child: Icon(icon, size: 24, color: _ink),
+                  child: Icon(icon, size: 24, color: cs.onSurface),
                 ),
                 const SizedBox(height: 12),
                 Text(
                   label,
                   textAlign: TextAlign.center,
                   style: theme.textTheme.labelLarge?.copyWith(
-                    color: _ink,
+                    color: cs.onSurface,
                     fontWeight: FontWeight.w700,
                     height: 1.15,
                   ),
@@ -258,9 +264,12 @@ class _LearnHubScreenState extends ConsumerState<LearnHubScreen> {
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 8),
           decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.86),
+            color: learnModuleListCardFill(context),
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: const Color(0x14000000), width: 1),
+            border: Border.all(
+              color: learnModuleListCardBorder(context),
+              width: 1,
+            ),
           ),
           child: Material(
             color: Colors.transparent,
@@ -284,11 +293,11 @@ class _LearnHubScreenState extends ConsumerState<LearnHubScreen> {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       textAlign: TextAlign.center,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w500,
                         height: 1.2,
-                        color: _ink,
+                        color: colorScheme.onSurface,
                       ),
                     ),
                     const SizedBox(height: 2),
@@ -300,7 +309,7 @@ class _LearnHubScreenState extends ConsumerState<LearnHubScreen> {
                       style: TextStyle(
                         fontSize: 10,
                         fontWeight: FontWeight.w400,
-                        color: colorScheme.onSurfaceVariant.withOpacity(0.6),
+                        color: colorScheme.onSurfaceVariant,
                       ),
                     ),
                   ],
@@ -315,10 +324,11 @@ class _LearnHubScreenState extends ConsumerState<LearnHubScreen> {
 
   Widget _sectionTitle(BuildContext context, String t) {
     final theme = Theme.of(context);
+    final cs = theme.colorScheme;
     return Text(
       t,
       style: theme.textTheme.titleMedium?.copyWith(
-        color: _ink,
+        color: cs.onSurface,
         fontWeight: FontWeight.w900,
       ),
     );
@@ -327,6 +337,7 @@ class _LearnHubScreenState extends ConsumerState<LearnHubScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final cs = theme.colorScheme;
     final bottomInset = MediaQuery.paddingOf(context).bottom;
 
     final tiles = <(String, IconData)>[
@@ -349,7 +360,7 @@ class _LearnHubScreenState extends ConsumerState<LearnHubScreen> {
     final showDescriptionSection = vDesc.isNotEmpty;
 
     return Scaffold(
-      backgroundColor: _bg,
+      backgroundColor: learnModuleListPageBackground(context),
       body: SafeArea(
         bottom: false,
         child: SingleChildScrollView(
@@ -373,34 +384,11 @@ class _LearnHubScreenState extends ConsumerState<LearnHubScreen> {
                         Text(
                           'Learn',
                           style: theme.textTheme.titleLarge?.copyWith(
-                            color: _ink,
+                            color: cs.onSurface,
                             fontWeight: FontWeight.w800,
                           ),
                         ),
                         const Spacer(),
-                        PopupMenuButton<LearnExplanationLanguage>(
-                          tooltip: 'Explanation language',
-                          icon: const Icon(Icons.translate_outlined),
-                          color: Colors.white,
-                          onSelected: (v) {
-                            unawaited(
-                              ref
-                                  .read(
-                                      learnExplanationLanguageProvider.notifier)
-                                  .setLanguage(v),
-                            );
-                          },
-                          itemBuilder: (context) => const [
-                            PopupMenuItem(
-                              value: LearnExplanationLanguage.english,
-                              child: Text('English meanings'),
-                            ),
-                            PopupMenuItem(
-                              value: LearnExplanationLanguage.myanmar,
-                              child: Text('Myanmar meanings'),
-                            ),
-                          ],
-                        ),
                       ],
                     ),
                   ),
@@ -411,7 +399,7 @@ class _LearnHubScreenState extends ConsumerState<LearnHubScreen> {
                     showTitle,
                     textAlign: TextAlign.start,
                     style: theme.textTheme.headlineSmall?.copyWith(
-                      color: _ink,
+                      color: cs.onSurface,
                       fontWeight: FontWeight.w900,
                       height: 1.1,
                     ),
@@ -500,18 +488,19 @@ class _InsideCardState extends State<_InsideCard> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final cs = theme.colorScheme;
     final t = widget.text.trim();
     final hasText = t.isNotEmpty;
     final maxLines = _expanded ? 999 : 4;
 
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.86),
+        color: learnModuleListCardFill(context),
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: const Color(0x14000000)),
+        border: Border.all(color: learnModuleListCardBorder(context)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.04),
+            color: cs.shadow.withValues(alpha: 0.06),
             blurRadius: 16,
             offset: const Offset(0, 10),
           ),
@@ -528,7 +517,7 @@ class _InsideCardState extends State<_InsideCard> {
               overflow: hasText && !_expanded ? TextOverflow.ellipsis : null,
               style: theme.textTheme.bodyMedium?.copyWith(
                 height: 1.45,
-                color: const Color(0xFF1A1917),
+                color: cs.onSurface,
                 fontWeight: FontWeight.w500,
               ),
             ),
@@ -542,7 +531,7 @@ class _InsideCardState extends State<_InsideCard> {
                       horizontal: 10,
                       vertical: 8,
                     ),
-                    foregroundColor: const Color(0xFF1A1917),
+                    foregroundColor: cs.primary,
                     textStyle: theme.textTheme.labelLarge?.copyWith(
                       fontWeight: FontWeight.w800,
                     ),

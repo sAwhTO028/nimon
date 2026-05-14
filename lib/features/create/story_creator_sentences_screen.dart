@@ -27,8 +27,12 @@ import 'package:nimon/features/create/story_creator_quiz_editor_screen.dart';
 import 'package:nimon/features/create/story_creator_vocab_kanji_editor_screen.dart';
 import 'package:nimon/features/create/story_creator_grammar_overlays.dart';
 import 'package:nimon/features/create/story_creator_furigana_tokens.dart';
+import 'package:nimon/features/create/widgets/creator_fit_info_bottom_sheet.dart';
+import 'package:nimon/features/create/widgets/creator_info_bottom_sheet.dart';
 import 'package:nimon/ui/reading/nimon_japanese_sentence_line.dart';
 import 'package:nimon/ui/widgets/nimon_circle_nav_button.dart';
+import 'package:nimon/ui/widgets/nimon_scrollable_help_bottom_sheet.dart';
+import 'package:nimon/core/design_system/nimon_color_tokens.dart';
 
 /// Visible title for the pinned workspace header on `/create/story/sentences`
 /// (driven by the router `?panel=` on that host; see [syncCreatorDrawerSessionForRouter]).
@@ -552,127 +556,40 @@ class _StoryCreatorSentencesScreenState
 
   void _showHowThisWorks() {
     _dismissKeyboard();
-    final theme = Theme.of(context);
-    final cs = theme.colorScheme;
-    showModalBottomSheet<void>(
+    showCreatorFitInfoBottomSheet(
       context: context,
-      showDragHandle: true,
-      isScrollControlled: true,
-      useSafeArea: true,
-      backgroundColor: cs.surface,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      builder: (ctx) {
-        final mq = MediaQuery.of(ctx);
-        return Padding(
-          padding: EdgeInsets.only(bottom: mq.viewInsets.bottom),
-          child: ConstrainedBox(
-            constraints: BoxConstraints(maxHeight: mq.size.height * 0.75),
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'How this works',
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  _HowItWorksBullet(
-                    text: 'Write one Japanese sentence at a time.',
-                    theme: theme,
-                  ),
-                  _HowItWorksBullet(
-                    text: 'Tap send to add it to your story.',
-                    theme: theme,
-                  ),
-                  _HowItWorksBullet(
-                    text:
-                        'Tap a sentence to edit text, readings, and translations.',
-                    theme: theme,
-                  ),
-                  _HowItWorksBullet(
-                    text: 'Reorder sentences anytime.',
-                    theme: theme,
-                  ),
-                  _HowItWorksBullet(
-                    text:
-                        'Publish Read Only or Full Learn from the progress menu when you are ready.',
-                    theme: theme,
-                  ),
-                ],
-              ),
-            ),
-          ),
-        );
-      },
+      title: 'How this works',
+      children: const [
+        CreatorInfoBulletColumn(
+          lines: [
+            'Write one Japanese sentence at a time.',
+            'Tap send to add it to your story.',
+            'Tap a sentence to edit text, readings, and translations.',
+            'Reorder sentences anytime.',
+            'Publish Read Only or Full Learn from the progress menu when you are ready.',
+          ],
+        ),
+      ],
     );
   }
 
   void _showVocabHowTo() {
     _dismissKeyboard();
-    final theme = Theme.of(context);
-    final cs = theme.colorScheme;
-    showModalBottomSheet<void>(
+    showCreatorFitInfoBottomSheet(
       context: context,
-      showDragHandle: true,
-      isScrollControlled: true,
-      useSafeArea: true,
-      backgroundColor: cs.surface,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      builder: (ctx) {
-        final mq = MediaQuery.of(ctx);
-        return Padding(
-          padding: EdgeInsets.only(bottom: mq.viewInsets.bottom),
-          child: ConstrainedBox(
-            constraints: BoxConstraints(maxHeight: mq.size.height * 0.75),
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'How to add vocabulary / kanji',
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  _HowItWorksBullet(
-                    text: 'Tap Add entry.',
-                    theme: theme,
-                  ),
-                  _HowItWorksBullet(
-                    text: 'Select a word or phrase from the story.',
-                    theme: theme,
-                  ),
-                  _HowItWorksBullet(
-                    text: 'Choose Vocabulary or Kanji.',
-                    theme: theme,
-                  ),
-                  _HowItWorksBullet(
-                    text: 'Add source meaning first.',
-                    theme: theme,
-                  ),
-                  _HowItWorksBullet(
-                    text: 'Optionally add English meaning.',
-                    theme: theme,
-                  ),
-                  _HowItWorksBullet(
-                    text: 'Optionally add up to 3 example sentences.',
-                    theme: theme,
-                  ),
-                ],
-              ),
-            ),
-          ),
-        );
-      },
+      title: 'How to add vocabulary / kanji',
+      children: const [
+        CreatorInfoBulletColumn(
+          lines: [
+            'Tap Add entry.',
+            'Select a word or phrase from the story.',
+            'Choose Vocabulary or Kanji.',
+            'Add source meaning first.',
+            'Optionally add English meaning.',
+            'Optionally add up to 3 example sentences.',
+          ],
+        ),
+      ],
     );
   }
 
@@ -790,62 +707,23 @@ class _StoryCreatorSentencesScreenState
 
   void _showQuizHowTo() {
     _dismissKeyboard();
-    final theme = Theme.of(context);
-    final cs = theme.colorScheme;
-    showModalBottomSheet<void>(
+    showNimonScrollableHelpBottomSheet(
       context: context,
-      useSafeArea: true,
-      showDragHandle: true,
-      backgroundColor: cs.surface,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (ctx) {
-        return Padding(
-          padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'How to create quiz items',
-                style: theme.textTheme.titleLarge?.copyWith(
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-              const SizedBox(height: 10),
-              Text(
-                'Quiz types:\n'
-                '- Vocabulary: word/meaning questions\n'
-                '- Kanji: kanji reading/meaning questions\n'
-                '- Grammar: pattern meaning/usage questions\n'
-                '- Sentence: comprehension about a story sentence\n\n'
-                'How to add:\n'
-                '1. Pick a tab (type)\n'
-                '2. Tap “Add quiz”\n'
-                '3. Write a clear prompt/question\n'
-                '4. Add 4 answer options (A–D)\n'
-                '5. Choose the correct answer\n\n'
-                'Explanations:\n'
-                '- Source explanation is primary\n'
-                '- English explanation is optional and hidden by default',
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: cs.onSurfaceVariant,
-                  height: 1.4,
-                ),
-              ),
-              const SizedBox(height: 14),
-              Align(
-                alignment: Alignment.centerRight,
-                child: FilledButton(
-                  onPressed: () => Navigator.pop(ctx),
-                  child: const Text('Got it'),
-                ),
-              ),
-            ],
-          ),
-        );
-      },
+      title: 'How to create quiz items',
+      body: 'Quiz types:\n'
+          '- Vocabulary: word/meaning questions\n'
+          '- Kanji: kanji reading/meaning questions\n'
+          '- Grammar: pattern meaning/usage questions\n'
+          '- Sentence: comprehension about a story sentence\n\n'
+          'How to add:\n'
+          '1. Pick a tab (type)\n'
+          '2. Tap “Add quiz”\n'
+          '3. Write a clear prompt/question\n'
+          '4. Add 4 answer options (A–D)\n'
+          '5. Choose the correct answer\n\n'
+          'Explanations:\n'
+          '- Source explanation is primary\n'
+          '- English explanation is optional and hidden by default',
     );
   }
 
@@ -899,55 +777,16 @@ class _StoryCreatorSentencesScreenState
 
   void _showListeningHowTo() {
     _dismissKeyboard();
-    final theme = Theme.of(context);
-    final cs = theme.colorScheme;
-    showModalBottomSheet<void>(
+    showNimonScrollableHelpBottomSheet(
       context: context,
-      useSafeArea: true,
-      showDragHandle: true,
-      backgroundColor: cs.surface,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (ctx) {
-        return Padding(
-          padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Listening / Pronunciation',
-                style: theme.textTheme.titleLarge?.copyWith(
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-              const SizedBox(height: 10),
-              Text(
-                'Upload story audio for listening practice in Full Learn.\n\n'
-                'How to add audio:\n'
-                '1. Tap “Choose audio file”\n'
-                '2. Pick mp3, m4a, or wav (sign in to save online)\n'
-                '3. After upload, tap “Add audio to story” to attach it to this draft\n\n'
-                'Optional display name or length: expand “Optional details” on the success screen.\n\n'
-                'You can Replace audio or Remove audio anytime.',
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: cs.onSurfaceVariant,
-                  height: 1.4,
-                ),
-              ),
-              const SizedBox(height: 14),
-              Align(
-                alignment: Alignment.centerRight,
-                child: FilledButton(
-                  onPressed: () => Navigator.pop(ctx),
-                  child: const Text('Got it'),
-                ),
-              ),
-            ],
-          ),
-        );
-      },
+      title: 'Listening / Pronunciation',
+      body: 'Upload story audio for listening practice in Full Learn.\n\n'
+          'How to add audio:\n'
+          '1. Tap “Choose audio file”\n'
+          '2. Pick mp3, m4a, or wav (sign in to save online)\n'
+          '3. After upload, tap “Add audio to story” to attach it to this draft\n\n'
+          'Optional display name or length: expand “Optional details” on the success screen.\n\n'
+          'You can Replace audio or Remove audio anytime.',
     );
   }
 
@@ -2586,6 +2425,7 @@ class _GlassPillSurface extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final tc = Theme.of(context).colors;
     final radius = BorderRadius.circular(999);
     final content = SizedBox(
       height: height,
@@ -2600,9 +2440,12 @@ class _GlassPillSurface extends StatelessWidget {
       child: BackdropFilter(
         filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
         child: Material(
-          color: Colors.white.withValues(alpha: 0.72),
+          color: Color.alphaBlend(
+            tc.surface.withValues(alpha: 0.82),
+            tc.appBackground,
+          ),
           elevation: 8,
-          shadowColor: Colors.black.withValues(alpha: 0.10),
+          shadowColor: tc.textPrimary.withValues(alpha: 0.12),
           borderRadius: radius,
           clipBehavior: Clip.antiAlias,
           child: onTap == null
@@ -3106,40 +2949,6 @@ class _BottomComposer extends StatelessWidget {
             ],
           ),
         ),
-      ),
-    );
-  }
-}
-
-class _HowItWorksBullet extends StatelessWidget {
-  const _HowItWorksBullet({required this.text, required this.theme});
-
-  final String text;
-  final ThemeData theme;
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = theme.colorScheme;
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.only(top: 3),
-            child: Icon(Icons.circle, size: 8, color: cs.primary),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              text,
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: cs.onSurface,
-                height: 1.35,
-              ),
-            ),
-          ),
-        ],
       ),
     );
   }

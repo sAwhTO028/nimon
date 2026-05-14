@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:nimon/core/validation/validation_issue_from_json.dart';
 import 'package:nimon/features/create/data/story_draft_remote_publish_errors.dart';
 
 void main() {
@@ -21,6 +22,26 @@ void main() {
       ),
       kPublishFullLearnRequiresReadOnlyFirst,
     );
+  });
+
+  test('validation_failed body parses into typed issue list', () {
+    final body = jsonEncode({
+      'statusCode': 400,
+      'message': 'validation_failed',
+      'issues': [
+        {
+          'code': 'x',
+          'field': 'story.title',
+          'messageKey': 'story.title.required',
+          'severity': 'blocking',
+        },
+      ],
+    });
+    final parsed = tryParseValidationIssuesFromHttpBody(body);
+    expect(parsed, isNotNull);
+    final ex = StoryDraftValidationFailedException(parsed!);
+    expect(ex.issues.length, 1);
+    expect(ex.issues.first.field, 'story.title');
   });
 
   test('publishedMonoMissingFriendlyMessageIfAny returns null for other 422',

@@ -1,6 +1,29 @@
-import { HttpStatus, Injectable } from '@nestjs/common';
+import { HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { Prisma, PublishState } from '@prisma/client';
+import {
+  normalizeStoryDraftTextFields,
+  validateStoryDescription,
+  validateStoryTitle,
+} from '../../common/validation/story-validation';
+import { ValidationMode } from '../../common/validation/validation-mode';
+import { assertNoBlockingValidationIssues } from '../../common/validation/validation-exception';
+import { combine, type ValidationResult } from '../../common/validation/validation-result';
+import {
+  storyPublishInputFromDraftRow,
+  validateStoryPublishInput,
+} from '../../common/validation/publish-validation';
+import {
+  assertCanRevealOnePublishedTabMono,
+  isOwnerPublishedMonoTabVisible,
+  logPublishedTabPublishQuotaIfDev,
+} from '../published-monos/published-mono-published-tab-quota';
+import {
+  resolvePublishedMonoIdForReadOnlyPublish,
+  type PublishedMonoReadOnlyPublishScope,
+} from '../published-monos/published-mono-slot-guards';
 import { PrismaService } from '../prisma/prisma.service';
+import { FREE_TIER_QUOTA_KEYS, FREE_TIER_QUOTAS } from '../../common/limits/free-tier-quotas';
+import { QuotaExceededException } from '../../common/limits/quota-exceeded.exception';
 import { apiError } from '../../common/api-error';
 import {
   DraftListSummaryResponseDto,
@@ -24,7 +47,61 @@ type ListCursorPayload = { u: string; i: string };
 
 @Injectable()
 export class StoryDraftsService {
+  private readonly logger = new Logger(StoryDraftsService.name);
+
   constructor(private readonly prisma: PrismaService) {}
+
+  private isM17e4DiagEnabled(): boolean {
+    return process.env.NODE_ENV !== 'production';
+  }
+
+  private jsonSourceDraftId(content: unknown): string | null {
+    const c = content as Record<string, unknown> | null | undefined;
+    const raw = c?.sourceDraftId;
+    if (typeof raw !== 'string' || !raw.trim()) {
+      return null;
+    }
+    return raw.trim();
+  }
+
+  private logM17e4EditStage(params: {
+    trigger: 'getDraftById' | 'updateDraft' | 'createDraft';
+    ownerId: string;
+    workspaceDraftId: string;
+    publishedMonoIdFromDraft: string | null;
+    draftPublishState: PublishState;
+    draftHasDirty: boolean;
+    publishedMonoTrashedAtIso: string | null;
+    publishedMonoSourceDraftId: string | null;
+    createdDraftId: string | null;
+  }): void {
+    if (!this.isM17e4DiagEnabled()) {
+      return;
+    }
+    const p = params;
+    this.logger.log(
+      `[M17E-4 edit-stage] trigger=${p.trigger} ownerId=${p.ownerId} publishedMonoId=${p.publishedMonoIdFromDraft ?? 'null'} sourceDraftId=${p.publishedMonoSourceDraftId ?? 'null'} workspaceDraftId=${p.workspaceDraftId} createdDraftId=${p.createdDraftId ?? 'null'} draft.publishState=${p.draftPublishState} draft.publishedMonoId=${p.publishedMonoIdFromDraft ?? 'null'} draft.sourcePublishedMonoId=n/a draft.hasUnpublishedCoreChanges=${p.draftHasDirty} publishedMono.trashedAt=${p.publishedMonoTrashedAtIso ?? 'null'} publishedMonoRowHasUnpublishedCoreChanges=n/a visibility=PUBLISHED_MONO_CATALOG_VISIBLE`,
+    );
+  }
+
+  private logM17e4PublishEntry(params: {
+    methodName: string;
+    ownerId: string;
+    draftId: string;
+    publishState: PublishState;
+    publishedMonoIdOnDraft: string | null;
+    hasDirty: boolean;
+    isFirstPublish: boolean;
+    resolutionVia: string;
+  }): void {
+    if (!this.isM17e4DiagEnabled()) {
+      return;
+    }
+    const x = params;
+    this.logger.log(
+      `[M17E-4 publish-entry] methodName=${x.methodName} ownerId=${x.ownerId} draftId=${x.draftId} draft.publishState=${x.publishState} draft.publishedMonoId=${x.publishedMonoIdOnDraft ?? 'null'} draft.hasUnpublishedCoreChanges=${x.hasDirty} isFirstPublish=${x.isFirstPublish ? 'yes' : 'no'} resolutionVia=${x.resolutionVia}`,
+    );
+  }
 
   private etagFromVersion(version: number): string {
     return `"v${version}"`;
@@ -71,6 +148,32 @@ export class StoryDraftsService {
       return {};
     }
     return { ...(content as Record<string, unknown>) };
+  }
+
+  /**
+   * Draft PUT uses the **array order** of `sentences` as canonical display order.
+   * DB column `DraftSentence.order` is always `0..n-1` by index (unique with `draftId`).
+   * Client `orderIndex` is not trusted for insertion (duplicates caused P2002).
+   */
+  private logDuplicateIncomingSentenceOrderIndexes(
+    draftId: string,
+    sentences: unknown[],
+  ): void {
+    const seen = new Set<number>();
+    const dup = new Set<number>();
+    for (const raw of sentences) {
+      if (raw == null || typeof raw !== 'object' || Array.isArray(raw)) continue;
+      const oi = (raw as Record<string, unknown>).orderIndex;
+      if (typeof oi !== 'number' || !Number.isFinite(oi)) continue;
+      const k = Math.trunc(oi);
+      if (seen.has(k)) dup.add(k);
+      else seen.add(k);
+    }
+    if (dup.size === 0) return;
+    const sorted = [...dup].sort((a, b) => a - b);
+    this.logger.warn(
+      `draft_sentences: duplicate orderIndex in PUT payload (ignored for DB order); draftId=${draftId} duplicateOrderIndex=${sorted.join(',')}`,
+    );
   }
 
   /**
@@ -218,7 +321,42 @@ export class StoryDraftsService {
     await this.ensureDevOwnerUser(ownerId);
 
     const draftId = req.draftId ?? crypto.randomUUID();
-    const basics = req.basics ?? {};
+    const basicsRaw = req.basics ?? {};
+    const normalizedText = normalizeStoryDraftTextFields({
+      title: basicsRaw.title as string | null | undefined,
+      description: basicsRaw.description as string | null | undefined,
+    });
+    const basics = { ...basicsRaw, ...normalizedText };
+
+    const draftParts: ValidationResult[] = [];
+    if (Object.prototype.hasOwnProperty.call(basicsRaw, 'title')) {
+      draftParts.push(
+        validateStoryTitle(
+          basicsRaw.title as string | null | undefined,
+          ValidationMode.Draft,
+        ),
+      );
+    }
+    if (Object.prototype.hasOwnProperty.call(basicsRaw, 'description')) {
+      draftParts.push(
+        validateStoryDescription(
+          basicsRaw.description as string | null | undefined,
+          ValidationMode.Draft,
+        ),
+      );
+    }
+    if (draftParts.length > 0) {
+      assertNoBlockingValidationIssues(combine(...draftParts));
+    }
+
+    const draftCount = await this.prisma.storyDraft.count({ where: { ownerId } });
+    if (draftCount >= FREE_TIER_QUOTAS.draftStories) {
+      throw new QuotaExceededException(
+        FREE_TIER_QUOTA_KEYS.draftStories,
+        FREE_TIER_QUOTAS.draftStories,
+        draftCount,
+      );
+    }
 
     const created = await this.prisma.storyDraft.create({
       data: {
@@ -245,13 +383,29 @@ export class StoryDraftsService {
       },
     });
 
+    this.logM17e4EditStage({
+      trigger: 'createDraft',
+      ownerId,
+      workspaceDraftId: created.id,
+      publishedMonoIdFromDraft: null,
+      draftPublishState: created.publishState,
+      draftHasDirty: created.hasUnpublishedCoreChanges,
+      publishedMonoTrashedAtIso: null,
+      publishedMonoSourceDraftId: null,
+      createdDraftId: created.id,
+    });
+
     return this.mapFullDraft(created);
   }
 
   async deleteDraft(ownerId: string, draftId: string): Promise<void> {
     const existing = await this.prisma.storyDraft.findFirst({
       where: { id: draftId, ownerId },
-      select: { publishedMonoId: true },
+      select: {
+        publishedMonoId: true,
+        hasUnpublishedCoreChanges: true,
+        publishState: true,
+      },
     });
     if (!existing) {
       throw apiError(HttpStatus.NOT_FOUND, 'draft_not_found', 'Draft not found');
@@ -260,14 +414,28 @@ export class StoryDraftsService {
     if (linkedId) {
       const pm = await this.prisma.publishedMono.findUnique({
         where: { id: linkedId },
-        select: { trashedAt: true },
+        select: { trashedAt: true, ownerId: true },
       });
       if (pm && pm.trashedAt == null) {
-        throw apiError(
-          HttpStatus.CONFLICT,
-          'published_draft_must_be_trashed_first',
-          'Move the published story to Trash before deleting this draft.',
-        );
+        if (pm.ownerId !== ownerId) {
+          throw apiError(HttpStatus.NOT_FOUND, 'draft_not_found', 'Draft not found');
+        }
+        const isPlainDraft = existing.publishState === PublishState.draft;
+        if (isPlainDraft && !existing.hasUnpublishedCoreChanges) {
+          throw apiError(
+            HttpStatus.CONFLICT,
+            'published_draft_must_be_trashed_first',
+            'Move the published story to Trash before deleting this draft.',
+          );
+        }
+        if (existing.hasUnpublishedCoreChanges) {
+          await assertCanRevealOnePublishedTabMono(
+            this.prisma,
+            ownerId,
+            { tag: 'cancel-edit', draftId, publishedMonoId: linkedId },
+            (line) => this.logger.log(line),
+          );
+        }
       }
     }
 
@@ -288,11 +456,28 @@ export class StoryDraftsService {
         grammarEntries: true,
         quizEntries: true,
         audios: true,
+        publishedMono: { select: { id: true, trashedAt: true, content: true } },
       },
     });
 
     if (!draft) {
       throw apiError(HttpStatus.NOT_FOUND, 'draft_not_found', 'Draft not found');
+    }
+
+    const pmRef = draft.publishedMonoId?.trim() || null;
+    if (draft.publishState !== PublishState.draft || pmRef) {
+      const pm = draft.publishedMono;
+      this.logM17e4EditStage({
+        trigger: 'getDraftById',
+        ownerId,
+        workspaceDraftId: draftId,
+        publishedMonoIdFromDraft: pmRef,
+        draftPublishState: draft.publishState,
+        draftHasDirty: draft.hasUnpublishedCoreChanges,
+        publishedMonoTrashedAtIso: pm?.trashedAt?.toISOString() ?? null,
+        publishedMonoSourceDraftId: this.jsonSourceDraftId(pm?.content),
+        createdDraftId: null,
+      });
     }
 
     return this.mapFullDraft(draft);
@@ -306,11 +491,38 @@ export class StoryDraftsService {
   ): Promise<StoryDraftResponseDto> {
     const requiredIfMatch = this.requireIfMatch(ifMatch);
 
+    const basicsRaw = body.basics ?? {};
+    const normalizedBasics = normalizeStoryDraftTextFields({
+      title: basicsRaw.title as string | null | undefined,
+      description: basicsRaw.description as string | null | undefined,
+    });
     const basics = {
-      ...body.basics,
+      ...basicsRaw,
+      ...normalizedBasics,
       ownerId,
       storyId: draftId,
     };
+
+    const draftParts: ValidationResult[] = [];
+    if (Object.prototype.hasOwnProperty.call(basicsRaw, 'title')) {
+      draftParts.push(
+        validateStoryTitle(
+          basicsRaw.title as string | null | undefined,
+          ValidationMode.Draft,
+        ),
+      );
+    }
+    if (Object.prototype.hasOwnProperty.call(basicsRaw, 'description')) {
+      draftParts.push(
+        validateStoryDescription(
+          basicsRaw.description as string | null | undefined,
+          ValidationMode.Draft,
+        ),
+      );
+    }
+    if (draftParts.length > 0) {
+      assertNoBlockingValidationIssues(combine(...draftParts));
+    }
 
     if (basics.storyId !== draftId) {
       throw apiError(
@@ -321,6 +533,7 @@ export class StoryDraftsService {
     }
 
     const sentences = body.sentences ?? [];
+    this.logDuplicateIncomingSentenceOrderIndexes(draftId, sentences);
     const vocab = body.vocabularyKanji?.entries ?? [];
     const grammar = body.grammar?.entries ?? [];
     const quiz = body.quiz?.entries ?? [];
@@ -364,9 +577,12 @@ export class StoryDraftsService {
       if (sentences.length > 0) {
         await tx.draftSentence.createMany({
           data: sentences.map((s, idx) => {
-            const orderIndex = (s as any).orderIndex;
-            const order = typeof orderIndex === 'number' ? orderIndex : idx;
-            return { draftId, order, content: s as Prisma.InputJsonValue };
+            const base =
+              s != null && typeof s === 'object' && !Array.isArray(s)
+                ? (s as Record<string, unknown>)
+                : {};
+            const content = { ...base, orderIndex: idx } as Prisma.InputJsonValue;
+            return { draftId, order: idx, content };
           }),
         });
       }
@@ -450,12 +666,31 @@ export class StoryDraftsService {
           grammarEntries: true,
           quizEntries: true,
           audios: true,
+          publishedMono: { select: { id: true, trashedAt: true, content: true } },
         },
       });
 
       if (!reloaded) {
         throw apiError(HttpStatus.NOT_FOUND, 'draft_not_found', 'Draft not found');
       }
+
+      const pmRef = reloaded.publishedMonoId?.trim() || null;
+      const linked = !!(pmRef && pmRef.length > 0);
+      if (linked && reloaded.hasUnpublishedCoreChanges) {
+        const pm = reloaded.publishedMono;
+        this.logM17e4EditStage({
+          trigger: 'updateDraft',
+          ownerId,
+          workspaceDraftId: draftId,
+          publishedMonoIdFromDraft: pmRef,
+          draftPublishState: reloaded.publishState,
+          draftHasDirty: reloaded.hasUnpublishedCoreChanges,
+          publishedMonoTrashedAtIso: pm?.trashedAt?.toISOString() ?? null,
+          publishedMonoSourceDraftId: this.jsonSourceDraftId(pm?.content),
+          createdDraftId: null,
+        });
+      }
+
       return reloaded;
     });
 
@@ -737,47 +972,6 @@ export class StoryDraftsService {
     };
   }
 
-  private sentenceHasJapaneseText(sentenceContent: unknown): boolean {
-    if (!sentenceContent || typeof sentenceContent !== 'object') return false;
-    const c = sentenceContent as Record<string, unknown>;
-    const candidates = [
-      c.japanese,
-      c.japaneseText,
-      c.jp,
-      c.textJa,
-      c.text,
-      c.value,
-    ];
-    return candidates.some((v) => typeof v === 'string' && v.trim().length > 0);
-  }
-
-  private getReadOnlyReadinessUnmet(draft: any): string[] {
-    const unmet: string[] = [];
-    if (!draft.title?.trim()) unmet.push('title_empty');
-    if (!draft.category?.trim()) unmet.push('category_empty');
-    if (!draft.level?.trim()) unmet.push('level_empty');
-    if (!draft.description?.trim()) unmet.push('description_empty');
-    if (!draft.targetDurationBandKey?.trim())
-      unmet.push('target_duration_band_missing');
-
-    const sentences = (draft.sentences ?? []) as Array<{ content: unknown }>;
-    const hasValidSentence = sentences.some((s) =>
-      this.sentenceHasJapaneseText(s.content),
-    );
-    if (!hasValidSentence) unmet.push('no_valid_sentence');
-    return unmet;
-  }
-
-  private getFullLearnReadinessUnmet(draft: any): string[] {
-    const unmet = this.getReadOnlyReadinessUnmet(draft);
-    const statuses = this.ensureModuleWorkflowStatuses(draft.moduleWorkflowStatuses);
-    const requiredKeys = ['vocabulary_kanji', 'grammar', 'quiz', 'audio'];
-    for (const k of requiredKeys) {
-      if (statuses[k] !== 'completed') unmet.push(`module_${k}_not_completed`);
-    }
-    return unmet;
-  }
-
   async publishReadOnly(ownerId: string, draftId: string, ifMatch?: string) {
     const requiredIfMatch = this.requireIfMatch(ifMatch);
 
@@ -801,18 +995,38 @@ export class StoryDraftsService {
         this.throwConflict(draft.version);
       }
 
-      const unmet = this.getReadOnlyReadinessUnmet(draft);
-      if (unmet.length > 0) {
-        throw apiError(
-          HttpStatus.UNPROCESSABLE_ENTITY,
-          'unprocessable_entity',
-          'Read-only publish requirements not met',
-          { unmet },
-        );
-      }
+      const pubCheck = validateStoryPublishInput(
+        storyPublishInputFromDraftRow(draft),
+        ValidationMode.ReadOnlyPublish,
+      );
+      assertNoBlockingValidationIssues(pubCheck);
 
-      let publishedMonoId = draft.publishedMonoId;
+      const resolution = await resolvePublishedMonoIdForReadOnlyPublish(
+        tx as unknown as PublishedMonoReadOnlyPublishScope,
+        ownerId,
+        { id: draft.id, publishedMonoId: draft.publishedMonoId },
+      );
+      let publishedMonoId = resolution.publishedMonoId;
+      const isFirstPublish = publishedMonoId == null;
+
+      this.logM17e4PublishEntry({
+        methodName: 'publishReadOnly',
+        ownerId,
+        draftId,
+        publishState: draft.publishState,
+        publishedMonoIdOnDraft: draft.publishedMonoId ?? null,
+        hasDirty: draft.hasUnpublishedCoreChanges,
+        isFirstPublish,
+        resolutionVia: resolution.via,
+      });
+
       if (!publishedMonoId) {
+        await assertCanRevealOnePublishedTabMono(
+          tx,
+          ownerId,
+          { tag: 'publish-quota', draftId, publishedMonoId: undefined },
+          (line) => this.logger.log(line),
+        );
         const mono = await tx.publishedMono.create({
           data: {
             ownerId,
@@ -820,11 +1034,32 @@ export class StoryDraftsService {
             category: draft.category ?? '',
             level: draft.level ?? '',
             description: draft.description ?? '',
+            contentLocale: 'en',
+            learningLanguage: 'ja',
             content: { sourceDraftId: draft.id },
           },
           select: { id: true },
         });
         publishedMonoId = mono.id;
+      } else {
+        const wouldReveal =
+          (await isOwnerPublishedMonoTabVisible(tx, ownerId, publishedMonoId)) === false;
+        if (wouldReveal) {
+          await assertCanRevealOnePublishedTabMono(
+            tx,
+            ownerId,
+            { tag: 'publish-quota', draftId, publishedMonoId },
+            (line) => this.logger.log(line),
+          );
+        } else {
+          await logPublishedTabPublishQuotaIfDev(
+            tx,
+            ownerId,
+            { tag: 'publish-quota', draftId, publishedMonoId },
+            (line) => this.logger.log(line),
+            false,
+          );
+        }
       }
 
       // V1 update path:
@@ -834,16 +1069,20 @@ export class StoryDraftsService {
       // Merge with existing content so a prior full_learn snapshot (`content.learn`) is preserved.
       const existingPm = await tx.publishedMono.findUnique({
         where: { id: publishedMonoId },
-        select: { content: true },
+        select: { content: true, trashedAt: true },
       });
       const prevContent = (existingPm?.content ?? {}) as Record<string, unknown>;
+      const clearTrash = existingPm?.trashedAt != null;
       await tx.publishedMono.update({
         where: { id: publishedMonoId },
         data: {
+          ...(clearTrash ? { trashedAt: null } : {}),
           title: draft.title ?? '',
           category: draft.category ?? '',
           level: draft.level ?? '',
           description: draft.description ?? '',
+          contentLocale: 'en',
+          learningLanguage: 'ja',
           content: {
             ...prevContent,
             sourceDraftId: draft.id,
@@ -921,15 +1160,22 @@ export class StoryDraftsService {
         this.throwConflict(draft.version);
       }
 
-      const unmet = this.getFullLearnReadinessUnmet(draft);
-      if (unmet.length > 0) {
-        throw apiError(
-          HttpStatus.UNPROCESSABLE_ENTITY,
-          'unprocessable_entity',
-          'Full-learn publish requirements not met',
-          { unmet },
-        );
-      }
+      const learnCheck = validateStoryPublishInput(
+        storyPublishInputFromDraftRow(draft),
+        ValidationMode.FullLearnPublish,
+      );
+      assertNoBlockingValidationIssues(learnCheck);
+
+      this.logM17e4PublishEntry({
+        methodName: 'publishFullLearn',
+        ownerId,
+        draftId,
+        publishState: draft.publishState,
+        publishedMonoIdOnDraft: draft.publishedMonoId ?? null,
+        hasDirty: draft.hasUnpublishedCoreChanges,
+        isFirstPublish: false,
+        resolutionVia: 'n/a_full_learn_no_row_create',
+      });
 
       if (!draft.publishedMonoId) {
         throw apiError(
@@ -937,6 +1183,26 @@ export class StoryDraftsService {
           'unprocessable_entity',
           'Full-learn publish requires an existing publishedMonoId',
           { unmet: ['published_mono_missing'] },
+        );
+      }
+
+      const pmIdForQuota = String(draft.publishedMonoId).trim();
+      const wouldReveal =
+        (await isOwnerPublishedMonoTabVisible(tx, ownerId, pmIdForQuota)) === false;
+      if (wouldReveal) {
+        await assertCanRevealOnePublishedTabMono(
+          tx,
+          ownerId,
+          { tag: 'publish-quota', draftId, publishedMonoId: pmIdForQuota },
+          (line) => this.logger.log(line),
+        );
+      } else {
+        await logPublishedTabPublishQuotaIfDev(
+          tx,
+          ownerId,
+          { tag: 'publish-quota', draftId, publishedMonoId: pmIdForQuota },
+          (line) => this.logger.log(line),
+          false,
         );
       }
 
@@ -990,6 +1256,8 @@ export class StoryDraftsService {
               category: reloaded.category ?? '',
               level: reloaded.level ?? '',
               description: reloaded.description ?? '',
+              contentLocale: 'en',
+              learningLanguage: 'ja',
               content: {
                 ...prev,
                 sourceDraftId: reloaded.id,

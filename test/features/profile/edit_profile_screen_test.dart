@@ -8,6 +8,8 @@ import 'package:nimon/features/profile/presentation/providers/edit_profile_notif
 import 'package:nimon/features/create/data/media_upload_repository.dart';
 import 'package:nimon/features/create/data/media_upload_repository_provider.dart';
 
+import '../../support/auth_session_test_overrides.dart';
+
 class _FakeMeProfileRepo implements MeProfileRepository {
   _FakeMeProfileRepo({
     required this.initial,
@@ -74,6 +76,7 @@ class _FakeMediaUploads extends MediaUploadRepository {
 Widget _wrap(Widget child, {required MeProfileRepository repo}) {
   return ProviderScope(
     overrides: [
+      authenticatedAuthSessionOverride,
       remoteMeProfileRepositoryProvider.overrideWithValue(repo),
     ],
     child: MaterialApp(
@@ -115,6 +118,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          authenticatedAuthSessionOverride,
           remoteMeProfileRepositoryProvider.overrideWithValue(repo),
         ],
         child: const MaterialApp(home: EditProfileScreen()),
@@ -185,6 +189,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          authenticatedAuthSessionOverride,
           remoteMeProfileRepositoryProvider.overrideWithValue(repo),
         ],
         child: const MaterialApp(home: EditProfileScreen()),
@@ -243,6 +248,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          authenticatedAuthSessionOverride,
           remoteMeProfileRepositoryProvider.overrideWithValue(repo),
         ],
         child: const MaterialApp(home: EditProfileScreen()),
@@ -295,6 +301,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          authenticatedAuthSessionOverride,
           remoteMeProfileRepositoryProvider.overrideWithValue(repo),
           editProfilePickImageProvider.overrideWithValue(fakePick),
           mediaUploadRepositoryProvider.overrideWithValue(
@@ -341,6 +348,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          authenticatedAuthSessionOverride,
           remoteMeProfileRepositoryProvider.overrideWithValue(repo),
           editProfilePickImageProvider.overrideWithValue(fakePick),
           mediaUploadRepositoryProvider.overrideWithValue(
@@ -387,6 +395,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          authenticatedAuthSessionOverride,
           remoteMeProfileRepositoryProvider.overrideWithValue(repo),
           editProfilePickImageProvider.overrideWithValue(fakePick),
           mediaUploadRepositoryProvider.overrideWithValue(
@@ -417,8 +426,8 @@ void main() {
       initial: const EditableProfileResponse(
         userId: 'u1',
         email: 'a@b.com',
-        displayName: null,
-        handle: null,
+        displayName: 'Alice',
+        handle: 'alice_ok',
         avatarUrl: null,
         coverImageUrl: null,
         bio: null,

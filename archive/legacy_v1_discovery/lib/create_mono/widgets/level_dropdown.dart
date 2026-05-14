@@ -61,7 +61,8 @@ class LevelDropdown extends StatelessWidget {
                 borderRadius: BorderRadius.circular(8),
                 borderSide: const BorderSide(color: Colors.blue),
               ),
-              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             ),
             items: ['N1', 'N2', 'N3', 'N4', 'N5'].map((String level) {
               return DropdownMenuItem<String>(

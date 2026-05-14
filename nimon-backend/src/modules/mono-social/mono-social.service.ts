@@ -3,6 +3,10 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { FREE_TIER_QUOTA_KEYS, FREE_TIER_QUOTAS } from '../../common/limits/free-tier-quotas';
+import { QuotaExceededException } from '../../common/limits/quota-exceeded.exception';
+import { PublicWebBaseUrlService } from '../common/public-web-base-url.service';
+import { MediaUrlCanonicalizerService } from '../media/media-url-canonicalizer.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { PUBLISHED_MONO_CATALOG_VISIBLE } from '../published-monos/published-mono-visibility';
 import type {
@@ -15,21 +19,11 @@ type CursorPayload = { c: string; i: string };
 
 @Injectable()
 export class MonoSocialService {
-  constructor(private readonly prisma: PrismaService) {}
-
-  private publicWebBaseUrl(): string {
-    const raw =
-      process.env.NIMON_PUBLIC_WEB_BASE_URL?.trim() ||
-      process.env.PUBLIC_WEB_BASE_URL?.trim() ||
-      '';
-    const base = raw.replace(/\/+$/, '');
-    return base || 'http://localhost:3000';
-  }
-
-  private shareUrlFor(monoId: string): string {
-    const base = this.publicWebBaseUrl();
-    return `${base}/mono/${monoId}`;
-  }
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly media: MediaUrlCanonicalizerService,
+    private readonly publicWeb: PublicWebBaseUrlService,
+  ) {}
 
   private encodeCursor(createdAt: Date, id: string): string {
     const payload: CursorPayload = { c: createdAt.toISOString(), i: id };
@@ -80,6 +74,20 @@ export class MonoSocialService {
 
   async bookmark(userId: string, monoId: string): Promise<MonoBookmarkStateDto> {
     const rid = await this.requireCatalogVisibleMono(monoId);
+    const existing = await this.prisma.monoBookmark.findUnique({
+      where: { userId_publishedMonoId: { userId, publishedMonoId: rid } },
+      select: { publishedMonoId: true },
+    });
+    if (!existing) {
+      const savedCount = await this.prisma.monoBookmark.count({ where: { userId } });
+      if (savedCount >= FREE_TIER_QUOTAS.savedMonos) {
+        throw new QuotaExceededException(
+          FREE_TIER_QUOTA_KEYS.savedMonos,
+          FREE_TIER_QUOTAS.savedMonos,
+          savedCount,
+        );
+      }
+    }
     await this.prisma.monoBookmark.upsert({
       where: { userId_publishedMonoId: { userId, publishedMonoId: rid } },
       update: {},
@@ -206,17 +214,16 @@ export class MonoSocialService {
         })
       : [];
     const myReacted = new Set(myReactions.map((r) => r.publishedMonoId));
-
-    const base = this.publicWebBaseUrl();
     const items = page.map((b) => {
       const m = b.publishedMono;
       const content = (m.content ?? {}) as any;
       const publishKind = typeof content.publishKind === 'string' ? content.publishKind : null;
       const core = content?.core && typeof content.core === 'object' ? content.core : {};
-      const coverUrl =
+      const rawCover =
         typeof core?.coverImageUrl === 'string' && core.coverImageUrl.trim() !== ''
           ? core.coverImageUrl.trim()
           : null;
+      const coverUrl = this.media.url(rawCover);
       const learn = content?.learn && typeof content.learn === 'object' ? content.learn : {};
       const audio = learn?.audio && typeof learn.audio === 'object' ? learn.audio : {};
       const storyAudio =
@@ -244,7 +251,7 @@ export class MonoSocialService {
         hasAudio,
         isBookmarkedByMe: true as const,
         myReaction: myReacted.has(m.id) ? ('heart' as const) : null,
-        shareUrl: `${base}/mono/${m.id}`,
+        shareUrl: this.publicWeb.monoShareUrl(m.id),
         publishKind,
         accessType: 'public' as const,
         bookmarkedAt: b.createdAt.toISOString(),

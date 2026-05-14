@@ -1,375 +1,440 @@
+import 'dart:async' show unawaited;
+
 import 'package:flutter/material.dart';
-import 'package:nimon/ui/widgets/nimon_circle_nav_button.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:nimon/features/learn/learn_explanation_language.dart';
-import 'package:nimon/features/learn/learn_explanation_language_provider.dart';
 import 'package:nimon/features/auth/auth_providers.dart';
 import 'package:nimon/features/auth/auth_session_state.dart';
-import 'package:nimon/features/settings/settings_providers.dart';
-import 'package:nimon/core/design_system/nimon_layout.dart';
-import 'package:nimon/core/design_system/nimon_tokens.dart';
-import 'package:nimon/core/design_system/nimon_typography.dart';
-import 'package:nimon/core/design_system/nimon_breakpoints.dart';
+import 'package:nimon/core/design_system/nimon_color_tokens.dart';
+import 'package:nimon/features/settings/presentation/providers/user_preferences_notifier.dart';
+import 'package:nimon/ui/widgets/nimon_circle_nav_button.dart';
+import 'package:nimon/l10n/app_localizations.dart';
 
-/// V1 Settings: General, Learning, Support — lightweight grouped layout.
-class SettingsScreen extends ConsumerWidget {
+/// M11c: Settings shell (stores preferences; applying them is deferred).
+class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
 
-  static String _themeLabel(ThemeMode m) => switch (m) {
-        ThemeMode.system => 'System default',
-        ThemeMode.light => 'Light',
-        ThemeMode.dark => 'Dark',
-      };
+  @override
+  ConsumerState<SettingsScreen> createState() => _SettingsScreenState();
+}
 
-  static String _localeLabel(Locale? l) {
-    if (l == null) return 'System default';
-    if (l.languageCode == 'ja') return '日本語';
-    return 'English';
+class _SettingsScreenState extends ConsumerState<SettingsScreen> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      unawaited(ref.read(userPreferencesNotifierProvider.notifier).load());
+    });
   }
 
-  static String _learnLanguageLabel(LearnExplanationLanguage v) => switch (v) {
-        LearnExplanationLanguage.english => 'English',
-        LearnExplanationLanguage.myanmar => 'Myanmar',
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final session = ref.watch(authSessionProvider);
+    final state = ref.watch(userPreferencesNotifierProvider);
+
+    ref.listen(userPreferencesNotifierProvider, (prev, next) {
+      final msg = next.errorMessage?.trim();
+      if (msg == null || msg.isEmpty) return;
+      if (prev?.errorMessage == next.errorMessage) return;
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(msg),
+          behavior: SnackBarBehavior.floating,
+          margin: const EdgeInsets.all(16),
+        ),
+      );
+    });
+
+    final tokens = Theme.of(context).extension<NimonColorTokens>() ??
+        (Theme.of(context).brightness == Brightness.dark
+            ? NimonColorTokens.dark
+            : NimonColorTokens.light);
+    return Scaffold(
+      backgroundColor: tokens.appBackground,
+      appBar: AppBar(
+        title: Text(l10n.settingsTitle),
+        leading: const NimonBackButton(),
+      ),
+      body: switch (session) {
+        AuthSessionAuthenticated() => _SettingsBody(state: state),
+        _ => _SignInRequiredBody(onSignIn: () => context.go('/login')),
+      },
+    );
+  }
+}
+
+class _SettingsBody extends ConsumerWidget {
+  const _SettingsBody({required this.state});
+
+  final UserPreferencesState state;
+
+  static String _appLocaleLabel(String code) => switch (code) {
+        'system' => 'System',
+        'en' => 'English',
+        'ja' => '日本語',
+        'my' => 'မြန်မာ',
+        _ => 'System',
       };
 
-  static String _readingLabel(String id) => switch (id) {
-        'small' => 'Small',
-        'large' => 'Large',
-        _ => 'Standard',
+  static String _contentLocaleLabel(String code) => switch (code) {
+        'my' => 'Myanmar',
+        'ja' => 'Japanese',
+        _ => 'International / English',
+      };
+
+  static String _learningLanguageLabel(String code) => switch (code) {
+        'ja' => 'Japanese',
+        _ => 'Japanese',
+      };
+
+  static String _themeModeLabel(String code) => switch (code) {
+        'light' => 'Light',
+        'dark' => 'Dark',
+        _ => 'System',
+      };
+
+  static String _readingTextSizeLabel(AppLocalizations l10n, String code) =>
+      switch (code) {
+        'small' => l10n.settingsReadingTextSizeSmall,
+        'large' => l10n.settingsReadingTextSizeLarge,
+        _ => l10n.settingsReadingTextSizeStandard,
       };
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final theme = Theme.of(context);
-    final s = theme.space;
-    final wc = context.widthClass;
-    final themeMode = ref.watch(themeModeSettingProvider);
-    final appLocale = ref.watch(appLocaleSettingProvider);
-    final notificationsEnabled = ref.watch(notificationsEnabledSettingProvider);
-    final readingScale = ref.watch(readingTextScaleSettingProvider);
-    final readingId = readingScale <= 0.94
-        ? 'small'
-        : readingScale >= 1.08
-            ? 'large'
-            : 'standard';
-    final learnLang = ref.watch(learnExplanationLanguageProvider);
-    final authSession = ref.watch(authSessionProvider);
+    final l10n = AppLocalizations.of(context)!;
+    if (state.loading) {
+      return const Center(child: CircularProgressIndicator());
+    }
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Settings'),
-        leading: const NimonBackButton(),
+    final prefs = state.prefs;
+    final disabledWhileSaving = state.saving;
+
+    return ListView(
+      children: [
+        _SectionHeader(title: l10n.settingsLanguageSection),
+        ListTile(
+          title: Text(l10n.settingsAppLanguage),
+          subtitle: Text(_appLocaleLabel(prefs.appLocale)),
+          trailing: const Icon(Icons.chevron_right_rounded),
+          onTap: disabledWhileSaving
+              ? null
+              : () => _pickAppLanguage(context, ref, prefs.appLocale),
+        ),
+        ListTile(
+          title: Text(l10n.settingsContentCommunity),
+          subtitle: Text(_contentLocaleLabel(prefs.contentLocale)),
+          trailing: const Icon(Icons.chevron_right_rounded),
+          onTap: disabledWhileSaving
+              ? null
+              : () => _pickContentLocale(context, ref, prefs.contentLocale),
+        ),
+        ListTile(
+          title: Text(l10n.settingsLearningLanguage),
+          subtitle: Text(_learningLanguageLabel(prefs.learningLanguage)),
+          trailing: const Icon(Icons.chevron_right_rounded),
+          onTap: disabledWhileSaving
+              ? null
+              : () =>
+                  _pickLearningLanguage(context, ref, prefs.learningLanguage),
+        ),
+        _SectionHeader(title: l10n.settingsReadingSection),
+        ListTile(
+          title: Text(l10n.settingsReadingTextSize),
+          subtitle: Text(_readingTextSizeLabel(l10n, prefs.readingTextSize)),
+          trailing: const Icon(Icons.chevron_right_rounded),
+          onTap: disabledWhileSaving
+              ? null
+              : () => _pickReadingTextSize(
+                    context,
+                    ref,
+                    prefs.readingTextSize,
+                  ),
+        ),
+        SwitchListTile.adaptive(
+          title: Text(l10n.settingsShowExplanationSentence),
+          subtitle: Text(l10n.settingsShowExplanationSentenceSubtitle),
+          value: prefs.showExplanations,
+          onChanged: disabledWhileSaving
+              ? null
+              : (v) => ref
+                  .read(userPreferencesNotifierProvider.notifier)
+                  .updateShowExplanations(v),
+        ),
+        _SectionHeader(title: l10n.settingsAppearanceSection),
+        ListTile(
+          title: Text(l10n.settingsTheme),
+          subtitle: Text(_themeModeLabel(prefs.themeMode)),
+          trailing: const Icon(Icons.chevron_right_rounded),
+          onTap: disabledWhileSaving
+              ? null
+              : () => _pickThemeMode(context, ref, prefs.themeMode),
+        ),
+        _SectionHeader(title: l10n.settingsAccountSection),
+        ListTile(
+          leading: const Icon(Icons.edit_outlined),
+          title: Text(l10n.settingsEditProfile),
+          trailing: const Icon(Icons.chevron_right_rounded),
+          onTap: () => context.push('/profile/edit'),
+        ),
+        ListTile(
+          leading: const Icon(Icons.logout_rounded),
+          title: Text(l10n.settingsSignOut),
+          subtitle: Text(l10n.settingsSignOutSubtitle),
+          onTap: () async {
+            final go = await showDialog<bool>(
+              context: context,
+              builder: (ctx) => AlertDialog(
+                title: Text(l10n.settingsSignOutDialogTitle),
+                content: Text(l10n.settingsSignOutDialogBody),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(ctx, false),
+                    child: Text(l10n.settingsCancel),
+                  ),
+                  FilledButton(
+                    onPressed: () => Navigator.pop(ctx, true),
+                    child: Text(l10n.settingsSignOut),
+                  ),
+                ],
+              ),
+            );
+            if (go != true) return;
+            await ref.read(authSessionProvider.notifier).logout();
+            if (!context.mounted) return;
+            context.go('/login');
+          },
+        ),
+        _SectionHeader(title: l10n.settingsNotificationsSection),
+        ListTile(
+          leading: Icon(Icons.notifications_none_rounded),
+          title: Text(l10n.settingsNotificationsSection),
+          subtitle: Text(l10n.settingsComingSoon),
+          enabled: false,
+        ),
+        _SectionHeader(title: l10n.settingsAboutSection),
+        ListTile(
+          leading: Icon(Icons.info_outline_rounded),
+          title: Text(l10n.settingsAppVersion),
+          subtitle: Text(l10n.settingsAppVersionPlaceholder),
+        ),
+        const SizedBox(height: 24),
+      ],
+    );
+  }
+
+  Future<void> _pickAppLanguage(
+    BuildContext context,
+    WidgetRef ref,
+    String current,
+  ) async {
+    final l10n = AppLocalizations.of(context)!;
+    final picked = await showDialog<String>(
+      context: context,
+      builder: (ctx) => SimpleDialog(
+        title: Text(l10n.settingsAppLanguage),
+        children: [
+          _radio(ctx,
+              title: l10n.settingsSystem, value: 'system', group: current),
+          _radio(ctx, title: l10n.settingsEnglish, value: 'en', group: current),
+          _radio(ctx, title: '日本語', value: 'ja', group: current),
+          _radio(ctx, title: 'မြန်မာ', value: 'my', group: current),
+        ],
       ),
-      body: NimonReadingColumn.wrap(
-        context,
-        ListView(
+    );
+    if (picked == null || picked == current) return;
+    await ref
+        .read(userPreferencesNotifierProvider.notifier)
+        .updateAppLocale(picked);
+  }
+
+  Future<void> _pickContentLocale(
+    BuildContext context,
+    WidgetRef ref,
+    String current,
+  ) async {
+    final l10n = AppLocalizations.of(context)!;
+    final picked = await showDialog<String>(
+      context: context,
+      builder: (ctx) => SimpleDialog(
+        title: Text(l10n.settingsContentCommunity),
+        children: [
+          _radio(ctx, title: l10n.settingsMyanmar, value: 'my', group: current),
+          _radio(
+            ctx,
+            title: l10n.settingsInternationalEnglish,
+            value: 'en',
+            group: current,
+          ),
+          _radio(ctx,
+              title: l10n.settingsJapanese, value: 'ja', group: current),
+        ],
+      ),
+    );
+    if (picked == null || picked == current) return;
+    await ref
+        .read(userPreferencesNotifierProvider.notifier)
+        .updateContentLocale(picked);
+  }
+
+  Future<void> _pickLearningLanguage(
+    BuildContext context,
+    WidgetRef ref,
+    String current,
+  ) async {
+    final l10n = AppLocalizations.of(context)!;
+    final picked = await showDialog<String>(
+      context: context,
+      builder: (ctx) => SimpleDialog(
+        title: Text(l10n.settingsLearningLanguage),
+        children: [
+          _radio(ctx,
+              title: l10n.settingsJapanese, value: 'ja', group: current),
+          ListTile(
+            title: const Text('More languages'),
+            subtitle: Text(l10n.settingsComingSoon),
+            enabled: false,
+          ),
+        ],
+      ),
+    );
+    if (picked == null || picked == current) return;
+    await ref
+        .read(userPreferencesNotifierProvider.notifier)
+        .updateLearningLanguage(picked);
+  }
+
+  Future<void> _pickReadingTextSize(
+    BuildContext context,
+    WidgetRef ref,
+    String current,
+  ) async {
+    final l10n = AppLocalizations.of(context)!;
+    final picked = await showDialog<String>(
+      context: context,
+      builder: (ctx) => SimpleDialog(
+        title: Text(l10n.settingsReadingTextSize),
+        children: [
+          _radio(ctx,
+              title: l10n.settingsReadingTextSizeSmall,
+              value: 'small',
+              group: current),
+          _radio(
+            ctx,
+            title: l10n.settingsReadingTextSizeStandard,
+            value: 'standard',
+            group: current,
+          ),
+          _radio(ctx,
+              title: l10n.settingsReadingTextSizeLarge,
+              value: 'large',
+              group: current),
+        ],
+      ),
+    );
+    if (picked == null || picked == current) return;
+    await ref
+        .read(userPreferencesNotifierProvider.notifier)
+        .updateReadingTextSize(picked);
+  }
+
+  Future<void> _pickThemeMode(
+    BuildContext context,
+    WidgetRef ref,
+    String current,
+  ) async {
+    final l10n = AppLocalizations.of(context)!;
+    final picked = await showDialog<String>(
+      context: context,
+      builder: (ctx) => SimpleDialog(
+        title: Text(l10n.settingsTheme),
+        children: [
+          _radio(ctx,
+              title: l10n.settingsSystem, value: 'system', group: current),
+          _radio(ctx, title: 'Light', value: 'light', group: current),
+          _radio(ctx, title: 'Dark', value: 'dark', group: current),
+        ],
+      ),
+    );
+    if (picked == null || picked == current) return;
+    await ref
+        .read(userPreferencesNotifierProvider.notifier)
+        .updateThemeMode(picked);
+  }
+
+  Widget _radio(
+    BuildContext ctx, {
+    required String title,
+    required String value,
+    required String group,
+  }) {
+    return RadioListTile<String>(
+      title: Text(title),
+      value: value,
+      groupValue: group,
+      onChanged: (v) => Navigator.pop(ctx, v),
+    );
+  }
+}
+
+class _SignInRequiredBody extends StatelessWidget {
+  const _SignInRequiredBody({required this.onSignIn});
+
+  final VoidCallback onSignIn;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            _SectionHeader(title: 'General'),
-            ListTile(
-              title: const Text('Account'),
-              subtitle: Text(
-                switch (authSession) {
-                  AuthSessionAuthenticated(:final user) =>
-                    user.email ?? user.id,
-                  _ => 'Not signed in',
-                },
-              ),
-              leading: Icon(
-                Icons.account_circle_outlined,
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
+            const Icon(Icons.lock_outline_rounded, size: 34),
+            const SizedBox(height: 12),
+            Text(
+              l10n.settingsSignInRequiredTitle,
+              style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
             ),
-            ListTile(
-              title: const Text('App language'),
-              subtitle: Text(_localeLabel(appLocale)),
-              trailing: Icon(
-                Icons.chevron_right_rounded,
-                color:
-                    theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
-              ),
-              onTap: () => _pickAppLanguage(context, ref),
+            const SizedBox(height: 8),
+            Text(
+              l10n.settingsSignInRequiredBody,
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
             ),
-            ListTile(
-              title: const Text('Theme'),
-              subtitle: Text(_themeLabel(themeMode)),
-              trailing: Icon(
-                Icons.chevron_right_rounded,
-                color:
-                    theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
-              ),
-              onTap: () => _pickTheme(context, ref),
+            const SizedBox(height: 16),
+            FilledButton(
+              onPressed: onSignIn,
+              child: Text(l10n.settingsSignInCta),
             ),
-            SwitchListTile.adaptive(
-              value: notificationsEnabled,
-              onChanged: (v) {
-                ref
-                    .read(notificationsEnabledSettingProvider.notifier)
-                    .setEnabled(v);
-              },
-              title: const Text('Push notifications'),
-              subtitle: const Text('Turn push notifications on or off'),
-              contentPadding:
-                  EdgeInsets.symmetric(horizontal: s.x4, vertical: 2),
-            ),
-            SizedBox(height: s.x2),
-            _SectionHeader(title: 'Learning'),
-            ListTile(
-              title: const Text('Learn language'),
-              subtitle: Text(
-                'Explanations and support text: ${_learnLanguageLabel(learnLang)}',
-              ),
-              trailing: Icon(
-                Icons.chevron_right_rounded,
-                color:
-                    theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
-              ),
-              onTap: () => _pickLearnLanguage(context, ref),
-            ),
-            ListTile(
-              title: const Text('Reading text size'),
-              subtitle: Text(
-                'Applies across reading surfaces: ${_readingLabel(readingId)}',
-              ),
-              trailing: Icon(
-                Icons.chevron_right_rounded,
-                color:
-                    theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
-              ),
-              onTap: () => _pickReadingSize(context, ref),
-            ),
-            SwitchListTile.adaptive(
-              value: ref.watch(monoExplanationEnabledSettingProvider),
-              onChanged: (v) {
-                ref
-                    .read(monoExplanationEnabledSettingProvider.notifier)
-                    .setEnabled(v);
-              },
-              title: const Text('Listening explanation sentence'),
-              subtitle: const Text(
-                'Show explanation lines in Listening / Pronunciation',
-              ),
-              contentPadding:
-                  EdgeInsets.symmetric(horizontal: s.x4, vertical: 2),
-            ),
-            SwitchListTile.adaptive(
-              value: ref.watch(monoReaderTranslationEnabledProvider),
-              onChanged: (v) {
-                ref
-                    .read(monoReaderTranslationEnabledProvider.notifier)
-                    .setEnabled(v);
-              },
-              title: const Text('Show Mono translations'),
-              subtitle: const Text(
-                'Show source and English meanings under each Japanese line on the Mono reader',
-              ),
-              contentPadding:
-                  EdgeInsets.symmetric(horizontal: s.x4, vertical: 2),
-            ),
-            SizedBox(height: s.x2),
-            _SectionHeader(title: 'Support'),
-            ListTile(
-              leading: Icon(
-                Icons.help_outline_rounded,
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
-              title: const Text('Help / Feedback'),
-              trailing: Icon(
-                Icons.chevron_right_rounded,
-                color:
-                    theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
-              ),
-              onTap: () => context.push('/settings/help'),
-            ),
-            SizedBox(height: wc == NimonWidthClass.compact ? s.x6 : s.x8),
           ],
         ),
       ),
     );
   }
-
-  Future<void> _pickAppLanguage(BuildContext context, WidgetRef ref) async {
-    final current = ref.read(appLocaleSettingProvider);
-    final currentCode = current == null
-        ? 'system'
-        : (current.languageCode == 'ja' ? 'ja' : 'en');
-    final code = await showDialog<String>(
-      context: context,
-      builder: (ctx) {
-        return SimpleDialog(
-          title: const Text('App language'),
-          children: [
-            RadioListTile<String>(
-              title: const Text('System default'),
-              value: 'system',
-              groupValue: currentCode,
-              onChanged: (v) => Navigator.pop(ctx, v),
-            ),
-            RadioListTile<String>(
-              title: const Text('English'),
-              value: 'en',
-              groupValue: currentCode,
-              onChanged: (v) => Navigator.pop(ctx, v),
-            ),
-            RadioListTile<String>(
-              title: const Text('日本語'),
-              subtitle: Text(
-                'UI may still be mostly English in V1',
-                style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
-                      color: Theme.of(ctx).colorScheme.onSurfaceVariant,
-                    ),
-              ),
-              value: 'ja',
-              groupValue: currentCode,
-              onChanged: (v) => Navigator.pop(ctx, v),
-            ),
-          ],
-        );
-      },
-    );
-    if (code == null) return;
-    if (code == 'system') {
-      await ref.read(appLocaleSettingProvider.notifier).setLocale(null);
-    } else if (code == 'en') {
-      await ref.read(appLocaleSettingProvider.notifier).setLocale(
-            const Locale('en'),
-          );
-    } else if (code == 'ja') {
-      await ref.read(appLocaleSettingProvider.notifier).setLocale(
-            const Locale('ja'),
-          );
-    }
-  }
-
-  Future<void> _pickTheme(BuildContext context, WidgetRef ref) async {
-    final current = ref.read(themeModeSettingProvider);
-    final picked = await showDialog<ThemeMode>(
-      context: context,
-      builder: (ctx) {
-        return SimpleDialog(
-          title: const Text('Theme'),
-          children: [
-            RadioListTile<ThemeMode>(
-              title: const Text('System default'),
-              value: ThemeMode.system,
-              groupValue: current,
-              onChanged: (v) => Navigator.pop(ctx, v),
-            ),
-            RadioListTile<ThemeMode>(
-              title: const Text('Light'),
-              value: ThemeMode.light,
-              groupValue: current,
-              onChanged: (v) => Navigator.pop(ctx, v),
-            ),
-            RadioListTile<ThemeMode>(
-              title: const Text('Dark'),
-              value: ThemeMode.dark,
-              groupValue: current,
-              onChanged: (v) => Navigator.pop(ctx, v),
-            ),
-          ],
-        );
-      },
-    );
-    if (picked != null) {
-      await ref.read(themeModeSettingProvider.notifier).setThemeMode(picked);
-    }
-  }
-
-  Future<void> _pickLearnLanguage(BuildContext context, WidgetRef ref) async {
-    final current = ref.read(learnExplanationLanguageProvider);
-    final picked = await showDialog<LearnExplanationLanguage>(
-      context: context,
-      builder: (ctx) {
-        return SimpleDialog(
-          title: const Text('Learn language'),
-          children: [
-            RadioListTile<LearnExplanationLanguage>(
-              title: const Text('English'),
-              value: LearnExplanationLanguage.english,
-              groupValue: current,
-              onChanged: (v) => Navigator.pop(ctx, v),
-            ),
-            RadioListTile<LearnExplanationLanguage>(
-              title: const Text('Myanmar'),
-              value: LearnExplanationLanguage.myanmar,
-              groupValue: current,
-              onChanged: (v) => Navigator.pop(ctx, v),
-            ),
-          ],
-        );
-      },
-    );
-    if (picked != null) {
-      await ref
-          .read(learnExplanationLanguageProvider.notifier)
-          .setLanguage(picked);
-    }
-  }
-
-  Future<void> _pickReadingSize(BuildContext context, WidgetRef ref) async {
-    final scale = ref.read(readingTextScaleSettingProvider);
-    final current = scale <= 0.94
-        ? 'small'
-        : scale >= 1.08
-            ? 'large'
-            : 'standard';
-    final picked = await showDialog<String>(
-      context: context,
-      builder: (ctx) {
-        return SimpleDialog(
-          title: const Text('Reading text size'),
-          children: [
-            RadioListTile<String>(
-              title: const Text('Small'),
-              value: 'small',
-              groupValue: current,
-              onChanged: (v) => Navigator.pop(ctx, v),
-            ),
-            RadioListTile<String>(
-              title: const Text('Standard'),
-              value: 'standard',
-              groupValue: current,
-              onChanged: (v) => Navigator.pop(ctx, v),
-            ),
-            RadioListTile<String>(
-              title: const Text('Large'),
-              value: 'large',
-              groupValue: current,
-              onChanged: (v) => Navigator.pop(ctx, v),
-            ),
-          ],
-        );
-      },
-    );
-    if (picked != null) {
-      await ref
-          .read(readingTextScaleSettingProvider.notifier)
-          .setFromSizeId(picked);
-    }
-  }
 }
 
 class _SectionHeader extends StatelessWidget {
-  final String title;
+  const _SectionHeader({required this.title});
 
-  const _SectionHeader({
-    required this.title,
-  });
+  final String title;
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final s = theme.space;
-    final wc = context.widthClass;
     return Padding(
-      padding: EdgeInsets.fromLTRB(s.x5, s.x5, s.x5, s.x2),
+      padding: const EdgeInsets.fromLTRB(16, 20, 16, 8),
       child: Text(
-        title.toUpperCase(),
-        style: theme.type.metadata(theme, wc).copyWith(
-              letterSpacing: 0.7,
-              fontWeight: FontWeight.w700,
-              color: theme.colorScheme.onSurfaceVariant,
+        title,
+        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.w800,
             ),
       ),
     );

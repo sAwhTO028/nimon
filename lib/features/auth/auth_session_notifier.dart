@@ -126,4 +126,9 @@ class AuthSessionNotifier extends StateNotifier<AuthSessionState> {
     await _store.clearTokens();
     state = const AuthSessionUnauthenticated();
   }
+
+  /// Updates in-memory session after [AuthRefresh401Coordinator] persists rotated tokens.
+  void applyAuthenticatedUser(AuthUser user) {
+    state = AuthSessionAuthenticated(user);
+  }
 }

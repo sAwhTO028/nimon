@@ -46,9 +46,8 @@ class _PromptCarouselState extends State<PromptCarousel> {
         _scrollController.position.pixels >
             _scrollController.position.maxScrollExtent * 0.8 &&
         widget.visibleLimit < 15) {
-      widget.onVisibleLimitChanged(widget.visibleLimit + 5 < 15
-          ? widget.visibleLimit + 5
-          : 15);
+      widget.onVisibleLimitChanged(
+          widget.visibleLimit + 5 < 15 ? widget.visibleLimit + 5 : 15);
     }
 
     // Update current page for dots indicator
@@ -56,7 +55,8 @@ class _PromptCarouselState extends State<PromptCarousel> {
     if (_scrollController.hasClients) {
       // Estimate card height: ~100-120dp per card including margin
       final estimatedCardHeight = 110.0;
-      final newPage = (_scrollController.position.pixels / estimatedCardHeight).floor();
+      final newPage =
+          (_scrollController.position.pixels / estimatedCardHeight).floor();
       if (newPage != _currentPage && newPage >= 0) {
         setState(() {
           _currentPage = newPage;
@@ -172,4 +172,3 @@ class _PromptCarouselState extends State<PromptCarousel> {
     );
   }
 }
-

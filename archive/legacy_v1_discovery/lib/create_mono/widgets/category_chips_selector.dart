@@ -57,7 +57,8 @@ class CategoryChipsSelector extends StatelessWidget {
                     onCategorySelected(newCategory);
                   },
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                     decoration: BoxDecoration(
                       color: isSelected ? Colors.blue : Colors.grey.shade100,
                       borderRadius: BorderRadius.circular(10),
@@ -83,4 +84,3 @@ class CategoryChipsSelector extends StatelessWidget {
     );
   }
 }
-

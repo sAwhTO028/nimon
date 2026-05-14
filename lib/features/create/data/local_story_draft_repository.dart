@@ -4,6 +4,7 @@ import 'package:nimon/core/pagination/page_request.dart';
 import 'package:nimon/core/pagination/page_result.dart';
 import 'package:nimon/core/pagination/pagination_defaults.dart';
 import 'package:nimon/features/create/data/dto/draft_list_summary_dto.dart';
+import 'package:nimon/features/create/data/published_edit_staging_guard.dart';
 import 'package:nimon/features/create/data/story_draft_repository.dart';
 import 'package:nimon/features/create/story_creator_draft_storage.dart';
 import 'package:nimon/features/create/story_creator_models.dart';
@@ -121,6 +122,16 @@ class LocalStoryDraftRepository implements StoryDraftRepository {
   Future<void> deleteDraft(String draftId) async {
     await StoryCreatorDraftStorage.clear(draftId: draftId);
     await StoryCreatorDraftResumeStorage.clearMeta(draftId);
+  }
+
+  @override
+  Future<bool> discardPublishedEditStaging(String draftId) async {
+    final id = draftId.trim();
+    if (id.isEmpty) return false;
+    final draft = await loadDraft(id);
+    if (!isLinkedPublishedEditStagingDraft(draft)) return false;
+    await deleteDraft(id);
+    return true;
   }
 
   @override

@@ -18,6 +18,7 @@ import 'package:nimon/features/create/story_creator_grammar_overlays.dart';
 import 'package:nimon/features/create/story_creator_models.dart';
 import 'package:nimon/features/create/story_creator_provider.dart';
 import 'package:nimon/features/create/story_creator_review_display.dart';
+import 'package:nimon/features/learn/learn_creator_module_tokens.dart';
 import 'package:nimon/ui/widgets/nimon_circle_nav_button.dart';
 
 /// One editable grammar example row inside the add/edit sheet (max 3 rows).
@@ -271,7 +272,7 @@ class _GrammarPatternSheetState extends State<_GrammarPatternSheet> {
                       child: Text(
                         closedLabel,
                         style: theme.textTheme.labelLarge?.copyWith(
-                              color: StoryCreatorGrammarEditorScreen._ink,
+                              color: cs.onSurface,
                               fontWeight: FontWeight.w800,
                               height: 1.15,
                             ) ??
@@ -318,7 +319,7 @@ class _GrammarPatternSheetState extends State<_GrammarPatternSheet> {
             Text(
               existing == null ? 'Add pattern' : 'Edit pattern',
               style: theme.textTheme.titleLarge?.copyWith(
-                color: StoryCreatorGrammarEditorScreen._ink,
+                color: cs.onSurface,
                 fontWeight: FontWeight.w800,
               ),
             ),
@@ -326,7 +327,7 @@ class _GrammarPatternSheetState extends State<_GrammarPatternSheet> {
             Text(
               'Pattern title is required. Everything else is optional in V1.',
               style: theme.textTheme.bodySmall?.copyWith(
-                color: StoryCreatorGrammarEditorScreen._muted,
+                color: cs.onSurfaceVariant,
                 height: 1.35,
               ),
             ),
@@ -359,18 +360,19 @@ class _GrammarPatternSheetState extends State<_GrammarPatternSheet> {
             Text(
               'Meaning (optional)',
               style: theme.textTheme.labelLarge?.copyWith(
-                color: StoryCreatorGrammarEditorScreen._ink,
+                color: cs.onSurface,
                 fontWeight: FontWeight.w800,
               ),
             ),
             const SizedBox(height: 8),
             TextField(
               controller: _meaningSourceCtrl,
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 labelText: 'Source meaning',
-                border: OutlineInputBorder(),
+                border: const OutlineInputBorder(),
                 alignLabelWithHint: true,
                 filled: true,
+                fillColor: cs.surface,
               ),
               minLines: 2,
               maxLines: 4,
@@ -387,18 +389,19 @@ class _GrammarPatternSheetState extends State<_GrammarPatternSheet> {
             Text(
               'Usage / when to use (optional)',
               style: theme.textTheme.labelLarge?.copyWith(
-                color: StoryCreatorGrammarEditorScreen._ink,
+                color: cs.onSurface,
                 fontWeight: FontWeight.w800,
               ),
             ),
             const SizedBox(height: 8),
             TextField(
               controller: _usageSourceCtrl,
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 labelText: 'Source usage',
-                border: OutlineInputBorder(),
+                border: const OutlineInputBorder(),
                 alignLabelWithHint: true,
                 filled: true,
+                fillColor: cs.surface,
               ),
               minLines: 2,
               maxLines: 4,
@@ -414,7 +417,7 @@ class _GrammarPatternSheetState extends State<_GrammarPatternSheet> {
             Text(
               'Examples (optional)',
               style: theme.textTheme.labelLarge?.copyWith(
-                color: StoryCreatorGrammarEditorScreen._ink,
+                color: cs.onSurface,
                 fontWeight: FontWeight.w800,
               ),
             ),
@@ -422,7 +425,7 @@ class _GrammarPatternSheetState extends State<_GrammarPatternSheet> {
             Text(
               'Up to 3 examples. Add rows as needed.',
               style: theme.textTheme.bodySmall?.copyWith(
-                color: StoryCreatorGrammarEditorScreen._muted,
+                color: cs.onSurfaceVariant,
                 height: 1.35,
               ),
             ),
@@ -446,7 +449,7 @@ class _GrammarPatternSheetState extends State<_GrammarPatternSheet> {
                           Text(
                             'Example ${entry.key + 1}',
                             style: theme.textTheme.labelLarge?.copyWith(
-                              color: StoryCreatorGrammarEditorScreen._ink,
+                              color: cs.onSurface,
                               fontWeight: FontWeight.w800,
                             ),
                           ),
@@ -472,12 +475,13 @@ class _GrammarPatternSheetState extends State<_GrammarPatternSheet> {
                       const SizedBox(height: 8),
                       TextField(
                         controller: entry.value.jp,
-                        decoration: const InputDecoration(
+                        decoration: InputDecoration(
                           labelText: 'Source example sentence',
                           hintText: 'Usually Japanese from your story',
-                          border: OutlineInputBorder(),
+                          border: const OutlineInputBorder(),
                           alignLabelWithHint: true,
                           filled: true,
+                          fillColor: cs.surface,
                         ),
                         minLines: 2,
                         maxLines: 4,
@@ -485,11 +489,12 @@ class _GrammarPatternSheetState extends State<_GrammarPatternSheet> {
                       const SizedBox(height: 10),
                       TextField(
                         controller: entry.value.sourceMeaning,
-                        decoration: const InputDecoration(
+                        decoration: InputDecoration(
                           labelText: 'Source example meaning',
-                          border: OutlineInputBorder(),
+                          border: const OutlineInputBorder(),
                           alignLabelWithHint: true,
                           filled: true,
+                          fillColor: cs.surface,
                         ),
                         minLines: 2,
                         maxLines: 4,
@@ -523,13 +528,14 @@ class _GrammarPatternSheetState extends State<_GrammarPatternSheet> {
                   },
                   icon: const Icon(Icons.add_rounded, size: 20),
                   label: const Text('Add example'),
+                  style: TextButton.styleFrom(foregroundColor: cs.primary),
                 ),
               ),
             const SizedBox(height: 8),
             Text(
               'Common mistake (optional)',
               style: theme.textTheme.labelLarge?.copyWith(
-                color: StoryCreatorGrammarEditorScreen._ink,
+                color: cs.onSurface,
                 fontWeight: FontWeight.w800,
               ),
             ),
@@ -537,44 +543,47 @@ class _GrammarPatternSheetState extends State<_GrammarPatternSheet> {
             Text(
               'Source language only in V1 (no separate Common English pair).',
               style: theme.textTheme.bodySmall?.copyWith(
-                color: StoryCreatorGrammarEditorScreen._muted,
+                color: cs.onSurfaceVariant,
                 height: 1.35,
               ),
             ),
             const SizedBox(height: 8),
             TextField(
               controller: _wrongCtrl,
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 labelText: 'Wrong form (source)',
-                border: OutlineInputBorder(),
+                border: const OutlineInputBorder(),
                 filled: true,
+                fillColor: cs.surface,
               ),
             ),
             const SizedBox(height: 10),
             TextField(
               controller: _correctCtrl,
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 labelText: 'Correct form (source)',
-                border: OutlineInputBorder(),
+                border: const OutlineInputBorder(),
                 filled: true,
+                fillColor: cs.surface,
               ),
             ),
             const SizedBox(height: 18),
             Text(
               'Related note (optional)',
               style: theme.textTheme.labelLarge?.copyWith(
-                color: StoryCreatorGrammarEditorScreen._ink,
+                color: cs.onSurface,
                 fontWeight: FontWeight.w800,
               ),
             ),
             const SizedBox(height: 8),
             TextField(
               controller: _noteSourceCtrl,
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 labelText: 'Source note',
-                border: OutlineInputBorder(),
+                border: const OutlineInputBorder(),
                 alignLabelWithHint: true,
                 filled: true,
+                fillColor: cs.surface,
               ),
               minLines: 2,
               maxLines: 4,
@@ -607,9 +616,6 @@ class _GrammarPatternSheetState extends State<_GrammarPatternSheet> {
 /// Manual V1 editor for the Grammar Learn module (one story draft).
 class StoryCreatorGrammarEditorScreen extends ConsumerWidget {
   const StoryCreatorGrammarEditorScreen({super.key});
-
-  static const _ink = Color(0xFF1A1917);
-  static const _muted = Color(0xFF5C5A55);
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -776,7 +782,7 @@ class StoryCreatorGrammarEditorScreen extends ConsumerWidget {
       isScrollControlled: true,
       useSafeArea: true,
       showDragHandle: true,
-      backgroundColor: const Color(0xFFF6F3EA),
+      backgroundColor: theme.colorScheme.surface,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -844,8 +850,9 @@ class StoryCreatorGrammarModuleBody extends ConsumerWidget {
     final bottomInset = MediaQuery.paddingOf(context).bottom;
     final items = draft.grammar.entries;
 
+    final cs = theme.colorScheme;
     final headerTextStyle = theme.textTheme.titleLarge?.copyWith(
-      color: StoryCreatorGrammarEditorScreen._ink,
+      color: cs.onSurface,
       fontWeight: FontWeight.w800,
       height: 1.2,
     );
@@ -871,7 +878,7 @@ class StoryCreatorGrammarModuleBody extends ConsumerWidget {
           'Use source language as the main text; Common English is optional. '
           'At least one valid pattern completes this module.',
           style: theme.textTheme.bodyMedium?.copyWith(
-            color: StoryCreatorGrammarEditorScreen._muted,
+            color: cs.onSurfaceVariant,
             height: 1.45,
           ),
         ),
@@ -882,7 +889,7 @@ class StoryCreatorGrammarModuleBody extends ConsumerWidget {
               child: Text(
                 '${items.length} ${items.length == 1 ? 'pattern' : 'patterns'}',
                 style: theme.textTheme.titleSmall?.copyWith(
-                  color: StoryCreatorGrammarEditorScreen._ink,
+                  color: cs.onSurface,
                   fontWeight: FontWeight.w800,
                 ),
               ),
@@ -1087,6 +1094,7 @@ class _GrammarReviewListCard extends StatelessWidget {
               entry.headline,
               style: theme.textTheme.titleMedium?.copyWith(
                 fontWeight: FontWeight.w800,
+                color: cs.onSurface,
               ),
             ),
             if (meaningSummary != null) ...[
@@ -1128,11 +1136,14 @@ class _EmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = theme.colorScheme;
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.8),
+        color: cs.surfaceContainerHigh,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.black.withValues(alpha: 0.06)),
+        border: Border.all(
+          color: cs.outlineVariant.withValues(alpha: 0.45),
+        ),
       ),
       child: Padding(
         padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
@@ -1141,7 +1152,7 @@ class _EmptyState extends StatelessWidget {
           'Tip: source meaning is primary; Common English is optional.',
           style: theme.textTheme.bodyMedium?.copyWith(
             height: 1.45,
-            color: const Color(0xFF5C5A55),
+            color: cs.onSurfaceVariant,
           ),
         ),
       ),
@@ -1170,9 +1181,6 @@ class _GrammarCard extends StatelessWidget {
   final VoidCallback onDelete;
   final Widget reorderDragStartListener;
 
-  static const _ink = Color(0xFF1A1917);
-  static const _muted = Color(0xFF5C5A55);
-
   String? _meaningSummary() {
     final m = entry.meanings;
     if (m == null) return null;
@@ -1188,15 +1196,20 @@ class _GrammarCard extends StatelessWidget {
     final cs = theme.colorScheme;
     final meaning = _meaningSummary();
     final form = entry.form?.trim();
+    final cardBg = learnCreatorModuleCardSurfaceColor(context);
+    final cardBorder = learnCreatorModuleCardBorderColor(context);
+    final ink = learnCreatorModulePrimaryTextColor(context);
+    final muted = learnCreatorModuleSecondaryTextColor(context);
+    final actionFg = learnCreatorModuleActionForegroundColor(context);
 
     return Card(
       margin: EdgeInsets.zero,
       elevation: 0,
-      color: cs.surface,
+      color: cardBg,
       surfaceTintColor: Colors.transparent,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(14),
-        side: BorderSide(color: cs.outlineVariant.withValues(alpha: 0.7)),
+        side: BorderSide(color: cardBorder.withValues(alpha: 0.7)),
       ),
       child: Padding(
         padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
@@ -1212,7 +1225,7 @@ class _GrammarCard extends StatelessWidget {
                     child: Text(
                       entry.headline,
                       style: theme.textTheme.titleMedium?.copyWith(
-                        color: _ink,
+                        color: ink,
                         fontWeight: FontWeight.w800,
                         height: 1.2,
                       ),
@@ -1247,7 +1260,7 @@ class _GrammarCard extends StatelessWidget {
                         child: Icon(
                           Icons.more_horiz_rounded,
                           size: 22,
-                          color: cs.onSurfaceVariant.withValues(alpha: 0.88),
+                          color: muted.withValues(alpha: 0.88),
                         ),
                       ),
                     ),
@@ -1262,7 +1275,7 @@ class _GrammarCard extends StatelessWidget {
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
                 style: theme.textTheme.bodyMedium?.copyWith(
-                  color: _ink,
+                  color: muted,
                   fontWeight: FontWeight.w500,
                   height: 1.35,
                 ),
@@ -1275,7 +1288,7 @@ class _GrammarCard extends StatelessWidget {
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
                 style: theme.textTheme.bodySmall?.copyWith(
-                  color: _muted,
+                  color: muted,
                   fontWeight: FontWeight.w600,
                   height: 1.35,
                 ),
@@ -1296,6 +1309,7 @@ class _GrammarCard extends StatelessWidget {
                         icon: const Icon(Icons.edit_outlined, size: 18),
                         label: const Text('Edit'),
                         style: TextButton.styleFrom(
+                          foregroundColor: actionFg,
                           visualDensity: VisualDensity.compact,
                           tapTargetSize: MaterialTapTargetSize.padded,
                         ),

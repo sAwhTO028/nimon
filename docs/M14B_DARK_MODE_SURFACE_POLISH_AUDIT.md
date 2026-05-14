@@ -1,0 +1,17 @@
+# M14B Dark Mode Surface Polish — Audit
+
+Theme fixes target **Material 3 `ColorScheme`** tokens (`surface`, `surfaceContainer*`, `onSurface`, `onSurfaceVariant`, `outlineVariant`, `primary`) and a small shared learn helper (`learn_module_surface_tokens.dart`) plus `showNimonScrollableHelpBottomSheet` for long creator help copy.
+
+| Screen / Surface | File(s) | Current issue | Token/color cause | Fix approach | Status |
+|------------------|---------|-----------------|-------------------|--------------|--------|
+| Profile Published / Workspace / Saved tabs | `lib/features/profile/profile_screen.dart` (`_ProfileIconTabs`) | Unselected tab icon/label nearly invisible; dividers faint in dark | `Colors.black.withOpacity` on dark surfaces | `onSurfaceVariant` for unselected; `onSurface` for selected text/icon; `primary` tab indicator; `outlineVariant` dividers | Done |
+| Add / Create tab (empty + continue card) | `lib/features/create/story_creator_add_tab_screen.dart` | Section headers and featured title used fixed ink | Hardcoded `_ink` / `_muted` | `colorScheme.onSurface` / `onSurfaceVariant`; chip text `onSurface` | Done |
+| Vocabulary / Kanji list (reader) | `lib/features/learn/vocab_kanji_list_screen.dart` | Warm paper + ink on cards | Fixed `_bg` / `_ink` / white card fill | `learnModuleListPageBackground`, card fill/border helpers, `onSurface` / `onSurfaceVariant` | Done |
+| Grammar list (reader) | `lib/features/learn/grammar_pattern_list_screen.dart` | Same as vocab | Same | Same pattern as vocab | Done |
+| Learn hub | `lib/features/learn/learn_hub_screen.dart` | Cards / stats / description on light-only surfaces | `_bg`, `_ink`, translucent white | Shared learn page + card tokens; `onSurface` / `onSurfaceVariant`; description card + CTA use scheme | Done |
+| Grammar — Add pattern / how-to sheet | `lib/features/create/story_creator_grammar_overlays.dart` | Title headline contrast on dark | Default text color on `titleMedium` | Explicit `onSurface` on sheet + test-play titles | Done |
+| Quiz editor module + cards | `lib/features/create/story_creator_quiz_editor_screen.dart` | Header + cards used ink; sheet cream background | `0xFFF6F3EA`, `_ink`, white cards | Sheet `surface`; body text `onSurface` / `onSurfaceVariant`; cards `surfaceContainerHigh` + `outlineVariant` borders | Done |
+| Add quiz bottom sheet | `story_creator_quiz_editor_screen.dart` (`_showUpsertSheet`) | Cream sheet in dark | Hardcoded `0xFFF6F3EA` | `colorScheme.surface` + scheme text colors in form | Done |
+| Quiz / Listening how-to (sentences host) | `lib/features/create/story_creator_sentences_screen.dart`, `lib/ui/widgets/nimon_scrollable_help_bottom_sheet.dart` | Column overflow (~11px) on phone | Non-scrollable `Column` in default sheet height | `isScrollControlled`, transparent sheet, `FractionallySizedBox`, `SafeArea`, `SingleChildScrollView`, `viewInsets` padding | Done |
+| Listening module + empty/summary cards | `lib/features/create/story_creator_audio_editor_screen.dart` | Fixed ink + light cards | `_ink` / `_muted` / white fills | `onSurface` / `onSurfaceVariant`; `surfaceContainerHigh` cards; audio upsert sheet `surface` | Done |
+| Add / replace audio sheet | `story_creator_audio_editor_screen.dart`, `lib/features/create/creator_audio_upload_sheet.dart` | Cream sheet; static ink/muted | `0xFFF6F3EA`; `CreatorAudioUploadSheet.ink` | Sheet `surface`; upload sheet derives `onSurface` / `onSurfaceVariant` at build; success panel border `outlineVariant` | Done |

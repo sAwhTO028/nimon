@@ -195,7 +195,8 @@ class _OneShortTabState extends State<OneShortTab> {
       {
         'id': 'rainy_day_promise',
         'title': 'Theme – RAINY DAY PROMISE',
-        'context': 'Two old friends meet again at a bus stop on a rainy afternoon in Tokyo.',
+        'context':
+            'Two old friends meet again at a bus stop on a rainy afternoon in Tokyo.',
         'duration': '4–6 minutes',
         'category': 'Love',
         'level': 'N3',
@@ -203,7 +204,8 @@ class _OneShortTabState extends State<OneShortTab> {
       {
         'id': 'first_snow_train',
         'title': 'Theme – FIRST SNOW, LAST TRAIN',
-        'context': 'Two people miss the last train home and walk together through the first snow of the season.',
+        'context':
+            'Two people miss the last train home and walk together through the first snow of the season.',
         'duration': '6–8 minutes',
         'category': 'Love',
         'level': 'N2',
@@ -211,7 +213,8 @@ class _OneShortTabState extends State<OneShortTab> {
       {
         'id': 'mystery_library',
         'title': 'Theme – MYSTERY IN THE LIBRARY',
-        'context': 'A detective investigates a strange disappearance in an old university library.',
+        'context':
+            'A detective investigates a strange disappearance in an old university library.',
         'duration': '5–7 minutes',
         'category': 'Mystery',
         'level': 'N1',
@@ -219,7 +222,8 @@ class _OneShortTabState extends State<OneShortTab> {
       {
         'id': 'horror_apartment',
         'title': 'Theme – THE APARTMENT',
-        'context': 'A new tenant discovers the dark history of their new apartment building.',
+        'context':
+            'A new tenant discovers the dark history of their new apartment building.',
         'duration': '6–8 minutes',
         'category': 'Horror',
         'level': 'N2',
@@ -231,7 +235,8 @@ class _OneShortTabState extends State<OneShortTab> {
     }
 
     return allPrompts.where((prompt) {
-      return prompt['level'] == _state.jlpt && prompt['category'] == _state.category;
+      return prompt['level'] == _state.jlpt &&
+          prompt['category'] == _state.category;
     }).toList();
   }
 
@@ -401,8 +406,8 @@ class _OneShortTabState extends State<OneShortTab> {
       return Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         child: Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
             color: Theme.of(context).colorScheme.surface,
             borderRadius: BorderRadius.circular(12),
             border: Border.all(color: Theme.of(context).dividerColor),
@@ -473,8 +478,8 @@ class _OneShortTabState extends State<OneShortTab> {
                       Align(
                         alignment: Alignment.topRight,
                         child: Container(
-                          padding:
-                              const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 2),
                           decoration: BoxDecoration(
                             color: Colors.grey.shade200,
                             borderRadius: BorderRadius.circular(10),
@@ -575,7 +580,8 @@ class _OneShortTabState extends State<OneShortTab> {
                 borderRadius: BorderRadius.circular(8),
                 borderSide: const BorderSide(color: Colors.blue),
               ),
-              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             ),
           ),
         ],

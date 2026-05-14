@@ -61,7 +61,7 @@ class _QuickOneShotSectionState extends State<QuickOneShotSection> {
           showSeeAll: true,
         ),
         const SizedBox(height: 16),
-        
+
         // Content area (reduced height for more compact cards)
         SizedBox(
           height: 220,
@@ -76,15 +76,15 @@ class _QuickOneShotSectionState extends State<QuickOneShotSection> {
     if (_isLoading) {
       return _buildLoadingState();
     }
-    
+
     if (_hasError) {
       return _buildErrorState();
     }
-    
+
     if (_oneShots.isEmpty) {
       return _buildEmptyState();
     }
-    
+
     return _buildOneShotsList();
   }
 
@@ -114,7 +114,8 @@ class _QuickOneShotSectionState extends State<QuickOneShotSection> {
               flex: 5,
               child: Container(
                 decoration: BoxDecoration(
-                  borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+                  borderRadius:
+                      const BorderRadius.vertical(top: Radius.circular(20)),
                   color: Colors.grey[300],
                 ),
                 child: const Center(
@@ -169,8 +170,11 @@ class _QuickOneShotSectionState extends State<QuickOneShotSection> {
             Text(
               'Failed to load one-shots',
               style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
-              ),
+                    color: Theme.of(context)
+                        .colorScheme
+                        .onSurface
+                        .withOpacity(0.7),
+                  ),
             ),
             const SizedBox(height: 8),
             TextButton(
@@ -199,15 +203,21 @@ class _QuickOneShotSectionState extends State<QuickOneShotSection> {
             Text(
               'No one-shots yet',
               style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
-              ),
+                    color: Theme.of(context)
+                        .colorScheme
+                        .onSurface
+                        .withOpacity(0.7),
+                  ),
             ),
             const SizedBox(height: 8),
             Text(
               'Check back later for personalized recommendations',
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.5),
-              ),
+                    color: Theme.of(context)
+                        .colorScheme
+                        .onSurface
+                        .withOpacity(0.5),
+                  ),
               textAlign: TextAlign.center,
             ),
           ],
@@ -239,14 +249,16 @@ class _QuickOneShotSectionState extends State<QuickOneShotSection> {
       title: oneShot.title,
       episodeNo: 'Mono ${oneShot.monoNo}',
       authorName: oneShot.writerName,
-      coverUrl: oneShot.coverUrl ?? 'https://images.unsplash.com/photo-1519638399535-1b036603ac77?w=800',
+      coverUrl: oneShot.coverUrl ??
+          'https://images.unsplash.com/photo-1519638399535-1b036603ac77?w=800',
       jlpt: oneShot.jlpt,
       likes: oneShot.likes,
       readTime: '5 min',
       category: 'One-Shot',
-      preview: 'A quick and engaging one-shot story perfect for your learning journey. (Mono ${oneShot.monoNo})',
+      preview:
+          'A quick and engaging one-shot story perfect for your learning journey. (Mono ${oneShot.monoNo})',
     );
-    
+
     showEpisodeBottomSheetFromMeta(
       context,
       episodeMeta,

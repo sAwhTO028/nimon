@@ -6,6 +6,7 @@ import {
   Header,
   HttpCode,
   HttpStatus,
+  Logger,
   Param,
   Post,
   Query,
@@ -24,16 +25,37 @@ import type { PublishedMonoPermanentDeleteRequestDto } from './published-monos.d
 @UseGuards(JwtOrDevOwnerFallbackGuard)
 @Controller('v1/published-monos')
 export class PublishedMonosController {
+  private readonly logger = new Logger(PublishedMonosController.name);
+
   constructor(private readonly published: PublishedMonosService) {}
 
   @Get()
   @Header('Content-Type', 'application/json')
   async list(
     @Query('limit') limit: string | undefined,
+    @Query('cursor') cursor: string | undefined,
+    @Query('sort') sort: string | undefined,
     @Query('trashed') trashed: string | undefined,
     @CurrentUser() user: JwtValidatedUser,
   ) {
-    return await this.published.listPublishedMonos(user.userId, limit, trashed);
+    // M17C-5 TEMP: controller saw the request before service (remove after diagnosis).
+    this.logger.log(
+      `[M17C-5] route=GET /v1/published-monos PublishedMonosController.list hit ` +
+        `userId=${user.userId} limit=${String(limit ?? '')} cursor=${String(cursor ?? '')} ` +
+        `sort=${String(sort ?? '')} trashed=${String(trashed ?? '')}`,
+    );
+    const out = await this.published.listPublishedMonos(
+      user.userId,
+      limit,
+      trashed,
+      cursor,
+      sort,
+    );
+    this.logger.log(
+      `[M17C-5] route=GET /v1/published-monos PublishedMonosController.list out ` +
+        `responseKeys=${Object.keys(out).sort().join(',')}`,
+    );
+    return out;
   }
 
   /** Move to Trash (P1 soft-delete); idempotent. */

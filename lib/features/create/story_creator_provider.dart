@@ -3,10 +3,12 @@ import 'dart:async';
 import 'package:flutter/foundation.dart' show kDebugMode, debugPrint;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:nimon/features/auth/current_user_id_provider.dart';
+import 'package:nimon/core/validation/app_quota_exceeded_exception.dart';
 import 'package:nimon/features/create/creator_readiness.dart';
 import 'package:nimon/features/create/data/remote_backend_config.dart';
 import 'package:nimon/features/create/creator_published_edit_baseline.dart';
 import 'package:nimon/features/create/creator_read_only_publish_tracking.dart';
+import 'package:nimon/features/create/data/story_draft_remote_publish_errors.dart';
 import 'package:nimon/features/create/data/story_draft_repository.dart';
 import 'package:nimon/features/create/data/story_draft_repository_provider.dart';
 import 'package:nimon/features/profile/profile_processing_refresh.dart';
@@ -346,6 +348,20 @@ class StoryCreatorDraftNotifier extends StateNotifier<StoryCreatorDraftState> {
           state.draft.publishState != StoryPublishState.draft) {
         _bumpProfileProcessingListRefresh();
       }
+    } on StoryDraftValidationFailedException {
+      state = state.copyWith(
+        dirty: true,
+        saveStatus: CreatorDraftSaveStatus.failed,
+        lastSaveError: 'Validation failed',
+      );
+      rethrow;
+    } on AppQuotaExceededException {
+      state = state.copyWith(
+        dirty: true,
+        saveStatus: CreatorDraftSaveStatus.failed,
+        clearLastSaveError: true,
+      );
+      rethrow;
     } catch (e) {
       state = state.copyWith(
         dirty: true,
@@ -516,6 +532,28 @@ class StoryCreatorDraftNotifier extends StateNotifier<StoryCreatorDraftState> {
       targetDurationBandKey: targetDurationBandKey,
     );
     unawaited(persistLocalNow(reason: 'basics_confirm'));
+  }
+
+  /// Same as [applyBasics] but awaits persistence (used before navigation).
+  Future<void> applyBasicsAndWaitPersist({
+    required String title,
+    required String category,
+    required String level,
+    required String description,
+    required String promptSourceNote,
+    required String? coverImageUrl,
+    String? targetDurationBandKey,
+  }) async {
+    _applyBasicsFields(
+      title: title,
+      category: category,
+      level: level,
+      description: description,
+      promptSourceNote: promptSourceNote,
+      coverImageUrl: coverImageUrl,
+      targetDurationBandKey: targetDurationBandKey,
+    );
+    await persistLocalNow(reason: 'basics_confirm');
   }
 
   /// Debounced variant for text-heavy basics fields (title/description/etc).
@@ -712,13 +750,32 @@ class StoryCreatorDraftNotifier extends StateNotifier<StoryCreatorDraftState> {
   /// Review / explicit actions: publish then await local disk flush (single completion signal).
   Future<bool> publishReadingOnlyToDisk() async {
     if (!computeReadOnlyReady(state.draft).ready) return false;
+    final previousPublish = state.draft.publishState;
     _setDraft(
       state.draft.copyWith(
         publishState: StoryPublishState.readingOnlyPublished,
         basics: state.draft.basics.copyWith(updatedAt: DateTime.now()),
       ),
     );
-    await persistLocalNow(reason: 'publish_reading_only');
+    try {
+      await persistLocalNow(reason: 'publish_reading_only');
+    } on StoryDraftValidationFailedException {
+      _setDraft(
+        state.draft.copyWith(
+          publishState: previousPublish,
+          basics: state.draft.basics.copyWith(updatedAt: DateTime.now()),
+        ),
+      );
+      rethrow;
+    } on AppQuotaExceededException {
+      _setDraft(
+        state.draft.copyWith(
+          publishState: previousPublish,
+          basics: state.draft.basics.copyWith(updatedAt: DateTime.now()),
+        ),
+      );
+      rethrow;
+    }
     if (state.saveStatus == CreatorDraftSaveStatus.saved) {
       final sig = computeReadOnlyPublishedCoreSignature(state.draft);
       await saveReadOnlyPublishedCoreSignature(
@@ -732,13 +789,32 @@ class StoryCreatorDraftNotifier extends StateNotifier<StoryCreatorDraftState> {
 
   Future<bool> publishFullLearnToDisk() async {
     if (!computeFullLearnReady(state.draft).ready) return false;
+    final previousPublish = state.draft.publishState;
     _setDraft(
       state.draft.copyWith(
         publishState: StoryPublishState.fullLearnPublished,
         basics: state.draft.basics.copyWith(updatedAt: DateTime.now()),
       ),
     );
-    await persistLocalNow(reason: 'publish_full_learn');
+    try {
+      await persistLocalNow(reason: 'publish_full_learn');
+    } on StoryDraftValidationFailedException {
+      _setDraft(
+        state.draft.copyWith(
+          publishState: previousPublish,
+          basics: state.draft.basics.copyWith(updatedAt: DateTime.now()),
+        ),
+      );
+      rethrow;
+    } on AppQuotaExceededException {
+      _setDraft(
+        state.draft.copyWith(
+          publishState: previousPublish,
+          basics: state.draft.basics.copyWith(updatedAt: DateTime.now()),
+        ),
+      );
+      rethrow;
+    }
     if (state.saveStatus == CreatorDraftSaveStatus.saved) {
       // Full Learn implies a Read Only published baseline exists for the story core.
       final sig = computeReadOnlyPublishedCoreSignature(state.draft);

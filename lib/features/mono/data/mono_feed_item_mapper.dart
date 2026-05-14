@@ -194,5 +194,6 @@ MonoFeedItem monoFeedItemFromPublishedMonoListItemDto(
     needsRemoteDetailHydration: true,
     catalogMonoId: null,
     sourceDraftId: dto.sourceDraftId,
+    shareUrl: dto.shareUrl,
   );
 }

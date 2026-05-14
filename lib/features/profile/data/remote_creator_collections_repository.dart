@@ -2,8 +2,12 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart' show debugPrint, kDebugMode;
 import 'package:http/http.dart' as http;
+import 'package:nimon/core/validation/http_validation_failed_exception.dart';
+import 'package:nimon/core/validation/quota_exceeded_from_json.dart';
+import 'package:nimon/core/validation/validation_issue_from_json.dart';
 import 'package:nimon/features/create/data/remote_backend_config.dart';
 import 'package:nimon/features/auth/auth_strict_unauthorized.dart';
+import 'package:nimon/features/auth/authenticated_http.dart';
 
 import 'bulk_add_creator_collection_result.dart';
 import 'creator_mono_collection.dart';
@@ -30,13 +34,16 @@ class RemoteCreatorCollectionsRepository {
     required String apiBaseUrl,
     http.Client? client,
     CreatorCollectionsAuthHeaderBuilder? authHeaderBuilder,
+    NimonSendWithAuth401Recovery? sendWithAuth401Recovery,
   })  : _apiBaseUrl = apiBaseUrl.replaceAll(RegExp(r'/+$'), ''),
         _client = client ?? http.Client(),
-        _authHeaderBuilder = authHeaderBuilder;
+        _authHeaderBuilder = authHeaderBuilder,
+        _sendWithAuth401 = sendWithAuth401Recovery;
 
   final String _apiBaseUrl;
   final http.Client _client;
   final CreatorCollectionsAuthHeaderBuilder? _authHeaderBuilder;
+  final NimonSendWithAuth401Recovery? _sendWithAuth401;
 
   bool get _strict => RemoteBackendConfig.strictRemoteDrafts;
 
@@ -46,6 +53,18 @@ class RemoteCreatorCollectionsRepository {
     final auth = await builder();
     return {...auth, ...headers};
   }
+
+  Future<http.Response> _nimonAuthSend(
+    Uri uri,
+    Future<Map<String, String>> Function() mergeHeaders,
+    Future<http.Response> Function(Map<String, String> headers) send,
+  ) =>
+      nimonSendWithOptional401Recovery(
+        _sendWithAuth401,
+        requestUri: uri,
+        mergeHeaders: mergeHeaders,
+        send: send,
+      );
 
   Uri _u(String path) => Uri.parse('$_apiBaseUrl$path');
 
@@ -75,7 +94,13 @@ class RemoteCreatorCollectionsRepository {
   }
 
   Never _throwMapped(http.Response r, {required String genericFallback}) {
-    notifyIfStrictUnauthorized401(r);
+    if (r.statusCode == 401) notifyIfStrictUnauthorized401(r);
+    final quota = tryParseQuotaExceededFromHttpBody(r.body);
+    if (quota != null) throw quota;
+    final vf = tryParseValidationIssuesFromHttpBody(r.body);
+    if (vf != null && vf.isNotEmpty) {
+      throw HttpValidationFailedException(vf);
+    }
     final code = _messageCode(r);
     if (r.statusCode == 401) {
       throw StateError('Sign in required.');
@@ -113,11 +138,10 @@ class RemoteCreatorCollectionsRepository {
       if (kDebugMode) {
         debugPrint('RemoteCreatorCollectionsRepository: GET $uri');
       }
-      final resp = await _client.get(
+      final resp = await _nimonAuthSend(
         uri,
-        headers: await _mergeAuth({
-          'Accept': 'application/json',
-        }),
+        () => _mergeAuth({'Accept': 'application/json'}),
+        (h) => _client.get(uri, headers: h),
       );
       _ensure2xx(resp, genericFallback: 'Could not load collections.');
       final m = _jsonObject(resp);
@@ -155,13 +179,13 @@ class RemoteCreatorCollectionsRepository {
       if (visibility != null) 'visibility': visibility,
       if (sortOrder != null) 'sortOrder': sortOrder,
     };
-    final resp = await _client.post(
+    final resp = await _nimonAuthSend(
       uri,
-      headers: await _mergeAuth({
+      () => _mergeAuth({
         'Content-Type': 'application/json',
         'Accept': 'application/json',
       }),
-      body: jsonEncode(body),
+      (h) => _client.post(uri, headers: h, body: jsonEncode(body)),
     );
     _ensure2xx(resp, genericFallback: 'Could not create collection.');
     final m = _jsonObject(resp);
@@ -191,13 +215,13 @@ class RemoteCreatorCollectionsRepository {
       if (visibility != null) 'visibility': visibility,
       if (sortOrder != null) 'sortOrder': sortOrder,
     };
-    final resp = await _client.patch(
+    final resp = await _nimonAuthSend(
       uri,
-      headers: await _mergeAuth({
+      () => _mergeAuth({
         'Content-Type': 'application/json',
         'Accept': 'application/json',
       }),
-      body: jsonEncode(body),
+      (h) => _client.patch(uri, headers: h, body: jsonEncode(body)),
     );
     _ensure2xx(resp, genericFallback: 'Could not update collection.');
     final m = _jsonObject(resp);
@@ -213,9 +237,10 @@ class RemoteCreatorCollectionsRepository {
 
   Future<void> deleteCollection(String id) async {
     final uri = _u('/v1/me/creator-collections/$id');
-    final resp = await _client.delete(
+    final resp = await _nimonAuthSend(
       uri,
-      headers: await _mergeAuth({'Accept': 'application/json'}),
+      () => _mergeAuth({'Accept': 'application/json'}),
+      (h) => _client.delete(uri, headers: h),
     );
     if (resp.statusCode == 204) return;
     _ensure2xx(resp, genericFallback: 'Could not delete collection.');
@@ -226,13 +251,17 @@ class RemoteCreatorCollectionsRepository {
     String publishedMonoId,
   ) async {
     final uri = _u('/v1/me/creator-collections/$collectionId/items');
-    final resp = await _client.post(
+    final resp = await _nimonAuthSend(
       uri,
-      headers: await _mergeAuth({
+      () => _mergeAuth({
         'Content-Type': 'application/json',
         'Accept': 'application/json',
       }),
-      body: jsonEncode({'publishedMonoId': publishedMonoId}),
+      (h) => _client.post(
+        uri,
+        headers: h,
+        body: jsonEncode({'publishedMonoId': publishedMonoId}),
+      ),
     );
     _ensure2xx(resp, genericFallback: 'Could not add to collection.');
     final m = _jsonObject(resp);
@@ -245,9 +274,10 @@ class RemoteCreatorCollectionsRepository {
     final uri = _u(
       '/v1/me/creator-collections/$collectionId/items/$publishedMonoId',
     );
-    final resp = await _client.delete(
+    final resp = await _nimonAuthSend(
       uri,
-      headers: await _mergeAuth({'Accept': 'application/json'}),
+      () => _mergeAuth({'Accept': 'application/json'}),
+      (h) => _client.delete(uri, headers: h),
     );
     if (resp.statusCode == 204) return;
     _ensure2xx(resp, genericFallback: 'Could not remove from collection.');
@@ -264,9 +294,10 @@ class RemoteCreatorCollectionsRepository {
       if (kDebugMode) {
         debugPrint('RemoteCreatorCollectionsRepository: GET $uri');
       }
-      final resp = await _client.get(
+      final resp = await _nimonAuthSend(
         uri,
-        headers: await _mergeAuth({'Accept': 'application/json'}),
+        () => _mergeAuth({'Accept': 'application/json'}),
+        (h) => _client.get(uri, headers: h),
       );
       _ensure2xx(resp, genericFallback: 'Could not load collections.');
       final m = _jsonObject(resp);
@@ -310,9 +341,10 @@ class RemoteCreatorCollectionsRepository {
       if (kDebugMode) {
         debugPrint('RemoteCreatorCollectionsRepository: GET $uri');
       }
-      final resp = await _client.get(
+      final resp = await _nimonAuthSend(
         uri,
-        headers: await _mergeAuth({'Accept': 'application/json'}),
+        () => _mergeAuth({'Accept': 'application/json'}),
+        (h) => _client.get(uri, headers: h),
       );
       _ensure2xx(resp, genericFallback: 'Could not load stories.');
       final m = _jsonObject(resp);
@@ -366,9 +398,10 @@ class RemoteCreatorCollectionsRepository {
       if (kDebugMode) {
         debugPrint('RemoteCreatorCollectionsRepository: GET $uri');
       }
-      final resp = await _client.get(
+      final resp = await _nimonAuthSend(
         uri,
-        headers: await _mergeAuth({'Accept': 'application/json'}),
+        () => _mergeAuth({'Accept': 'application/json'}),
+        (h) => _client.get(uri, headers: h),
       );
       _ensure2xx(resp, genericFallback: 'Could not load stories.');
       final m = _jsonObject(resp);
@@ -410,13 +443,17 @@ class RemoteCreatorCollectionsRepository {
     List<String> publishedMonoIds,
   ) async {
     final uri = _u('/v1/me/creator-collections/$collectionId/items/bulk');
-    final resp = await _client.post(
+    final resp = await _nimonAuthSend(
       uri,
-      headers: await _mergeAuth({
+      () => _mergeAuth({
         'Content-Type': 'application/json',
         'Accept': 'application/json',
       }),
-      body: jsonEncode({'publishedMonoIds': publishedMonoIds}),
+      (h) => _client.post(
+        uri,
+        headers: h,
+        body: jsonEncode({'publishedMonoIds': publishedMonoIds}),
+      ),
     );
     _ensure2xx(resp, genericFallback: 'Could not update collection.');
     final m = _jsonObject(resp);

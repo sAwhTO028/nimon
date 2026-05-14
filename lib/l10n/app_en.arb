@@ -1,0 +1,315 @@
+{
+  "@@locale": "en",
+  "settingsTitle": "Settings",
+  "settingsLanguageSection": "Language",
+  "settingsAppearanceSection": "Appearance",
+  "settingsAccountSection": "Account",
+  "settingsNotificationsSection": "Notifications",
+  "settingsAboutSection": "About",
+  "settingsAppLanguage": "App Language",
+  "settingsContentCommunity": "Content Community",
+  "settingsLearningLanguage": "Learning Language",
+  "settingsTheme": "Theme",
+  "settingsComingSoon": "Coming soon",
+  "settingsEditProfile": "Edit profile",
+  "settingsSignOut": "Sign out",
+  "settingsSignOutSubtitle": "Leave this account on this device",
+  "settingsSignInRequiredTitle": "Sign in required",
+  "settingsSignInRequiredBody": "Settings are available after you sign in.",
+  "settingsSignInCta": "Sign in",
+  "settingsAppVersion": "App version",
+  "settingsAppVersionPlaceholder": "V1 shell (version integration deferred)",
+  "settingsSystem": "System",
+  "settingsEnglish": "English",
+  "settingsJapanese": "Japanese",
+  "settingsMyanmar": "Myanmar",
+  "settingsInternationalEnglish": "International / English",
+  "settingsSignOutDialogTitle": "Sign out?",
+  "settingsSignOutDialogBody": "You will be signed out on this device and returned to the login screen.",
+  "settingsCancel": "Cancel",
+  "settingsReadingSection": "Reading",
+  "settingsReadingTextSize": "Reading text size",
+  "settingsReadingTextSizeSmall": "Small",
+  "settingsReadingTextSizeStandard": "Standard",
+  "settingsReadingTextSizeLarge": "Large",
+  "settingsShowExplanationSentence": "Explanation sentence",
+  "settingsShowExplanationSentenceSubtitle": "Show per-sentence explanations in the mono reader",
+  "validationPublishSheetTitle": "Before publishing",
+  "validationPublishSectionBlocking": "Blocking",
+  "validationPublishSectionRecommended": "Recommended",
+  "validationPublishFixIssuesCta": "Fix issues",
+  "validationPublishAnywayCta": "Publish anyway",
+  "validationCtaSignIn": "Sign in",
+  "validationCtaNotNow": "Not now",
+  "validationCtaOk": "OK",
+  "validationMediaUploadGenericImage": "Could not upload image. Please try again.",
+  "validationMediaUploadGenericAudio": "Could not upload audio. Please try again.",
+  "validationFieldStoryTitle": "Story title",
+  "validationFieldStoryDescription": "Description",
+  "validationFieldStorySentences": "Sentences",
+  "validationFieldStoryBody": "Story body",
+  "validationFieldStoryLevel": "JLPT level",
+  "validationFieldStoryDuration": "Duration",
+  "validationFieldLearnVocabCount": "Vocabulary",
+  "validationFieldLearnGrammarCount": "Grammar",
+  "validationFieldLearnQuizCount": "Quiz",
+  "validationFieldLearnVocabulary": "Vocabulary",
+  "validationFieldLearnGrammar": "Grammar",
+  "validationFieldLearnQuiz": "Quiz",
+  "validationFieldModuleVocabularyKanji": "Vocabulary / Kanji module",
+  "validationFieldModuleGrammar": "Grammar module",
+  "validationFieldModuleQuiz": "Quiz module",
+  "validationFieldModuleAudio": "Listening module",
+  "validationFieldLearnModule": "Learn module",
+  "validationLearnModuleNotCompletedWithLabel": "Complete the {moduleLabel} module before publishing.",
+  "@validationLearnModuleNotCompletedWithLabel": {
+    "placeholders": {
+      "moduleLabel": {
+        "type": "String"
+      }
+    }
+  },
+  "validationLearnModuleLabelLearn": "learn",
+  "validationLearnModuleLabelVocabularyKanji": "Vocabulary / Kanji",
+  "validationLearnModuleLabelGrammar": "Grammar",
+  "validationLearnModuleLabelQuiz": "Quiz",
+  "validationLearnModuleLabelAudio": "Listening / Audio",
+  "validationLearnFuriganaInvalid": "Furigana for this text is not valid.",
+  "validationLearnFuriganaOverlap": "Furigana ranges cannot overlap.",
+  "validationProfileDisplayNameRequired": "Enter a display name.",
+  "validationProfileDisplayNameLength": "Display name must be between 1 and 30 characters.",
+  "validationProfileDisplayNameUnsafe": "Display name contains content that is not allowed.",
+  "validationProfileHandleNoEmoji": "Handles cannot include emoji.",
+  "validationProfileHandleLength": "Handle must be between 3 and 24 characters.",
+  "validationProfileHandleInvalidChars": "Handles may use lowercase letters, numbers, underscore, and period only.",
+  "validationProfileHandlePeriodEdge": "Handles cannot start or end with a period.",
+  "validationProfileHandlePeriodRepeat": "Handles cannot contain consecutive periods.",
+  "validationProfileHandleReserved": "That handle is reserved.",
+  "validationProfileBioTooLong": "Bio must be at most 150 characters.",
+  "validationProfileBioUnsafe": "Bio contains content that is not allowed.",
+  "validationProfileBioTooManyLines": "Bio may have at most 3 lines.",
+  "validationStoryTitleRequired": "Title is required to publish.",
+  "validationStoryTitleRecommended": "Add a title for your story.",
+  "validationStoryTitleTooShort": "Title must be at least 5 characters.",
+  "validationStoryTitleTooLong": "Title must be at most 80 characters.",
+  "validationStoryTitleUnsafe": "Title contains content that is not allowed.",
+  "validationStoryTitleLineBreak": "Title cannot contain line breaks.",
+  "validationStoryTitleTooManyEmoji": "Title may include at most one emoji.",
+  "validationStoryTitleOnlyNumbers": "Title cannot be only numbers.",
+  "validationStoryTitleOnlySymbols": "Title cannot be only symbols.",
+  "validationStoryTitleExcessiveRepeat": "Title has too many repeated characters.",
+  "validationStoryDescriptionRecommended": "Add a short description before publishing.",
+  "validationStoryDescriptionTooLong": "Description must be at most 160 characters.",
+  "validationStoryDescriptionUnsafe": "Description contains content that is not allowed.",
+  "validationStoryDescriptionLineBreak": "Description cannot contain line breaks.",
+  "validationStoryDescriptionTooManyUrls": "Description may include at most one link.",
+  "validationStoryDescriptionHashtagStuffing": "Too many hashtags in the description.",
+  "validationStoryDescriptionTooManyEmoji": "Description may include at most two emoji.",
+  "validationStoryDescriptionExcessiveRepeat": "Description has too many repeated characters.",
+  "validationCollectionTitleRequired": "Collection name is required.",
+  "validationCollectionTitleLength": "Collection name must be between 1 and 40 characters.",
+  "validationCollectionTitleUnsafe": "Collection name contains content that is not allowed.",
+  "validationCollectionTitleLineBreak": "Collection name cannot contain line breaks.",
+  "validationCollectionTitleNoUrl": "Collection name cannot contain links.",
+  "validationCollectionTitleTooManyEmoji": "Collection name may include at most one emoji.",
+  "validationCollectionTitleOnlyNumbers": "Collection name cannot be only numbers.",
+  "validationCollectionTitleOnlySymbols": "Collection name cannot be only symbols.",
+  "validationCollectionTitleOnlySpaces": "Collection name needs letters or numbers.",
+  "validationCollectionTitleExcessiveRepeat": "Collection name has too many repeated characters.",
+  "validationCollectionNameRequired": "Collection name is required.",
+  "validationCollectionNameLength": "Collection name must be between 1 and 40 characters.",
+  "validationCollectionNameUnsafe": "Collection name contains content that is not allowed.",
+  "validationCollectionNameLineBreak": "Collection name cannot contain line breaks.",
+  "validationCollectionNameNoUrl": "Collection name cannot contain links.",
+  "validationCollectionNameTooManyEmoji": "Collection name may include at most one emoji.",
+  "validationCollectionNameOnlyNumbers": "Collection name cannot be only numbers.",
+  "validationCollectionNameOnlySymbols": "Collection name cannot be only symbols.",
+  "validationCollectionNameOnlySpaces": "Collection name needs letters or numbers.",
+  "validationCollectionNameExcessiveRepeat": "Collection name has too many repeated characters.",
+  "validationAuthEmailRequired": "Email is required.",
+  "validationAuthEmailLength": "Email must be between 5 and 254 characters.",
+  "validationAuthEmailInvalid": "Enter a valid email address.",
+  "validationAuthEmailUnsafe": "Email contains content that is not allowed.",
+  "validationAuthPasswordLength": "Password must be between 8 and 64 characters.",
+  "validationAuthPasswordWeak": "That password is too common. Choose a stronger one.",
+  "validationAuthPasswordLineBreak": "Password cannot contain line breaks.",
+  "validationAuthPasswordRequiredLogin": "Password is required.",
+  "validationAuthConfirmPasswordMismatch": "Passwords do not match.",
+  "validationAuthLoginFailed": "Email or password is incorrect.",
+  "validationLearnVocabMeaningRequired": "Meaning is required for this publish mode.",
+  "validationLearnVocabMeaningLength": "Meaning must be between 1 and 80 characters.",
+  "validationLearnVocabMeaningNoEmoji": "Meaning cannot include emoji.",
+  "validationLearnVocabMeaningLineBreak": "Meaning cannot contain line breaks.",
+  "validationLearnVocabMeaningUnsafe": "Meaning contains content that is not allowed.",
+  "validationLearnVocabMeaningNoUrl": "Meaning cannot contain links.",
+  "validationLearnVocabMeaningNoHashtag": "Meaning cannot contain hashtags.",
+  "validationLearnVocabReadingRequired": "Reading is required for this word.",
+  "validationLearnVocabReadingTooLong": "Reading must be at most 40 characters.",
+  "validationLearnVocabReadingTooManyAlternatives": "Too many alternative readings.",
+  "validationLearnVocabReadingInvalidChars": "Reading may use hiragana, katakana, ・ and / only.",
+  "validationLearnVocabReadingUnsafe": "Reading contains content that is not allowed.",
+  "validationLearnGrammarTitleRequired": "Grammar title is required.",
+  "validationLearnGrammarTitleLength": "Grammar title must be between 2 and 40 characters.",
+  "validationLearnGrammarTitleNoEmoji": "Grammar title cannot include emoji.",
+  "validationLearnGrammarTitleLineBreak": "Grammar title cannot contain line breaks.",
+  "validationLearnGrammarTitleUnsafe": "Grammar title contains content that is not allowed.",
+  "validationLearnGrammarTitleNoUrl": "Grammar title cannot contain links.",
+  "validationLearnQuizCategoryInvalid": "Choose a quiz category.",
+  "validationLearnQuizQuestionRequired": "Question is required.",
+  "validationLearnQuizQuestionLength": "Question must be between 5 and 120 characters.",
+  "validationLearnQuizQuestionUnsafe": "Question contains content that is not allowed.",
+  "validationLearnQuizQuestionDuplicate": "That question is already in this story.",
+  "validationLearnQuizOptionsCount": "Provide between 2 and 4 answer options.",
+  "validationLearnQuizOptionsDuplicate": "Answer options must be unique.",
+  "validationLearnQuizAnswerRequired": "Choose the correct answer.",
+  "validationLearnQuizAnswerNotInOptions": "Correct answer must match one of the options.",
+  "validationLearnQuizAnswerSingleCorrect": "Exactly one option must be marked correct.",
+  "validationStorySentencesRequired": "Add at least one Japanese sentence.",
+  "validationStorySentencesTooFew": "Not enough sentences for this level and duration (minimum {min}; you have {actual}).",
+  "validationStorySentencesTooMany": "Too many sentences for this level and duration (maximum {max}; you have {actual}).",
+  "validationStoryBodyTooLong": "Story text is too long (maximum {max} characters; you have {actual}).",
+  "validationStoryLimitsSkippedNoJlpt": "JLPT level is not set; sentence length limits were not applied.",
+  "validationStoryLimitsSkippedNoBand": "Duration band is not set; sentence length limits were not applied.",
+  "validationLearnCountVocabRange": "Vocabulary count must be between {min} and {max} (you have {actual}).",
+  "validationLearnCountGrammarRange": "Grammar count must be between {min} and {max} (you have {actual}).",
+  "validationLearnCountQuizRange": "Quiz count must be between {min} and {max} (you have {actual}).",
+  "validationProtectedReactLogin": "Sign in to react to stories.",
+  "validationProtectedFollowLogin": "Sign in to follow creators.",
+  "validationProtectedSaveLogin": "Sign in to save stories.",
+  "validationProtectedCreateStoryLogin": "Sign in to create stories.",
+  "validationProtectedPublishStoryLogin": "Sign in to publish your story.",
+  "validationProtectedCreateCollectionLogin": "Sign in to create collections.",
+  "validationProtectedUploadMediaLogin": "Sign in to upload media.",
+  "validationProtectedEditProfileLogin": "Sign in to edit your profile.",
+  "validationProtectedGenericForbidden": "This action is not available.",
+  "validationProtectedGenericDisabled": "This action is disabled for your account.",
+  "validationMediaFileRequired": "Please choose a file to upload.",
+  "validationMediaFileEmpty": "This file is empty. Please choose another file.",
+  "validationMediaFileTooLarge": "This file is too large.",
+  "validationMediaFileInvalidType": "This file type is not supported.",
+  "validationMediaFileInvalidExtension": "This file extension is not supported.",
+  "validationMediaFileInvalidField": "Upload request was missing a required field.",
+  "validationMediaImageInvalidType": "Please choose a JPG, PNG, or WebP image.",
+  "validationMediaImageTooLarge": "This image is too large.",
+  "validationMediaAudioInvalidType": "Please choose a supported audio file.",
+  "validationMediaAudioTooLarge": "This audio file is too large.",
+  "validationNetworkOffline": "No internet connection. Please check your network and try again.",
+  "@validationStorySentencesTooFew": {
+    "placeholders": {
+      "min": {
+        "type": "int"
+      },
+      "actual": {
+        "type": "int"
+      }
+    }
+  },
+  "@validationStorySentencesTooMany": {
+    "placeholders": {
+      "max": {
+        "type": "int"
+      },
+      "actual": {
+        "type": "int"
+      }
+    }
+  },
+  "@validationStoryBodyTooLong": {
+    "placeholders": {
+      "max": {
+        "type": "int"
+      },
+      "actual": {
+        "type": "int"
+      }
+    }
+  },
+  "@validationLearnCountVocabRange": {
+    "placeholders": {
+      "min": {
+        "type": "int"
+      },
+      "max": {
+        "type": "int"
+      },
+      "actual": {
+        "type": "int"
+      }
+    }
+  },
+  "@validationLearnCountGrammarRange": {
+    "placeholders": {
+      "min": {
+        "type": "int"
+      },
+      "max": {
+        "type": "int"
+      },
+      "actual": {
+        "type": "int"
+      }
+    }
+  },
+  "@validationLearnCountQuizRange": {
+    "placeholders": {
+      "min": {
+        "type": "int"
+      },
+      "max": {
+        "type": "int"
+      },
+      "actual": {
+        "type": "int"
+      }
+    }
+  },
+  "quotaDialogOk": "OK",
+  "quotaPremiumComingLaterCta": "Premium later",
+  "quotaUnknownLimitTitle": "Free limit reached",
+  "quotaUnknownLimitMessage": "You've reached a free plan limit. Please remove an older item and try again.",
+  "publishedMonoLimitReachedTitle": "Free limit reached",
+  "publishedMonoLimitReachedMessage": "You can publish up to {limit} Monos on the free plan. Remove an old Mono or upgrade when Premium becomes available.",
+  "@publishedMonoLimitReachedMessage": {
+    "placeholders": {
+      "limit": {
+        "type": "int"
+      }
+    }
+  },
+  "savedMonoLimitReachedTitle": "Saved limit reached",
+  "savedMonoLimitReachedMessage": "You can save up to {limit} Monos on the free plan. Remove a saved Mono before saving a new one.",
+  "@savedMonoLimitReachedMessage": {
+    "placeholders": {
+      "limit": {
+        "type": "int"
+      }
+    }
+  },
+  "collectionLimitReachedTitle": "Collection limit reached",
+  "collectionLimitReachedMessage": "You can create up to {limit} collections on the free plan. Premium collections are coming in V2.",
+  "@collectionLimitReachedMessage": {
+    "placeholders": {
+      "limit": {
+        "type": "int"
+      }
+    }
+  },
+  "collectionItemLimitReachedTitle": "Collection is full",
+  "collectionItemLimitReachedMessage": "A collection can contain up to {limit} Monos on the free plan. Remove an item before adding another.",
+  "@collectionItemLimitReachedMessage": {
+    "placeholders": {
+      "limit": {
+        "type": "int"
+      }
+    }
+  },
+  "draftStoryLimitReachedTitle": "Draft limit reached",
+  "draftStoryLimitReachedMessage": "You can keep up to {limit} drafts on the free plan. Delete an old draft before creating a new one.",
+  "@draftStoryLimitReachedMessage": {
+    "placeholders": {
+      "limit": {
+        "type": "int"
+      }
+    }
+  }
+}

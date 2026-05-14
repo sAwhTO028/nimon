@@ -3,6 +3,8 @@ import 'dart:io' show SocketException;
 
 import 'package:flutter/foundation.dart' show debugPrint, kDebugMode;
 import 'package:http/http.dart' as http;
+import 'package:nimon/core/validation/http_validation_failed_exception.dart';
+import 'package:nimon/core/validation/validation_issue_from_json.dart';
 import 'package:nimon/features/auth/auth_models.dart';
 import 'package:nimon/features/create/data/remote_backend_config.dart';
 
@@ -75,6 +77,10 @@ class AuthRepository {
 
   void _throwIfNotOk(http.Response r, {String? context}) {
     if (r.statusCode >= 200 && r.statusCode < 300) return;
+    final parsed = tryParseValidationIssuesFromHttpBody(r.body);
+    if (parsed != null && parsed.isNotEmpty) {
+      throw HttpValidationFailedException(parsed);
+    }
     final msg = r.body.trim().isEmpty
         ? (context ?? 'HTTP ${r.statusCode}')
         : r.body.trim();

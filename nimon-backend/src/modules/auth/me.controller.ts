@@ -13,6 +13,7 @@ import { AuthService } from './auth.service';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import type { JwtValidatedUser } from './jwt.strategy';
 import { PatchMeProfileDto } from './dto/me-profile.dto';
+import { PatchMePreferencesDto } from './dto/me-preferences.dto';
 
 @Controller('v1')
 export class MeController {
@@ -40,5 +41,23 @@ export class MeController {
     @Body() body: PatchMeProfileDto,
   ) {
     return this.auth.patchMeProfile(req.user.userId, body);
+  }
+
+  @Get('me/preferences')
+  @UseGuards(JwtAuthGuard)
+  @Header('Content-Type', 'application/json')
+  mePreferences(@Req() req: { user: JwtValidatedUser }) {
+    return this.auth.getMePreferences(req.user.userId);
+  }
+
+  @Patch('me/preferences')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  @Header('Content-Type', 'application/json')
+  patchMePreferences(
+    @Req() req: { user: JwtValidatedUser },
+    @Body() body: PatchMePreferencesDto,
+  ) {
+    return this.auth.patchMePreferences(req.user.userId, body);
   }
 }

@@ -1,5 +1,15 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { canonicalizeMediaUrl } from '../media/media-url-canonicalizer';
+import type { MediaUrlCanonicalizerService } from '../media/media-url-canonicalizer.service';
 import { UserFollowService } from './user-follow.service';
+
+function mkMedia(): MediaUrlCanonicalizerService {
+  const base = 'http://localhost:3000/uploads';
+  return {
+    mediaPublicBaseUrl: () => base,
+    url: (u: string | null | undefined) => canonicalizeMediaUrl(u, base),
+  } as unknown as MediaUrlCanonicalizerService;
+}
 
 describe('UserFollowService', () => {
   const prisma = {
@@ -16,7 +26,7 @@ describe('UserFollowService', () => {
 
   beforeEach(async () => {
     jest.resetAllMocks();
-    svc = new UserFollowService(prisma as any);
+    svc = new UserFollowService(prisma as any, mkMedia());
   });
 
   it('follow: creates (idempotent upsert) and returns counts', async () => {

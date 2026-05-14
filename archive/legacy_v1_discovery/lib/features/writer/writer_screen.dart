@@ -4,6 +4,7 @@ import 'package:nimon/data/story_repo.dart';
 import 'package:nimon/models/story.dart';
 
 enum WriterKind { narration, dialog, monologue, emotion }
+
 enum _Pos { left, mid, right }
 
 /// UI-only metadata for each block (model ကို မထိ)
@@ -19,8 +20,8 @@ class _BlockMeta {
   WriterKind kind;
   _Pos pos;
   String colorCode; // blue | green | pink
-  String emoji;     // for emotion
-  String? speaker;  // for dialog
+  String emoji; // for emotion
+  String? speaker; // for dialog
 }
 
 class WriterScreen extends StatefulWidget {
@@ -37,12 +38,12 @@ class _WriterScreenState extends State<WriterScreen> {
   WriterKind _kind = WriterKind.narration;
 
   // alignment/color is single control (mapping)
-  _Pos _pos = _Pos.left;       // left=blue, mid=green, right=pink
+  _Pos _pos = _Pos.left; // left=blue, mid=green, right=pink
   String get _colorFromPos => switch (_pos) {
-    _Pos.left => 'blue',
-    _Pos.mid  => 'green',
-    _Pos.right=> 'pink',
-  };
+        _Pos.left => 'blue',
+        _Pos.mid => 'green',
+        _Pos.right => 'pink',
+      };
 
   // emotion palette (shown only when kind==emotion)
   String _emoji = '🙂';
@@ -96,26 +97,28 @@ class _WriterScreenState extends State<WriterScreen> {
           // ===== blocks list (reorderable) =====
           Expanded(
             child: _blocks.isEmpty
-                ? const Center(child: Text('No content yet. Write something below.'))
+                ? const Center(
+                    child: Text('No content yet. Write something below.'))
                 : ReorderableListView.builder(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
-              itemCount: _blocks.length,
-              onReorder: (oldIndex, newIndex) {
-                setState(() {
-                  if (newIndex > oldIndex) newIndex -= 1;
-                  final b = _blocks.removeAt(oldIndex);
-                  final m = _metas.removeAt(oldIndex);
-                  _blocks.insert(newIndex, b);
-                  _metas.insert(newIndex, m);
-                });
-              },
-              proxyDecorator: (child, _, __) => Material(
-                elevation: 6,
-                borderRadius: BorderRadius.circular(12),
-                child: child,
-              ),
-              itemBuilder: (ctx, i) => _blockTile(ctx, i, key: ValueKey('block_$i')),
-            ),
+                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+                    itemCount: _blocks.length,
+                    onReorder: (oldIndex, newIndex) {
+                      setState(() {
+                        if (newIndex > oldIndex) newIndex -= 1;
+                        final b = _blocks.removeAt(oldIndex);
+                        final m = _metas.removeAt(oldIndex);
+                        _blocks.insert(newIndex, b);
+                        _metas.insert(newIndex, m);
+                      });
+                    },
+                    proxyDecorator: (child, _, __) => Material(
+                      elevation: 6,
+                      borderRadius: BorderRadius.circular(12),
+                      child: child,
+                    ),
+                    itemBuilder: (ctx, i) =>
+                        _blockTile(ctx, i, key: ValueKey('block_$i')),
+                  ),
           ),
 
           const Divider(height: 1),
@@ -128,9 +131,9 @@ class _WriterScreenState extends State<WriterScreen> {
               runSpacing: 6,
               children: [
                 _kindChip('Narration', WriterKind.narration),
-                _kindChip('Dialog',    WriterKind.dialog),
+                _kindChip('Dialog', WriterKind.dialog),
                 _kindChip('Monologue', WriterKind.monologue),
-                _kindChip('Emotion',   WriterKind.emotion),
+                _kindChip('Emotion', WriterKind.emotion),
               ],
             ),
           ),
@@ -191,13 +194,14 @@ class _WriterScreenState extends State<WriterScreen> {
   Widget _contextOptionsBar() {
     // Common: alignment (pos) tri-toggle (maps color automatically)
     Widget alignRow = InputDecorator(
-      decoration: const InputDecoration(border: InputBorder.none, labelText: 'Align (maps color)'),
+      decoration: const InputDecoration(
+          border: InputBorder.none, labelText: 'Align (maps color)'),
       child: Wrap(
         spacing: 8,
         crossAxisAlignment: WrapCrossAlignment.center,
         children: [
           _posChip('Left  (Blue)', _Pos.left),
-          _posChip('Mid (Green)',  _Pos.mid),
+          _posChip('Mid (Green)', _Pos.mid),
           _posChip('Right (Pink)', _Pos.right),
           // color hint
           _colorTag(_colorFromPos),
@@ -227,20 +231,34 @@ class _WriterScreenState extends State<WriterScreen> {
 
     // Emotion: show emoji palette + Align
     if (_kind == WriterKind.emotion) {
-      const emojis = ['🙂','😂','😮','😡','😭','🥰','😱','🤔','😴','😏'];
+      const emojis = [
+        '🙂',
+        '😂',
+        '😮',
+        '😡',
+        '😭',
+        '🥰',
+        '😱',
+        '🤔',
+        '😴',
+        '😏'
+      ];
       return Padding(
         padding: const EdgeInsets.fromLTRB(16, 2, 16, 8),
         child: Column(
           children: [
             InputDecorator(
-              decoration: const InputDecoration(border: InputBorder.none, labelText: 'Emotion'),
+              decoration: const InputDecoration(
+                  border: InputBorder.none, labelText: 'Emotion'),
               child: Wrap(
                 spacing: 6,
-                children: emojis.map((e) => ChoiceChip(
-                  label: Text(e, style: const TextStyle(fontSize: 18)),
-                  selected: _emoji == e,
-                  onSelected: (_) => setState(() => _emoji = e),
-                )).toList(),
+                children: emojis
+                    .map((e) => ChoiceChip(
+                          label: Text(e, style: const TextStyle(fontSize: 18)),
+                          selected: _emoji == e,
+                          onSelected: (_) => setState(() => _emoji = e),
+                        ))
+                    .toList(),
               ),
             ),
             const SizedBox(height: 4),
@@ -275,14 +293,15 @@ class _WriterScreenState extends State<WriterScreen> {
 
   Widget _colorTag(String code) {
     final c = switch (code) {
-      'pink'  => Colors.pink.shade100,
+      'pink' => Colors.pink.shade100,
       'green' => Colors.green.shade100,
-      _       => Colors.blue.shade100,
+      _ => Colors.blue.shade100,
     };
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: c, borderRadius: BorderRadius.circular(8),
+        color: c,
+        borderRadius: BorderRadius.circular(8),
         border: Border.all(color: Colors.black12),
       ),
       child: Text('Color: $code'),
@@ -294,21 +313,23 @@ class _WriterScreenState extends State<WriterScreen> {
     if (t.isEmpty) return _snack('Type something first');
 
     // map WriterKind → model BlockType (dialog only uses dialog, rest = narration)
-    final bt = (_kind == WriterKind.dialog) ? BlockType.dialog : BlockType.narration;
+    final bt =
+        (_kind == WriterKind.dialog) ? BlockType.dialog : BlockType.narration;
 
     // inline formatting for monologue/emotion (simple)
     final text = switch (_kind) {
       WriterKind.monologue => '『$t』',
-      WriterKind.emotion   => '$_emoji $t',
-      _                    => t,
+      WriterKind.emotion => '$_emoji $t',
+      _ => t,
     };
 
     final ep = EpisodeBlock(
       type: bt,
       text: text,
-      speaker: (_kind == WriterKind.dialog && _speakerCtl.text.trim().isNotEmpty)
-          ? _speakerCtl.text.trim()
-          : null,
+      speaker:
+          (_kind == WriterKind.dialog && _speakerCtl.text.trim().isNotEmpty)
+              ? _speakerCtl.text.trim()
+              : null,
     );
 
     setState(() {
@@ -318,9 +339,10 @@ class _WriterScreenState extends State<WriterScreen> {
         pos: _pos,
         colorCode: _colorFromPos,
         emoji: _emoji,
-        speaker: (_kind == WriterKind.dialog && _speakerCtl.text.trim().isNotEmpty)
-            ? _speakerCtl.text.trim()
-            : null,
+        speaker:
+            (_kind == WriterKind.dialog && _speakerCtl.text.trim().isNotEmpty)
+                ? _speakerCtl.text.trim()
+                : null,
       ));
       _textCtl.clear();
       _speakerCtl.clear();
@@ -332,19 +354,20 @@ class _WriterScreenState extends State<WriterScreen> {
     final b = _blocks[i];
     final m = _metas[i];
     final align = switch (m.pos) {
-      _Pos.left  => MainAxisAlignment.start,
-      _Pos.mid   => MainAxisAlignment.center,
+      _Pos.left => MainAxisAlignment.start,
+      _Pos.mid => MainAxisAlignment.center,
       _Pos.right => MainAxisAlignment.end,
     };
     final isDialog = m.kind == WriterKind.dialog;
     final color = switch (m.colorCode) {
-      'pink'  => Colors.pink.shade100,
+      'pink' => Colors.pink.shade100,
       'green' => Colors.green.shade100,
-      _       => Colors.blue.shade100,
+      _ => Colors.blue.shade100,
     };
 
     final bubble = Container(
-      constraints: BoxConstraints(maxWidth: MediaQuery.sizeOf(ctx).width * (isDialog ? 0.85 : 0.95)),
+      constraints: BoxConstraints(
+          maxWidth: MediaQuery.sizeOf(ctx).width * (isDialog ? 0.85 : 0.95)),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: isDialog ? color : Colors.white,
@@ -355,7 +378,9 @@ class _WriterScreenState extends State<WriterScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (isDialog && (b.speaker ?? '').isNotEmpty)
-            Text('${b.speaker}:', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.black54)),
+            Text('${b.speaker}:',
+                style: const TextStyle(
+                    fontWeight: FontWeight.bold, color: Colors.black54)),
           Text(b.text),
         ],
       ),
@@ -412,14 +437,16 @@ class _WriterScreenState extends State<WriterScreen> {
                     title: const Text('Edit Block'),
                     content: TextField(controller: c, maxLines: 6),
                     actions: [
-                      TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+                      TextButton(
+                          onPressed: () => Navigator.pop(ctx),
+                          child: const Text('Cancel')),
                       FilledButton(
                         onPressed: () {
                           setState(() {
                             _blocks[index] = EpisodeBlock(
                               type: b.type,
-                              text: c.text,        // <-- update text (bug fix)
-                              speaker: b.speaker,  // keep same
+                              text: c.text, // <-- update text (bug fix)
+                              speaker: b.speaker, // keep same
                             );
                           });
                           Navigator.pop(ctx);

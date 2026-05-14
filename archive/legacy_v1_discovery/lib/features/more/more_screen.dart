@@ -11,4 +11,3 @@ class MoreScreen extends StatelessWidget {
     return const SettingsScreen();
   }
 }
-

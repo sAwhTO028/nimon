@@ -69,15 +69,15 @@ class OneShortState {
   }
 
   bool get hasRepoPrompt => selectedPromptId != null;
-  
-  bool get hasCustomPrompt => 
-      (customPromptTitle?.isNotEmpty ?? false) && 
+
+  bool get hasCustomPrompt =>
+      (customPromptTitle?.isNotEmpty ?? false) &&
       (customPromptContext?.isNotEmpty ?? false);
 
-  bool get isComplete => 
-      selectedLevel != null && 
-      selectedCategory != null && 
-      (hasRepoPrompt || hasCustomPrompt) && 
+  bool get isComplete =>
+      selectedLevel != null &&
+      selectedCategory != null &&
+      (hasRepoPrompt || hasCustomPrompt) &&
       title.isNotEmpty &&
       title.length <= 60;
 }
@@ -92,7 +92,6 @@ extension OneShortStateSteps on OneShortState {
     return s;
   }
 }
-
 
 class _AddMonoSheet extends StatefulWidget {
   const _AddMonoSheet();
@@ -121,11 +120,11 @@ class _AddMonoSheetState extends State<_AddMonoSheet> {
     'Sci-Fi',
     'Mystery'
   ];
-  
+
   // Repository-driven prompt data
   List<Prompt> _matchingPrompts = const [];
   int _visibleLimit = 5;
-  
+
   // Memoize prompt data to avoid unnecessary rebuilds
   List<Prompt>? _cachedPrompts;
   String? _cachedLevel;
@@ -134,11 +133,16 @@ class _AddMonoSheetState extends State<_AddMonoSheet> {
 
   JlptLevel? _toJlptLevel(String? s) {
     switch (s) {
-      case 'N5': return JlptLevel.n5;
-      case 'N4': return JlptLevel.n4;
-      case 'N3': return JlptLevel.n3;
-      case 'N2': return JlptLevel.n2;
-      case 'N1': return JlptLevel.n1;
+      case 'N5':
+        return JlptLevel.n5;
+      case 'N4':
+        return JlptLevel.n4;
+      case 'N3':
+        return JlptLevel.n3;
+      case 'N2':
+        return JlptLevel.n2;
+      case 'N1':
+        return JlptLevel.n1;
     }
     return null;
   }
@@ -146,7 +150,7 @@ class _AddMonoSheetState extends State<_AddMonoSheet> {
   void _refreshPrompts() {
     final level = _toJlptLevel(_oneShortState.selectedLevel);
     final category = _oneShortState.selectedCategory;
-    
+
     // Memoization: only re-query if level, category, or limit changed
     if (level != null && category != null) {
       if (_cachedLevel != _oneShortState.selectedLevel ||
@@ -173,7 +177,6 @@ class _AddMonoSheetState extends State<_AddMonoSheet> {
     }
   }
 
-
   @override
   void dispose() {
     _titleController.dispose();
@@ -189,7 +192,7 @@ class _AddMonoSheetState extends State<_AddMonoSheet> {
   void _setLevel(String level) {
     setState(() {
       _oneShortState = _oneShortState.copyWith(
-      selectedLevel: level,
+        selectedLevel: level,
         selectedCategory: null,
         selectedPromptId: null,
       );
@@ -200,7 +203,8 @@ class _AddMonoSheetState extends State<_AddMonoSheet> {
 
   void _setCategory(String category) {
     // Toggle: if same category is selected, deselect it
-    final newCategory = _oneShortState.selectedCategory == category ? null : category;
+    final newCategory =
+        _oneShortState.selectedCategory == category ? null : category;
     setState(() {
       _oneShortState = _oneShortState.copyWith(
         selectedCategory: newCategory,
@@ -231,7 +235,7 @@ class _AddMonoSheetState extends State<_AddMonoSheet> {
     final titleCtrl = TextEditingController();
     final contextCtrl = TextEditingController();
     final scrollController = ScrollController();
-    
+
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -291,18 +295,19 @@ class _AddMonoSheetState extends State<_AddMonoSheet> {
             child: GestureDetector(
               behavior: HitTestBehavior.translucent,
               onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: kScreenHorizontalPadding),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                // Preview carousel matching Home card dimensions
-                SizedBox(
-                  height: 220, // Home card height + outer padding
-                  child: Center(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: kScreenHorizontalPadding),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    // Preview carousel matching Home card dimensions
+                    SizedBox(
+                      height: 220, // Home card height + outer padding
+                      child: Center(
                         child: AnimatedSwitcher(
                           duration: const Duration(milliseconds: 180),
-                    child: OneShortPaperCard(
+                          child: OneShortPaperCard(
                             key: ValueKey(
                               '${_oneShortState.selectedLevel}_'
                               '${_oneShortState.selectedCategory}_'
@@ -314,38 +319,74 @@ class _AddMonoSheetState extends State<_AddMonoSheet> {
                             data: OneShortPaper(
                               jlpt: _oneShortState.selectedLevel ?? '',
                               title: _oneShortState.title,
-                              theme: _oneShortState.customPromptTitle?.trim().isNotEmpty == true
+                              theme: _oneShortState.customPromptTitle
+                                          ?.trim()
+                                          .isNotEmpty ==
+                                      true
                                   ? _oneShortState.customPromptTitle!.trim()
-                                  : (_oneShortState.selectedPromptId != null && _matchingPrompts.isNotEmpty
-                                      ? (_matchingPrompts.firstWhere((p) => p.id == _oneShortState.selectedPromptId, orElse: () => _matchingPrompts.first).title)
+                                  : (_oneShortState.selectedPromptId != null &&
+                                          _matchingPrompts.isNotEmpty
+                                      ? (_matchingPrompts
+                                          .firstWhere(
+                                              (p) =>
+                                                  p.id ==
+                                                  _oneShortState
+                                                      .selectedPromptId,
+                                              orElse: () =>
+                                                  _matchingPrompts.first)
+                                          .title)
                                       : ''),
-                              context: _oneShortState.customPromptContext?.trim().isNotEmpty == true
+                              context: _oneShortState.customPromptContext
+                                          ?.trim()
+                                          .isNotEmpty ==
+                                      true
                                   ? _oneShortState.customPromptContext!.trim()
-                                  : (_oneShortState.selectedPromptId != null && _matchingPrompts.isNotEmpty
-                                      ? (_matchingPrompts.firstWhere((p) => p.id == _oneShortState.selectedPromptId, orElse: () => _matchingPrompts.first).context)
+                                  : (_oneShortState.selectedPromptId != null &&
+                                          _matchingPrompts.isNotEmpty
+                                      ? (_matchingPrompts
+                                          .firstWhere(
+                                              (p) =>
+                                                  p.id ==
+                                                  _oneShortState
+                                                      .selectedPromptId,
+                                              orElse: () =>
+                                                  _matchingPrompts.first)
+                                          .context)
                                       : ''),
                               category: _oneShortState.selectedCategory ?? '',
-                              durationText: _oneShortState.customPromptDuration?.trim().isNotEmpty == true
+                              durationText: _oneShortState.customPromptDuration
+                                          ?.trim()
+                                          .isNotEmpty ==
+                                      true
                                   ? _oneShortState.customPromptDuration!.trim()
-                                  : (_oneShortState.selectedPromptId != null && _matchingPrompts.isNotEmpty
-                                      ? (_matchingPrompts.firstWhere((p) => p.id == _oneShortState.selectedPromptId, orElse: () => _matchingPrompts.first).duration)
+                                  : (_oneShortState.selectedPromptId != null &&
+                                          _matchingPrompts.isNotEmpty
+                                      ? (_matchingPrompts
+                                          .firstWhere(
+                                              (p) =>
+                                                  p.id ==
+                                                  _oneShortState
+                                                      .selectedPromptId,
+                                              orElse: () =>
+                                                  _matchingPrompts.first)
+                                          .duration)
                                       : ''),
                             ),
                           ),
+                        ),
+                      ),
                     ),
-                  ),
-                ),
-                const SizedBox(height: 12), // Reduced spacing
-                  _buildStepIndicator(),
-                  const SizedBox(height: 24),
-                  _buildLevelSelector(),
-                  const SizedBox(height: 16),
-                  _buildCategorySelector(),
-                  const SizedBox(height: 8),
-                  _buildPromptSelector(),
-                  const SizedBox(height: 24),
-                  _buildTitleInput(),
-                ],
+                    const SizedBox(height: 12), // Reduced spacing
+                    _buildStepIndicator(),
+                    const SizedBox(height: 24),
+                    _buildLevelSelector(),
+                    const SizedBox(height: 16),
+                    _buildCategorySelector(),
+                    const SizedBox(height: 8),
+                    _buildPromptSelector(),
+                    const SizedBox(height: 24),
+                    _buildTitleInput(),
+                  ],
                 ),
               ),
             ),
@@ -364,7 +405,7 @@ class _AddMonoSheetState extends State<_AddMonoSheet> {
           Container(
             width: 40,
             height: 4,
-      decoration: BoxDecoration(
+            decoration: BoxDecoration(
               color: Colors.grey.shade400,
               borderRadius: BorderRadius.circular(2),
             ),
@@ -373,9 +414,9 @@ class _AddMonoSheetState extends State<_AddMonoSheet> {
           Row(
             children: [
               Expanded(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
                     Text(
                       _getTitle(),
                       style: const TextStyle(
@@ -387,30 +428,31 @@ class _AddMonoSheetState extends State<_AddMonoSheet> {
                     const SizedBox(height: 4),
                     const Text(
                       'Please select you want to create section',
-                    style: TextStyle(
+                      style: TextStyle(
                         fontSize: 14,
                         color: Colors.grey,
+                      ),
                     ),
+                  ],
                 ),
-              ],
-            ),
-          ),
+              ),
               const SizedBox(width: 16),
               SizedBox(
                 height: 40,
                 child: FilledButton(
                   onPressed: _oneShortState.isComplete ? _handleCreate : null,
                   style: FilledButton.styleFrom(
-                    backgroundColor: _oneShortState.isComplete 
-                        ? Colors.blue 
+                    backgroundColor: _oneShortState.isComplete
+                        ? Colors.blue
                         : Colors.grey.shade300,
-                    foregroundColor: _oneShortState.isComplete 
-                        ? Colors.white 
+                    foregroundColor: _oneShortState.isComplete
+                        ? Colors.white
                         : Colors.grey.shade600,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(8),
                     ),
-                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 24, vertical: 12),
                   ),
                   child: const Text(
                     'CREATE',
@@ -419,15 +461,15 @@ class _AddMonoSheetState extends State<_AddMonoSheet> {
                 ),
               ),
             ],
-            ),
-          ],
-        ),
+          ),
+        ],
+      ),
     );
   }
 
   Widget _buildStepIndicator() {
     final stepsCompleted = _oneShortState.stepsCompleted;
-    
+
     // Hide if no steps completed
     if (stepsCompleted == 0) {
       return const SizedBox.shrink();
@@ -442,11 +484,11 @@ class _AddMonoSheetState extends State<_AddMonoSheet> {
         final isCompleted = stepNumber < stepsCompleted;
 
         return Row(
-      children: [
-        Container(
+          children: [
+            Container(
               width: isActive ? 8 : 6,
               height: 6,
-          decoration: BoxDecoration(
+              decoration: BoxDecoration(
                 color: isActive || isCompleted
                     ? Colors.blue
                     : Colors.grey.shade300,
@@ -484,9 +526,9 @@ class _AddMonoSheetState extends State<_AddMonoSheet> {
         ],
       ),
       child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
             'Select your level',
             style: TextStyle(
               fontSize: 18,
@@ -522,7 +564,8 @@ class _AddMonoSheetState extends State<_AddMonoSheet> {
                   borderSide: const BorderSide(color: Colors.blue, width: 2),
                 ),
                 // Material Design 3: 56dp height with perfect vertical centering
-                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
                 isDense: true,
                 // Ensure consistent baseline alignment
                 alignLabelWithHint: false,
@@ -558,7 +601,7 @@ class _AddMonoSheetState extends State<_AddMonoSheet> {
               }).toList(),
             ),
           ),
-      ],
+        ],
       ),
     );
   }
@@ -579,9 +622,9 @@ class _AddMonoSheetState extends State<_AddMonoSheet> {
         ],
       ),
       child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
             'Categories Select',
             style: TextStyle(
               fontSize: 18,
@@ -590,19 +633,20 @@ class _AddMonoSheetState extends State<_AddMonoSheet> {
             ),
           ),
           const SizedBox(height: 12),
-        SizedBox(
-          height: 40,
+          SizedBox(
+            height: 40,
             child: ListView.separated(
-            scrollDirection: Axis.horizontal,
+              scrollDirection: Axis.horizontal,
               itemCount: _categories.length,
               separatorBuilder: (context, index) => const SizedBox(width: 8),
-            itemBuilder: (context, index) {
+              itemBuilder: (context, index) {
                 final category = _categories[index];
                 final isSelected = _oneShortState.selectedCategory == category;
                 return GestureDetector(
                   onTap: () => _setCategory(category),
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                     decoration: BoxDecoration(
                       color: isSelected ? Colors.blue : Colors.grey.shade100,
                       borderRadius: BorderRadius.circular(10),
@@ -610,27 +654,26 @@ class _AddMonoSheetState extends State<_AddMonoSheet> {
                         color: isSelected ? Colors.blue : Colors.grey.shade300,
                       ),
                     ),
-              child: Text(
+                    child: Text(
                       category,
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
                         color: isSelected ? Colors.white : Colors.grey.shade700,
-                ),
-              ),
-            ),
+                      ),
+                    ),
+                  ),
                 );
               },
             ),
           ),
         ],
-        ),
-      );
-    }
+      ),
+    );
+  }
 
   Widget _buildPromptSelector() {
-    final hasSelections =
-        _oneShortState.selectedLevel != null &&
+    final hasSelections = _oneShortState.selectedLevel != null &&
         _oneShortState.selectedCategory != null;
 
     if (!hasSelections) {
@@ -753,7 +796,8 @@ class _AddMonoSheetState extends State<_AddMonoSheet> {
               borderRadius: BorderRadius.circular(8),
               borderSide: const BorderSide(color: Colors.blue),
             ),
-            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           ),
         ),
       ],
@@ -763,7 +807,6 @@ class _AddMonoSheetState extends State<_AddMonoSheet> {
   String _getTitle() {
     return 'Add One-Short';
   }
-
 }
 
 /// Custom Prompt Sheet with anchored overlay for Duration selector
@@ -797,8 +840,7 @@ class _CustomPromptSheetState extends State<_CustomPromptSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final bool canAdd = 
-        widget.titleCtrl.text.trim().length >= 3 &&
+    final bool canAdd = widget.titleCtrl.text.trim().length >= 3 &&
         widget.titleCtrl.text.trim().length <= 60 &&
         widget.contextCtrl.text.trim().length >= 10;
 
@@ -842,10 +884,12 @@ class _CustomPromptSheetState extends State<_CustomPromptSheet> {
                     onTap: () {
                       // Close keyboard before expanding to avoid layout jumps
                       FocusScope.of(context).unfocus();
-                      _showDurationAccordion.value = !_showDurationAccordion.value;
+                      _showDurationAccordion.value =
+                          !_showDurationAccordion.value;
                     },
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 14),
                       decoration: BoxDecoration(
                         color: Theme.of(context).cardColor,
                         borderRadius: BorderRadius.circular(12),
@@ -867,7 +911,8 @@ class _CustomPromptSheetState extends State<_CustomPromptSheet> {
                             builder: (_, open, __) => AnimatedRotation(
                               duration: const Duration(milliseconds: 180),
                               turns: open ? 0.5 : 0.0,
-                              child: const Icon(Icons.keyboard_arrow_down_rounded),
+                              child:
+                                  const Icon(Icons.keyboard_arrow_down_rounded),
                             ),
                           ),
                         ],
@@ -881,7 +926,9 @@ class _CustomPromptSheetState extends State<_CustomPromptSheet> {
                     builder: (context, open, _) {
                       return AnimatedCrossFade(
                         duration: const Duration(milliseconds: 180),
-                        crossFadeState: open ? CrossFadeState.showFirst : CrossFadeState.showSecond,
+                        crossFadeState: open
+                            ? CrossFadeState.showFirst
+                            : CrossFadeState.showSecond,
                         firstChild: _DurationAccordionPanel(
                           selected: _duration,
                           onSelect: (v) {
@@ -911,64 +958,64 @@ class _CustomPromptSheetState extends State<_CustomPromptSheet> {
                   ],
                 ],
               ),
-            const SizedBox(height: 14),
-            // 2) Title
-            TextField(
-              controller: widget.titleCtrl,
-              maxLength: 60,
-              textInputAction: TextInputAction.next,
-              onChanged: (_) => setState(() {}), // Rebuild to update button
-              decoration: const InputDecoration(
-                labelText: 'Title (3–60 chars)',
-                border: OutlineInputBorder(),
-                counterText: '',
+              const SizedBox(height: 14),
+              // 2) Title
+              TextField(
+                controller: widget.titleCtrl,
+                maxLength: 60,
+                textInputAction: TextInputAction.next,
+                onChanged: (_) => setState(() {}), // Rebuild to update button
+                decoration: const InputDecoration(
+                  labelText: 'Title (3–60 chars)',
+                  border: OutlineInputBorder(),
+                  counterText: '',
+                ),
               ),
-            ),
-            const SizedBox(height: 12),
-            // 3) Description
-            TextField(
-              controller: widget.contextCtrl,
-              maxLength: 300,
-              minLines: 3,
-              maxLines: 6,
-              onChanged: (_) => setState(() {}), // Rebuild to update button
-              decoration: const InputDecoration(
-                labelText: 'Description / Context (min 10 chars)',
-                border: OutlineInputBorder(),
-                counterText: '',
+              const SizedBox(height: 12),
+              // 3) Description
+              TextField(
+                controller: widget.contextCtrl,
+                maxLength: 300,
+                minLines: 3,
+                maxLines: 6,
+                onChanged: (_) => setState(() {}), // Rebuild to update button
+                decoration: const InputDecoration(
+                  labelText: 'Description / Context (min 10 chars)',
+                  border: OutlineInputBorder(),
+                  counterText: '',
+                ),
               ),
-            ),
-            const SizedBox(height: 24),
-            Row(
-              children: [
-                 Expanded(
-                   child: OutlinedButton(
-                     onPressed: () {
-                       Navigator.of(context).pop();
-                     },
-                     child: const Text('Cancel'),
-                   ),
-                 ),
-                const SizedBox(width: 12),
-                 Expanded(
-                   child: FilledButton(
-                     onPressed: canAdd
-                         ? () {
-                             widget.onSave(durationLabel(_duration));
-                           }
-                         : null,
-                     style: FilledButton.styleFrom(
-                       backgroundColor: canAdd ? null : Colors.grey.shade300,
-                       foregroundColor: canAdd ? null : Colors.grey.shade600,
-                     ),
-                     child: const Text('Add'),
-                   ),
-                 ),
-               ],
-             ),
-           ],
-         ),
-       ),
+              const SizedBox(height: 24),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () {
+                        Navigator.of(context).pop();
+                      },
+                      child: const Text('Cancel'),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: FilledButton(
+                      onPressed: canAdd
+                          ? () {
+                              widget.onSave(durationLabel(_duration));
+                            }
+                          : null,
+                      style: FilledButton.styleFrom(
+                        backgroundColor: canAdd ? null : Colors.grey.shade300,
+                        foregroundColor: canAdd ? null : Colors.grey.shade600,
+                      ),
+                      child: const Text('Add'),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -993,7 +1040,8 @@ class _DurationAccordionPanel extends StatelessWidget {
     ];
 
     return AnimatedAccordion(
-      headerCustomWidget: const SizedBox.shrink(), // we trigger from the pill above
+      headerCustomWidget:
+          const SizedBox.shrink(), // we trigger from the pill above
       contentBackgroundColor: Theme.of(context).cardColor,
       contentPadding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
       contentWidgets: options.map((opt) {
@@ -1011,7 +1059,9 @@ class _DurationAccordionPanel extends StatelessWidget {
             child: Row(
               children: [
                 Icon(
-                  isSelected ? Icons.radio_button_checked : Icons.radio_button_off,
+                  isSelected
+                      ? Icons.radio_button_checked
+                      : Icons.radio_button_off,
                   size: 20,
                   color: isSelected
                       ? Theme.of(context).colorScheme.primary
@@ -1042,7 +1092,3 @@ void showAddMonoSheet(BuildContext context) {
     builder: (context) => const _AddMonoSheet(),
   );
 }
-
-
-
-

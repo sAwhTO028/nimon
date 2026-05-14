@@ -48,6 +48,15 @@ abstract interface class StoryDraftRepository {
 
   Future<void> deleteDraft(String draftId);
 
+  /// Drops unpublished edits for a **published-mono edit staging** draft only.
+  ///
+  /// Calls [deleteDraft] on the story-draft resource only (remote:
+  /// `DELETE /v1/story-drafts/:id`). Never touches published-mono trash/delete.
+  ///
+  /// Returns [false] when [draftId] is empty, the draft is missing, or the row
+  /// is not linked published-edit staging (e.g. a plain local draft).
+  Future<bool> discardPublishedEditStaging(String draftId);
+
   /// Clears the **active** draft when no id is passed to storage — matches
   /// [StoryCreatorDraftStorage.clear] with no [draftId] (does not clear resume meta).
   Future<void> clearActiveDraft();

@@ -5,7 +5,6 @@ import '../../../models/episode_meta.dart';
 import '../../../models/story.dart';
 import '../../../data/episode_mock_data.dart'; // Canonical mock data source
 import '../../features/learn/learn_hub_screen.dart';
-import '../../features/reader/reader_screen.dart';
 import '../../features/reader/episode_reader_screen.dart';
 
 /// Global Episode Bottom Sheet - Reusable across the entire app

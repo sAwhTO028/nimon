@@ -9,6 +9,8 @@ import 'package:nimon/features/profile/data/remote_creator_collections_repositor
 import 'package:nimon/features/profile/presentation/add_to_collection_sheet.dart';
 import 'package:nimon/features/profile/presentation/providers/my_creator_collections_notifier.dart';
 
+import '../../support/auth_session_test_overrides.dart';
+
 void main() {
   testWidgets('Add to collection sheet loads collections from GET',
       (tester) async {
@@ -77,6 +79,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          authenticatedAuthSessionOverride,
           remoteCreatorCollectionsRepositoryProvider.overrideWithValue(repo),
         ],
         child: MaterialApp(
@@ -166,6 +169,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          authenticatedAuthSessionOverride,
           remoteCreatorCollectionsRepositoryProvider.overrideWithValue(repo),
         ],
         child: MaterialApp(

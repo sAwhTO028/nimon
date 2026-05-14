@@ -85,6 +85,11 @@ async function bootstrap() {
       forbidNonWhitelisted: true,
     }),
   );
-  await app.listen(process.env.PORT ?? 3000);
+  const port = Number(process.env.PORT ?? 3000);
+  await app.listen(port);
+  // M17C-5 TEMP: prove which Node process / build is actually listening (remove after diagnosis).
+  console.log(
+    `[M17C-5] nimon-backend bootstrap ok startedAt=${new Date().toISOString()} port=${port} pid=${process.pid} node=${process.version}`,
+  );
 }
 bootstrap();

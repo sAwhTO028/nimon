@@ -4,7 +4,9 @@ import 'package:flutter/foundation.dart' show kDebugMode, debugPrint;
 import 'package:http/http.dart' as http;
 import 'package:nimon/core/pagination/page_request.dart';
 import 'package:nimon/core/pagination/page_result.dart';
+import 'package:nimon/core/validation/quota_exceeded_from_json.dart';
 import 'package:nimon/features/auth/auth_strict_unauthorized.dart';
+import 'package:nimon/features/auth/authenticated_http.dart';
 import 'package:nimon/features/mono/mono_feed_models.dart';
 
 typedef MonoSocialAuthHeaderBuilder = Future<Map<String, String>> Function();
@@ -14,13 +16,16 @@ class RemoteMonoSocialRepository {
     required String apiBaseUrl,
     required MonoSocialAuthHeaderBuilder authHeaderBuilder,
     http.Client? client,
+    NimonSendWithAuth401Recovery? sendWithAuth401Recovery,
   })  : _apiBaseUrl = apiBaseUrl.replaceAll(RegExp(r'/+$'), ''),
         _authHeaderBuilder = authHeaderBuilder,
-        _client = client ?? http.Client();
+        _client = client ?? http.Client(),
+        _sendWithAuth401 = sendWithAuth401Recovery;
 
   final String _apiBaseUrl;
   final MonoSocialAuthHeaderBuilder _authHeaderBuilder;
   final http.Client _client;
+  final NimonSendWithAuth401Recovery? _sendWithAuth401;
 
   Uri _u(String path) => Uri.parse('$_apiBaseUrl$path');
 
@@ -31,6 +36,18 @@ class RemoteMonoSocialRepository {
     }
     return h;
   }
+
+  Future<http.Response> _nimonAuthSend(
+    Uri uri,
+    Future<Map<String, String>> Function() mergeHeaders,
+    Future<http.Response> Function(Map<String, String> headers) send,
+  ) =>
+      nimonSendWithOptional401Recovery(
+        _sendWithAuth401,
+        requestUri: uri,
+        mergeHeaders: mergeHeaders,
+        send: send,
+      );
 
   Map<String, Object?> _jsonObjectFromResponse(http.Response r) {
     final body = r.body.trim();
@@ -69,7 +86,9 @@ class RemoteMonoSocialRepository {
 
   void _throwIfNotOk(http.Response r) {
     if (r.statusCode >= 200 && r.statusCode < 300) return;
-    notifyIfStrictUnauthorized401(r);
+    if (r.statusCode == 401) notifyIfStrictUnauthorized401(r);
+    final quota = tryParseQuotaExceededFromHttpBody(r.body);
+    if (quota != null) throw quota;
     if (r.statusCode == 401) {
       throw StateError('Sign in required.');
     }
@@ -94,12 +113,13 @@ class RemoteMonoSocialRepository {
     if (kDebugMode) {
       debugPrint('RemoteMonoSocialRepository.fetchBookmarkedPage: GET $uri');
     }
-    final resp = await _client.get(
+    final resp = await _nimonAuthSend(
       uri,
-      headers: {
+      () async => <String, String>{
         ...await _authHeadersOrThrow(),
         'Accept': 'application/json',
       },
+      (h) => _client.get(uri, headers: h),
     );
     _throwIfNotOk(resp);
     final m = _jsonObjectFromResponse(resp);
@@ -161,12 +181,13 @@ class RemoteMonoSocialRepository {
     if (kDebugMode) {
       debugPrint('RemoteMonoSocialRepository.bookmarkMono: POST $uri');
     }
-    final resp = await _client.post(
+    final resp = await _nimonAuthSend(
       uri,
-      headers: {
+      () async => <String, String>{
         ...await _authHeadersOrThrow(),
         'Accept': 'application/json',
       },
+      (h) => _client.post(uri, headers: h),
     );
     _throwIfNotOk(resp);
     final m = _jsonObjectFromResponse(resp);
@@ -182,12 +203,13 @@ class RemoteMonoSocialRepository {
     if (kDebugMode) {
       debugPrint('RemoteMonoSocialRepository.unbookmarkMono: DELETE $uri');
     }
-    final resp = await _client.delete(
+    final resp = await _nimonAuthSend(
       uri,
-      headers: {
+      () async => <String, String>{
         ...await _authHeadersOrThrow(),
         'Accept': 'application/json',
       },
+      (h) => _client.delete(uri, headers: h),
     );
     _throwIfNotOk(resp);
     final m = _jsonObjectFromResponse(resp);
@@ -203,12 +225,13 @@ class RemoteMonoSocialRepository {
     if (kDebugMode) {
       debugPrint('RemoteMonoSocialRepository.reactMono: POST $uri');
     }
-    final resp = await _client.post(
+    final resp = await _nimonAuthSend(
       uri,
-      headers: {
+      () async => <String, String>{
         ...await _authHeadersOrThrow(),
         'Accept': 'application/json',
       },
+      (h) => _client.post(uri, headers: h),
     );
     _throwIfNotOk(resp);
     final m = _jsonObjectFromResponse(resp);
@@ -224,12 +247,13 @@ class RemoteMonoSocialRepository {
     if (kDebugMode) {
       debugPrint('RemoteMonoSocialRepository.unreactMono: DELETE $uri');
     }
-    final resp = await _client.delete(
+    final resp = await _nimonAuthSend(
       uri,
-      headers: {
+      () async => <String, String>{
         ...await _authHeadersOrThrow(),
         'Accept': 'application/json',
       },
+      (h) => _client.delete(uri, headers: h),
     );
     _throwIfNotOk(resp);
     final m = _jsonObjectFromResponse(resp);

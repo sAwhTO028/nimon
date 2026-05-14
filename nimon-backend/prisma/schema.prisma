@@ -29,17 +29,46 @@ model User {
   /// bcrypt hash; null for rows created before auth or dev-only users without password login
   passwordHash String?
 
-  storyDrafts    StoryDraft[]
-  publishedMonos PublishedMono[]
-  monoBookmarks  MonoBookmark[]
-  monoReactions  MonoReaction[]
-  following      UserFollow[] @relation("followingEdges")
-  followers      UserFollow[] @relation("followerEdges")
-  profile        UserProfile?
-  refreshTokens  RefreshToken[]
+  storyDrafts            StoryDraft[]
+  publishedMonos         PublishedMono[]
+  monoBookmarks          MonoBookmark[]
+  monoReactions          MonoReaction[]
+  following              UserFollow[]            @relation("followingEdges")
+  followers              UserFollow[]            @relation("followerEdges")
+  profile                UserProfile?
+  preferences            UserPreference?
+  refreshTokens          RefreshToken[]
   creatorMonoCollections CreatorMonoCollection[]
 
   @@map("users")
+}
+
+model UserPreference {
+  userId String @id @db.Uuid
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// UI language preference. Null means "system default".
+  appLocale String?
+
+  /// Community / content region locale. Null means backend default.
+  contentLocale String?
+
+  /// Target language being learned. Null means backend default.
+  learningLanguage String?
+
+  /// Theme mode. Null means "system default".
+  themeMode String?
+
+  /// Reader text size: small | standard | large. Null means standard.
+  readingTextSize String?
+
+  /// When false, hide per-sentence explanation lines in the mono reader. Null means true.
+  showExplanations Boolean?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("user_preferences")
 }
 
 model UserFollow {
@@ -61,11 +90,11 @@ model UserProfile {
   userId String @id @db.Uuid
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  displayName String?
-  handle      String? @unique
-  avatarUrl   String?
+  displayName   String?
+  handle        String? @unique
+  avatarUrl     String?
   coverImageUrl String?
-  bio         String?
+  bio           String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -112,11 +141,11 @@ model StoryDraft {
   fullLearnPublishedAt   DateTime?
 
   // "basics" in the contract (V1 simple; avoid over-normalizing)
-  title            String @default("")
-  category         String @default("")
-  level            String @default("")
-  description      String @default("")
-  promptSourceNote String @default("")
+  title                 String  @default("")
+  category              String  @default("")
+  level                 String  @default("")
+  description           String  @default("")
+  promptSourceNote      String  @default("")
   targetDurationBandKey String?
   coverImageUrl         String?
 
@@ -139,11 +168,11 @@ model StoryDraft {
 }
 
 model DraftSentence {
-  id        String   @id @default(uuid()) @db.Uuid
-  draftId   String   @db.Uuid
+  id        String     @id @default(uuid()) @db.Uuid
+  draftId   String     @db.Uuid
   draft     StoryDraft @relation(fields: [draftId], references: [id], onDelete: Cascade)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
 
   order Int
 
@@ -156,13 +185,13 @@ model DraftSentence {
 }
 
 model DraftVocabEntry {
-  id        String   @id @default(uuid()) @db.Uuid
-  draftId   String   @db.Uuid
+  id        String     @id @default(uuid()) @db.Uuid
+  draftId   String     @db.Uuid
   draft     StoryDraft @relation(fields: [draftId], references: [id], onDelete: Cascade)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
 
-  order Int
+  order   Int
   content Json
 
   @@unique([draftId, order])
@@ -171,13 +200,13 @@ model DraftVocabEntry {
 }
 
 model DraftGrammarEntry {
-  id        String   @id @default(uuid()) @db.Uuid
-  draftId   String   @db.Uuid
+  id        String     @id @default(uuid()) @db.Uuid
+  draftId   String     @db.Uuid
   draft     StoryDraft @relation(fields: [draftId], references: [id], onDelete: Cascade)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
 
-  order Int
+  order   Int
   content Json
 
   @@unique([draftId, order])
@@ -186,13 +215,13 @@ model DraftGrammarEntry {
 }
 
 model DraftQuizEntry {
-  id        String   @id @default(uuid()) @db.Uuid
-  draftId   String   @db.Uuid
+  id        String     @id @default(uuid()) @db.Uuid
+  draftId   String     @db.Uuid
   draft     StoryDraft @relation(fields: [draftId], references: [id], onDelete: Cascade)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
 
-  order Int
+  order   Int
   content Json
 
   @@unique([draftId, order])
@@ -201,14 +230,14 @@ model DraftQuizEntry {
 }
 
 model DraftAudio {
-  id        String   @id @default(uuid()) @db.Uuid
-  draftId   String   @db.Uuid
+  id        String     @id @default(uuid()) @db.Uuid
+  draftId   String     @db.Uuid
   draft     StoryDraft @relation(fields: [draftId], references: [id], onDelete: Cascade)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
 
   /// for V1 we only need a single "storyAudio" blob; JSON keeps it flexible
-  kind String @default("storyAudio")
+  kind    String @default("storyAudio")
   content Json
 
   @@index([draftId])
@@ -228,18 +257,25 @@ model PublishedMono {
   level       String @default("")
   description String @default("")
 
+  /// M11e: community/content region for feed defaults (en/my/ja). Null = legacy/untagged.
+  contentLocale String?
+
+  /// M11e: target learning language (V1: ja). Null = legacy/untagged.
+  learningLanguage String?
+
   content Json @default("{}")
 
   /// P1 Trash: when set, mono is hidden from catalog/feed and default owner published list.
   trashedAt DateTime?
 
-  drafts StoryDraft[]
-  monoBookmarks MonoBookmark[]
-  monoReactions MonoReaction[]
+  drafts                     StoryDraft[]
+  monoBookmarks              MonoBookmark[]
+  monoReactions              MonoReaction[]
   creatorMonoCollectionItems CreatorMonoCollectionItem[]
 
   @@index([ownerId, updatedAt])
   @@index([ownerId, trashedAt])
+  @@index([contentLocale, learningLanguage, updatedAt])
   @@map("published_monos")
 }
 
@@ -249,7 +285,7 @@ model MonoBookmark {
   userId String @db.Uuid
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  publishedMonoId String       @db.Uuid
+  publishedMonoId String        @db.Uuid
   publishedMono   PublishedMono @relation(fields: [publishedMonoId], references: [id], onDelete: Cascade)
 
   createdAt DateTime @default(now())
@@ -266,7 +302,7 @@ model MonoReaction {
   userId String @db.Uuid
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  publishedMonoId String       @db.Uuid
+  publishedMonoId String        @db.Uuid
   publishedMono   PublishedMono @relation(fields: [publishedMonoId], references: [id], onDelete: Cascade)
 
   kind      String   @default("heart")
@@ -278,16 +314,16 @@ model MonoReaction {
 }
 
 model CreatorMonoCollection {
-  id              String   @id @default(uuid()) @db.Uuid
-  ownerId         String   @db.Uuid
-  owner           User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
-  title           String
-  description     String?
-  coverImageUrl   String?
-  visibility      String   @default("public")
-  sortOrder       Int      @default(0)
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id            String   @id @default(uuid()) @db.Uuid
+  ownerId       String   @db.Uuid
+  owner         User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  title         String
+  description   String?
+  coverImageUrl String?
+  visibility    String   @default("public")
+  sortOrder     Int      @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
   items CreatorMonoCollectionItem[]
 
@@ -296,13 +332,13 @@ model CreatorMonoCollection {
 }
 
 model CreatorMonoCollectionItem {
-  id              String   @id @default(uuid()) @db.Uuid
-  collectionId    String   @db.Uuid
+  id              String                @id @default(uuid()) @db.Uuid
+  collectionId    String                @db.Uuid
   collection      CreatorMonoCollection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
-  publishedMonoId String   @db.Uuid
-  publishedMono   PublishedMono @relation(fields: [publishedMonoId], references: [id], onDelete: Cascade)
-  sortOrder       Int      @default(0)
-  createdAt       DateTime @default(now())
+  publishedMonoId String                @db.Uuid
+  publishedMono   PublishedMono         @relation(fields: [publishedMonoId], references: [id], onDelete: Cascade)
+  sortOrder       Int                   @default(0)
+  createdAt       DateTime              @default(now())
 
   /// Product rule (M8f): a published mono can belong to only one creator collection.
   @@unique([publishedMonoId])

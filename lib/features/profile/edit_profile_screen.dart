@@ -3,6 +3,10 @@ import 'dart:async' show unawaited;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:nimon/core/media/media_upload_error_mapper.dart';
+import 'package:nimon/core/validation/localized_validation_messages.dart';
+import 'package:nimon/core/validation/protected_action.dart';
+import 'package:nimon/core/validation/protected_action_guard.dart';
 import 'package:nimon/features/profile/presentation/providers/edit_profile_notifier.dart';
 import 'package:nimon/ui/widgets/nimon_circle_nav_button.dart';
 
@@ -29,8 +33,17 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     _handleCtrl = TextEditingController();
     _bioCtrl = TextEditingController();
 
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted) return;
+      final ok = await ensureProtectedActionAllowed(
+        context,
+        action: ProtectedActionType.editProfile,
+      );
+      if (!mounted) return;
+      if (!ok) {
+        Navigator.of(context).maybePop();
+        return;
+      }
       unawaited(ref.read(editProfileNotifierProvider.notifier).load());
     });
   }
@@ -60,12 +73,30 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
         _hydratedControllers = true;
         _hydrateControllers(next);
       }
-      if (next.errorMessage != null &&
-          next.errorMessage!.trim().isNotEmpty &&
-          prev?.errorMessage != next.errorMessage) {
+      String? snack(EditProfileState n) {
+        if (n.mediaUploadError != null && n.mediaUploadSurface != null) {
+          return mediaUploadUserMessageLocalized(
+            context,
+            n.mediaUploadError!,
+            surface: n.mediaUploadSurface!,
+          );
+        }
+        if (n.profileBannerIssue != null) {
+          return validationIssueDisplayMessageLocalized(
+            context,
+            n.profileBannerIssue!,
+          );
+        }
+        final m = n.errorMessage?.trim();
+        return (m == null || m.isEmpty) ? null : m;
+      }
+
+      final cur = snack(next);
+      final was = prev == null ? null : snack(prev);
+      if (cur != null && cur != was) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(next.errorMessage!.trim()),
+            content: Text(cur),
             behavior: SnackBarBehavior.floating,
             margin: const EdgeInsets.all(16),
           ),
@@ -139,12 +170,24 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     }
 
     Future<void> changeAvatar() async {
+      if (!await ensureProtectedActionAllowed(
+        context,
+        action: ProtectedActionType.uploadMedia,
+      )) {
+        return;
+      }
       await ref
           .read(editProfileNotifierProvider.notifier)
           .pickAndUploadAvatar(source: ImageSource.gallery);
     }
 
     Future<void> changeCover() async {
+      if (!await ensureProtectedActionAllowed(
+        context,
+        action: ProtectedActionType.uploadMedia,
+      )) {
+        return;
+      }
       await ref
           .read(editProfileNotifierProvider.notifier)
           .pickAndUploadCover(source: ImageSource.gallery);
@@ -263,19 +306,40 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                 TextField(
                   key: const ValueKey('editProfile.displayName'),
                   controller: _displayNameCtrl,
-                  decoration: const InputDecoration(
+                  onChanged: (_) => ref
+                      .read(editProfileNotifierProvider.notifier)
+                      .setDisplayName(
+                        _displayNameCtrl.text,
+                      ),
+                  decoration: InputDecoration(
                     labelText: 'Display name',
-                    border: OutlineInputBorder(),
+                    border: const OutlineInputBorder(),
+                    errorText: s.profileFieldErrors['displayName'] != null
+                        ? validationIssueDisplayMessageLocalized(
+                            context,
+                            s.profileFieldErrors['displayName']!,
+                          )
+                        : null,
                   ),
                 ),
                 const SizedBox(height: 12),
                 TextField(
                   key: const ValueKey('editProfile.handle'),
                   controller: _handleCtrl,
-                  decoration: const InputDecoration(
+                  onChanged: (_) =>
+                      ref.read(editProfileNotifierProvider.notifier).setHandle(
+                            _handleCtrl.text,
+                          ),
+                  decoration: InputDecoration(
                     labelText: 'Handle',
-                    helperText: '3–20 chars: a–z, 0–9, _',
-                    border: OutlineInputBorder(),
+                    helperText: '3–24 chars: a–z, 0–9, _, .',
+                    border: const OutlineInputBorder(),
+                    errorText: s.profileFieldErrors['handle'] != null
+                        ? validationIssueDisplayMessageLocalized(
+                            context,
+                            s.profileFieldErrors['handle']!,
+                          )
+                        : null,
                   ),
                 ),
                 const SizedBox(height: 12),
@@ -284,9 +348,19 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                   controller: _bioCtrl,
                   minLines: 3,
                   maxLines: 6,
-                  decoration: const InputDecoration(
+                  onChanged: (_) =>
+                      ref.read(editProfileNotifierProvider.notifier).setBio(
+                            _bioCtrl.text,
+                          ),
+                  decoration: InputDecoration(
                     labelText: 'Bio',
-                    border: OutlineInputBorder(),
+                    border: const OutlineInputBorder(),
+                    errorText: s.profileFieldErrors['bio'] != null
+                        ? validationIssueDisplayMessageLocalized(
+                            context,
+                            s.profileFieldErrors['bio']!,
+                          )
+                        : null,
                   ),
                 ),
                 const SizedBox(height: 12),

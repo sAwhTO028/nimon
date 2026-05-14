@@ -6,6 +6,12 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:nimon/features/create/story_basics_cover_upload_outcome.dart';
 import 'package:nimon/features/create/story_basics_remote_cover_url.dart';
+import 'package:nimon/core/validation/form_validation_adapter.dart';
+import 'package:nimon/core/validation/localized_validation_messages.dart';
+import 'package:nimon/core/validation/story_validators.dart';
+import 'package:nimon/core/validation/validation_issue.dart';
+import 'package:nimon/core/validation/validation_mode.dart';
+import 'package:nimon/core/validation/validation_severity.dart';
 import 'package:nimon/features/create/story_creator_models.dart';
 
 /// Payload for [StoryCreatorDraftNotifier.applyBasics] built from the unified form.
@@ -142,6 +148,10 @@ class CreateStoryBasicsFormState extends State<CreateStoryBasicsForm> {
   /// Prevents debounced autosave while snapshot/controllers are mid-seed.
   bool _suppressDraftNotifications = false;
 
+  ValidationIssue? _titleBlockingIssue;
+  ValidationIssue? _descriptionBlockingIssue;
+  ValidationIssue? _titleWarningIssue;
+
   @override
   void initState() {
     super.initState();
@@ -174,7 +184,28 @@ class CreateStoryBasicsFormState extends State<CreateStoryBasicsForm> {
   void _onFormChanged() {
     _notifyParent();
     _notifyDraftFieldsChanged();
-    if (mounted) setState(() {});
+    if (!mounted) return;
+    final titleR =
+        validateStoryTitle(_titleController.text, ValidationMode.draft);
+    final descR = validateStoryDescription(
+      _descriptionController.text,
+      ValidationMode.draft,
+    );
+    ValidationIssue? titleWarnIssue;
+    for (final i in titleR.issues) {
+      if (i.field == 'story.title' &&
+          i.severity == ValidationSeverity.warning) {
+        titleWarnIssue = i;
+        break;
+      }
+    }
+    final titleErrIssue = firstBlockingIssueForField(titleR, 'story.title');
+    final descErrIssue = firstBlockingIssueForField(descR, 'story.description');
+    setState(() {
+      _titleBlockingIssue = titleErrIssue;
+      _descriptionBlockingIssue = descErrIssue;
+      _titleWarningIssue = titleErrIssue == null ? titleWarnIssue : null;
+    });
   }
 
   void _notifyParent() => widget.onFieldsChanged?.call();
@@ -277,8 +308,7 @@ class CreateStoryBasicsFormState extends State<CreateStoryBasicsForm> {
     } finally {
       _suppressDraftNotifications = false;
     }
-    _notifyParent();
-    _notifyDraftFieldsChanged();
+    _onFormChanged();
   }
 
   bool get isStep1Complete =>
@@ -514,11 +544,24 @@ class CreateStoryBasicsFormState extends State<CreateStoryBasicsForm> {
               requiredMark: true,
               child: TextField(
                 controller: _titleController,
-                maxLength: 120,
+                maxLength: 80,
                 decoration: _fieldDecoration(
                   theme,
                   hintText: 'Story title',
                   counterText: '',
+                ).copyWith(
+                  errorText: _titleBlockingIssue != null
+                      ? validationIssueDisplayMessageLocalized(
+                          context,
+                          _titleBlockingIssue!,
+                        )
+                      : null,
+                  helperText: _titleWarningIssue != null
+                      ? validationIssueDisplayMessageLocalized(
+                          context,
+                          _titleWarningIssue!,
+                        )
+                      : null,
                 ),
                 style: theme.textTheme.bodyLarge,
                 textCapitalization: TextCapitalization.sentences,
@@ -536,6 +579,13 @@ class CreateStoryBasicsFormState extends State<CreateStoryBasicsForm> {
                 decoration: _fieldDecoration(
                   theme,
                   hintText: 'What readers should expect…',
+                ).copyWith(
+                  errorText: _descriptionBlockingIssue != null
+                      ? validationIssueDisplayMessageLocalized(
+                          context,
+                          _descriptionBlockingIssue!,
+                        )
+                      : null,
                 ),
                 style: theme.textTheme.bodyMedium,
                 textCapitalization: TextCapitalization.sentences,

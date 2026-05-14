@@ -127,7 +127,8 @@ class BookCoverCard extends StatelessWidget {
                 children: [
                   // Cover image
                   Image.network(
-                    story.coverUrl ?? 'https://picsum.photos/seed/${story.id}/600/900',
+                    story.coverUrl ??
+                        'https://picsum.photos/seed/${story.id}/600/900',
                     fit: BoxFit.cover,
                     loadingBuilder: (context, child, loadingProgress) {
                       if (loadingProgress == null) return child;

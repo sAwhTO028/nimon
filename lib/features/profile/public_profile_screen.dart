@@ -3,6 +3,9 @@ import 'dart:async' show unawaited;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:nimon/core/format_social_count.dart';
+import 'package:nimon/core/networking/network_error_mapping.dart';
+import 'package:nimon/core/validation/protected_action.dart';
+import 'package:nimon/core/validation/protected_action_guard.dart';
 import 'package:nimon/l10n/nimon_app_strings.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -11,19 +14,34 @@ import 'package:nimon/features/profile/public_profile_data.dart';
 import 'package:nimon/features/profile/public_profile_widgets.dart';
 import 'package:nimon/features/auth/auth_providers.dart';
 import 'package:nimon/features/auth/auth_session_state.dart';
-import 'package:nimon/features/mono/data/mono_feed_item_mapper.dart';
 import 'package:nimon/features/mono/mono_feed_models.dart';
 import 'package:nimon/features/mono/mono_reader_menu_origin.dart';
 import 'package:nimon/features/profile/data/profile_public_providers.dart';
+import 'package:nimon/features/profile/public_profile_remote_nested_scroll.dart';
 import 'package:nimon/features/profile/public_profile_routing_policy.dart';
 import 'package:nimon/features/profile/data/creator_mono_collection.dart';
 import 'package:nimon/features/profile/data/remote_public_creator_profile_repository.dart';
+import 'package:nimon/features/profile/presentation/providers/public_profile_monos_notifier.dart';
 import 'package:nimon/features/profile/public_creator_collection_detail_screen.dart';
 import 'package:nimon/features/profile/presentation/providers/my_creator_collections_notifier.dart';
 import 'package:nimon/features/mono/data/mono_feed_providers.dart'
     show remoteUserFollowRepositoryProvider, followingMonoFeedPagerProvider;
 import 'package:nimon/features/profile/presentation/providers/profile_following_pager.dart';
 import 'package:nimon/ui/widgets/nimon_circle_nav_button.dart';
+
+/// Remote public profile flexible **image** slot height (below toolbar).
+/// Shorter than [PublicProfileRemoteNestedScroll.kRemotePublicCoverImageHeight]
+/// so the identity block sits fully below the cover backdrop (M17B-3 overlap fix).
+const double kPublicProfileRemoteCoverImageHeight = 122;
+
+/// True when [GET /v1/users/:id/public-profile] returned no identity strings;
+/// then we may fill from the first mono row (M17B-2).
+bool publicProfileNeedsMonoWriterIdentity(PublicCreatorProfile p) {
+  final dn = (p.displayName ?? '').trim();
+  final h = (p.handle ?? '').trim();
+  final u = (p.username ?? '').trim();
+  return dn.isEmpty && h.isEmpty && u.isEmpty;
+}
 
 /// Learner-facing public profile (V1). Owner management stays on [ProfileScreen].
 class PublicProfileScreen extends ConsumerStatefulWidget {
@@ -57,18 +75,13 @@ class _PublicProfileScreenState extends ConsumerState<PublicProfileScreen>
   Object? _remoteError;
   bool _loadingProfile = false;
 
-  final List<MonoFeedItem> _creatorMonos = <MonoFeedItem>[];
-  String? _creatorNextCursor;
-  bool _creatorHasMore = false;
-  bool _loadingCreatorMonos = false;
-  Object? _creatorMonosError;
-
-  /// Remote public profile: 0 = all published monos, 1 = creator collections (M8f4).
-  int _remoteProfileMainTab = 0;
   final List<CreatorMonoCollection> _publicCollections =
       <CreatorMonoCollection>[];
   bool _loadingPublicCollections = false;
   Object? _publicCollectionsError;
+
+  /// True after the first successful [fetchPublicCollections] for this profile session.
+  bool _publicCollectionsLoaded = false;
 
   bool? _followOptimistic;
   int? _followersCountOptimistic;
@@ -92,6 +105,7 @@ class _PublicProfileScreenState extends ConsumerState<PublicProfileScreen>
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
+    _tabController.addListener(_onPublicProfileTabTick);
     _data = _bundleForCreator(
       legacyDemoCreatorProfileActive(
         userId: widget.userId,
@@ -118,6 +132,17 @@ class _PublicProfileScreenState extends ConsumerState<PublicProfileScreen>
       _measureHeaderSection();
       _onPublicProfileOuterScroll();
     });
+  }
+
+  void _onPublicProfileTabTick() {
+    if (!mounted) return;
+    if (_useRemoteProfile && _remoteProfile != null) {
+      final c = _tabController;
+      if (!c.indexIsChanging && c.index == 1) {
+        unawaited(_loadPublicCollections());
+      }
+    }
+    setState(() {});
   }
 
   void _measureHeaderSection() {
@@ -148,8 +173,22 @@ class _PublicProfileScreenState extends ConsumerState<PublicProfileScreen>
     WidgetsBinding.instance.removeObserver(this);
     _publicProfileScrollController.removeListener(_onPublicProfileOuterScroll);
     _publicProfileScrollController.dispose();
+    _tabController.removeListener(_onPublicProfileTabTick);
     _tabController.dispose();
     super.dispose();
+  }
+
+  @override
+  void didUpdateWidget(covariant PublicProfileScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final oldId = (oldWidget.userId ?? '').trim();
+    final newId = _routeUserId;
+    if (oldId != newId && newId.isNotEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        unawaited(_loadRemoteIfNeeded());
+      });
+    }
   }
 
   void _openFolder(String folderId) {
@@ -159,9 +198,6 @@ class _PublicProfileScreenState extends ConsumerState<PublicProfileScreen>
   String get _routeUserId => (widget.userId ?? '').trim();
 
   bool get _useRemoteProfile => _routeUserId.isNotEmpty;
-
-  bool get _isAuthed =>
-      ref.read(authSessionProvider) is AuthSessionAuthenticated;
 
   String? get _authedUserId {
     final s = ref.read(authSessionProvider);
@@ -184,7 +220,7 @@ class _PublicProfileScreenState extends ConsumerState<PublicProfileScreen>
     return _remoteProfile?.followersCount ?? 0;
   }
 
-  Future<void> _loadRemoteIfNeeded() async {
+  Future<void> _loadRemoteProfileOnly() async {
     if (!_useRemoteProfile) return;
     if (_loadingProfile) return;
     setState(() {
@@ -198,8 +234,10 @@ class _PublicProfileScreenState extends ConsumerState<PublicProfileScreen>
       setState(() {
         _remoteProfile = p;
         _loadingProfile = false;
+        _publicCollections.clear();
+        _publicCollectionsLoaded = false;
+        _publicCollectionsError = null;
       });
-      await _loadCreatorMonosFirstPage();
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -209,77 +247,35 @@ class _PublicProfileScreenState extends ConsumerState<PublicProfileScreen>
     }
   }
 
-  Future<void> _loadCreatorMonosFirstPage() async {
-    if (!_useRemoteProfile) return;
-    if (_loadingCreatorMonos) return;
-    setState(() {
-      _loadingCreatorMonos = true;
-      _creatorMonosError = null;
-      _creatorMonos.clear();
-      _creatorNextCursor = null;
-      _creatorHasMore = false;
-    });
-    try {
-      final repo = ref.read(remotePublicCreatorProfileRepositoryProvider);
-      final page = await repo.fetchCreatorMonoPage(_routeUserId, limit: 15);
-      if (!mounted) return;
-      setState(() {
-        _creatorMonos
-          ..clear()
-          ..addAll(page.items.map(monoFeedItemFromMonoFeedSummary));
-        _creatorNextCursor = page.nextCursor;
-        _creatorHasMore = page.hasMore;
-        _loadingCreatorMonos = false;
-      });
-    } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _creatorMonosError = e;
-        _loadingCreatorMonos = false;
-      });
-    }
+  Future<void> _loadRemoteIfNeeded() async {
+    await _loadRemoteProfileOnly();
+    if (!mounted || _remoteProfile == null) return;
+    await ref
+        .read(publicProfileMonosProvider(_routeUserId).notifier)
+        .loadInitial(_routeUserId);
   }
 
-  Future<void> _loadCreatorMonosMore() async {
+  Future<void> _pullRefreshPublicProfile() async {
     if (!_useRemoteProfile) return;
-    if (_loadingCreatorMonos) return;
-    if (!_creatorHasMore) return;
-    final cursor = _creatorNextCursor;
-    if (cursor == null || cursor.trim().isEmpty) return;
-    setState(() {
-      _loadingCreatorMonos = true;
-      _creatorMonosError = null;
-    });
-    try {
-      final repo = ref.read(remotePublicCreatorProfileRepositoryProvider);
-      final page = await repo.fetchCreatorMonoPage(
-        _routeUserId,
-        cursor: cursor,
-        limit: 15,
-      );
-      if (!mounted) return;
-      setState(() {
-        _creatorMonos.addAll(page.items.map(monoFeedItemFromMonoFeedSummary));
-        _creatorNextCursor = page.nextCursor;
-        _creatorHasMore = page.hasMore;
-        _loadingCreatorMonos = false;
-      });
-    } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _creatorMonosError = e;
-        _loadingCreatorMonos = false;
-      });
-    }
+    await _loadRemoteProfileOnly();
+    if (!mounted || _remoteProfile == null) return;
+    await ref
+        .read(publicProfileMonosProvider(_routeUserId).notifier)
+        .refresh(_routeUserId);
+    await _loadPublicCollections(force: true);
   }
 
-  Future<void> _loadPublicCollections() async {
+  Future<void> _loadPublicCollections({bool force = false}) async {
     if (!_useRemoteProfile) return;
     if (_loadingPublicCollections) return;
+    if (!force && _publicCollectionsLoaded) return;
     setState(() {
       _loadingPublicCollections = true;
       _publicCollectionsError = null;
-      _publicCollections.clear();
+      if (force) {
+        _publicCollections.clear();
+        _publicCollectionsLoaded = false;
+      }
     });
     try {
       final repo = ref.read(remoteCreatorCollectionsRepositoryProvider);
@@ -290,6 +286,7 @@ class _PublicProfileScreenState extends ConsumerState<PublicProfileScreen>
           ..clear()
           ..addAll(list);
         _loadingPublicCollections = false;
+        _publicCollectionsLoaded = true;
       });
     } catch (e) {
       if (!mounted) return;
@@ -319,15 +316,15 @@ class _PublicProfileScreenState extends ConsumerState<PublicProfileScreen>
     _snack(NimonAppStrings.shareLinkCopied);
   }
 
-  String _remoteMonosStatLabel() {
-    if (_loadingCreatorMonos && _creatorMonos.isEmpty) {
+  String _remoteMonosStatLabel(PublicProfileMonosState s) {
+    if (s.isInitialLoading && s.items.isEmpty) {
       return '…';
     }
-    final n = _creatorMonos.length;
+    final n = s.items.length;
     if (n == 0) {
       return formatSocialCount(0);
     }
-    if (_creatorHasMore) {
+    if (s.hasMore) {
       return '${formatSocialCount(n)}+';
     }
     return formatSocialCount(n);
@@ -335,8 +332,10 @@ class _PublicProfileScreenState extends ConsumerState<PublicProfileScreen>
 
   Future<void> _toggleFollow() async {
     if (!_useRemoteProfile) return;
-    if (!_isAuthed) {
-      _snack(NimonAppStrings.signInToFollowCreators);
+    if (!await ensureProtectedActionAllowed(
+      context,
+      action: ProtectedActionType.follow,
+    )) {
       return;
     }
     if (_isSelfProfile) return;
@@ -368,7 +367,9 @@ class _PublicProfileScreenState extends ConsumerState<PublicProfileScreen>
         _followOptimistic = before;
         _followersCountOptimistic = beforeCount;
       });
-      _snack(e is StateError ? e.message : 'Could not update follow.');
+      final offlineMsg = offlineUserMessageIfRecognized(e);
+      _snack(offlineMsg ??
+          (e is StateError ? e.message : 'Could not update follow.'));
     }
   }
 
@@ -436,6 +437,8 @@ class _PublicProfileScreenState extends ConsumerState<PublicProfileScreen>
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final topPad = MediaQuery.paddingOf(context).top;
+    final monosListKey = _routeUserId.isEmpty ? '__none__' : _routeUserId;
+    final monosState = ref.watch(publicProfileMonosProvider(monosListKey));
 
     if (_useRemoteProfile) {
       if (_loadingProfile && _remoteProfile == null) {
@@ -474,34 +477,46 @@ class _PublicProfileScreenState extends ConsumerState<PublicProfileScreen>
 
       final rp = _remoteProfile;
       if (rp != null) {
-        final displayName = rp.effectiveDisplayName;
-        final handle = (rp.handle ?? '').trim();
+        final monos = monosState.items;
+        final rpIdentity = publicProfileNeedsMonoWriterIdentity(rp)
+            ? applyMonoWriterIdentityFallback(
+                rp,
+                monoWriterId: monos.isEmpty ? null : monos.first.writerId,
+                monoWriterName: monos.isEmpty ? '' : monos.first.writerName,
+                monoWriterHandle: monos.isEmpty ? '' : monos.first.writerHandle,
+              )
+            : rp;
+        final mainDisplayName = rpIdentity.publicProfileMainDisplayName;
+        final handleLine =
+            rpIdentity.publicProfileSecondaryHandleLine(mainDisplayName);
         final bio = (rp.bio ?? '').trim();
 
         Widget monoSection() {
-          if (_loadingCreatorMonos && _creatorMonos.isEmpty) {
+          if (monosState.isInitialLoading && monosState.items.isEmpty) {
             return const Padding(
               padding: EdgeInsets.symmetric(vertical: 28),
               child: Center(child: CircularProgressIndicator()),
             );
           }
-          if (_creatorMonosError != null && _creatorMonos.isEmpty) {
+          if (monosState.error != null && monosState.items.isEmpty) {
             return Padding(
               padding: const EdgeInsets.symmetric(vertical: 16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Text('Could not load stories: $_creatorMonosError'),
+                  Text('Could not load stories: ${monosState.error}'),
                   const SizedBox(height: 10),
                   FilledButton(
-                    onPressed: _loadCreatorMonosFirstPage,
+                    onPressed: () => ref
+                        .read(publicProfileMonosProvider(_routeUserId).notifier)
+                        .loadInitial(_routeUserId),
                     child: const Text('Retry'),
                   ),
                 ],
               ),
             );
           }
-          if (_creatorMonos.isEmpty) {
+          if (monosState.showEmptyAfterLoad) {
             return Padding(
               padding: const EdgeInsets.symmetric(vertical: 24),
               child: Text(
@@ -512,13 +527,17 @@ class _PublicProfileScreenState extends ConsumerState<PublicProfileScreen>
               ),
             );
           }
+          final monos = monosState.items;
           return Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              for (var i = 0; i < _creatorMonos.length; i++)
+              for (var i = 0; i < monos.length; i++)
                 Padding(
-                  key:
-                      ValueKey<String>('public_mono_${_creatorMonos[i].id}_$i'),
+                  key: i == 0
+                      ? const ValueKey<String>('publicProfileFirstMonoRow')
+                      : ValueKey<String>(
+                          'public_mono_${monos[i].id}_$i',
+                        ),
                   padding: const EdgeInsets.only(bottom: 10),
                   child: Material(
                     color: Colors.transparent,
@@ -528,7 +547,7 @@ class _PublicProfileScreenState extends ConsumerState<PublicProfileScreen>
                         context.push(
                           '/mono-reader',
                           extra: <String, Object>{
-                            'items': List<MonoFeedItem>.from(_creatorMonos),
+                            'items': List<MonoFeedItem>.from(monos),
                             'initialIndex': i,
                             'readerMenuOrigin':
                                 MonoReaderMenuOrigin.publicCreatorProfile,
@@ -536,27 +555,30 @@ class _PublicProfileScreenState extends ConsumerState<PublicProfileScreen>
                         );
                       },
                       child: MonoStoryListRow(
-                        title: (_creatorMonos[i].title ?? '').trim().isEmpty
+                        title: (monos[i].title ?? '').trim().isEmpty
                             ? 'Untitled'
-                            : _creatorMonos[i].title!.trim(),
-                        description:
-                            _creatorMonos[i].storyDescription.trim().isNotEmpty
-                                ? _creatorMonos[i].storyDescription.trim()
-                                : _creatorMonos[i].bodyText.trim(),
-                        jlptLevel: _creatorMonos[i].level.trim(),
-                        thumbnailUrl: _creatorMonos[i].coverImageUrl,
+                            : monos[i].title!.trim(),
+                        description: monos[i].storyDescription.trim().isNotEmpty
+                            ? monos[i].storyDescription.trim()
+                            : monos[i].bodyText.trim(),
+                        jlptLevel: monos[i].level.trim(),
+                        thumbnailUrl: monos[i].coverImageUrl,
                       ),
                     ),
                   ),
                 ),
-              if (_creatorHasMore)
+              if (monosState.isLoadingMore)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 16),
+                  child: Center(child: CircularProgressIndicator()),
+                ),
+              if (monosState.loadMoreError != null && monos.isNotEmpty)
                 Padding(
-                  padding: const EdgeInsets.only(top: 8, bottom: 8),
-                  child: FilledButton(
-                    onPressed:
-                        _loadingCreatorMonos ? null : _loadCreatorMonosMore,
-                    child: Text(
-                      _loadingCreatorMonos ? 'Loading…' : 'Load more',
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: Text(
+                    'Could not load more: ${monosState.loadMoreError}',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: scheme.error,
                     ),
                   ),
                 ),
@@ -565,26 +587,29 @@ class _PublicProfileScreenState extends ConsumerState<PublicProfileScreen>
         }
 
         Widget collectionsSection() {
-          if (_loadingPublicCollections && _publicCollections.isEmpty) {
+          if (!_publicCollectionsLoaded) {
+            if (_publicCollectionsError != null && !_loadingPublicCollections) {
+              return Padding(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(
+                      'Could not load collections: $_publicCollectionsError',
+                    ),
+                    const SizedBox(height: 10),
+                    FilledButton(
+                      onPressed: () =>
+                          unawaited(_loadPublicCollections(force: true)),
+                      child: const Text('Retry'),
+                    ),
+                  ],
+                ),
+              );
+            }
             return const Padding(
               padding: EdgeInsets.symmetric(vertical: 28),
               child: Center(child: CircularProgressIndicator()),
-            );
-          }
-          if (_publicCollectionsError != null && _publicCollections.isEmpty) {
-            return Padding(
-              padding: const EdgeInsets.symmetric(vertical: 16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Text('Could not load collections: $_publicCollectionsError'),
-                  const SizedBox(height: 10),
-                  FilledButton(
-                    onPressed: _loadPublicCollections,
-                    child: const Text('Retry'),
-                  ),
-                ],
-              ),
             );
           }
           if (_publicCollections.isEmpty) {
@@ -598,8 +623,9 @@ class _PublicProfileScreenState extends ConsumerState<PublicProfileScreen>
               ),
             );
           }
-          final wName = displayName;
-          final wHandle = handle.isNotEmpty ? handle : '@reader';
+          final wName = mainDisplayName;
+          final wHandle =
+              rpIdentity.publicProfileWriterHandleLabel(mainDisplayName);
           return Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -630,241 +656,195 @@ class _PublicProfileScreenState extends ConsumerState<PublicProfileScreen>
           );
         }
 
-        return Scaffold(
-          backgroundColor: scheme.surface,
-          body: RefreshIndicator(
-            onRefresh: () async {
-              await _loadRemoteIfNeeded();
-              if (_remoteProfile != null) {
-                await _loadCreatorMonosFirstPage();
-                await _loadPublicCollections();
-              }
-            },
-            child: CustomScrollView(
-              controller: _publicProfileScrollController,
-              physics: const AlwaysScrollableScrollPhysics(),
-              slivers: [
-                SliverToBoxAdapter(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Stack(
-                        clipBehavior: Clip.none,
+        // NestedScrollView: SliverOverlapAbsorber shrinks the absorbed sliver's
+        // reported layoutExtent by maxScrollObstructionExtent (~collapsed toolbar),
+        // while paintExtent stays full; the viewport paints earlier slivers on top
+        // (SliverPaintOrder.firstIsTop), so the profile sliver's top is covered by
+        // the app bar for that many pixels unless we reserve the same height here.
+        final double nestedPinnedToolbarObstructionPx =
+            MediaQuery.paddingOf(context).top +
+                PublicProfileRemoteNestedScroll.kRemotePublicToolbarHeight;
+
+        // M14J-A10: hero overlay is fully inside the cover Stack (no negative bottom)
+        // so FlexibleSpaceBar paint bounds never clip avatar/stats.
+        const double kPublicProfileHeroOverlayInsetBottom = 12;
+
+        final coverFlexibleBackground = ColoredBox(
+          color: scheme.surface,
+          child: Stack(
+            key: const ValueKey('publicProfileCoverHeader'),
+            clipBehavior: Clip.hardEdge,
+            fit: StackFit.expand,
+            children: [
+              ClipRRect(
+                key: const ValueKey('publicProfileCoverBackdrop'),
+                borderRadius: const BorderRadius.vertical(
+                  bottom: Radius.circular(22),
+                ),
+                child: SizedBox.expand(
+                  child: _CoverImage(url: rp.coverImageUrl),
+                ),
+              ),
+              Positioned(
+                left: 20,
+                right: 20,
+                bottom: kPublicProfileHeroOverlayInsetBottom,
+                child: Row(
+                  key: const ValueKey('publicProfileHeroOverlayRow'),
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    KeyedSubtree(
+                      key: const ValueKey('publicProfileAvatar'),
+                      child: _Avatar(
+                        url: (rp.avatarUrl ?? '').trim().isNotEmpty
+                            ? rp.avatarUrl!.trim()
+                            : null,
+                        radius: 40,
+                      ),
+                    ),
+                    const SizedBox(width: 18),
+                    Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.only(bottom: 6),
+                        child: Row(
+                          children: [
+                            _StatChip(
+                              value: _remoteMonosStatLabel(monosState),
+                              label: 'Monos',
+                            ),
+                            const SizedBox(width: 10),
+                            _StatChip(
+                              value: formatSocialCount(
+                                _followersCountEffective,
+                              ),
+                              label: 'Followers',
+                            ),
+                            const SizedBox(width: 10),
+                            _StatChip(
+                              value: formatSocialCount(
+                                rp.followingCount,
+                              ),
+                              label: 'Following',
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+
+        final profileInfoPanel = ColoredBox(
+          color: scheme.surface,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              SizedBox(height: nestedPinnedToolbarObstructionPx),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+                child: Column(
+                  key: const ValueKey('publicProfileIdentityBlock'),
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      mainDisplayName,
+                      key: const ValueKey('publicProfileDisplayName'),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.headlineSmall?.copyWith(
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: -0.4,
+                        height: 1.1,
+                        color: scheme.onSurface,
+                      ),
+                    ),
+                    if (handleLine != null) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        handleLine,
+                        key: const ValueKey('publicProfileHandle'),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.titleSmall?.copyWith(
+                          color: scheme.onSurfaceVariant,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                    if (bio.isNotEmpty) ...[
+                      const SizedBox(height: 12),
+                      Text(
+                        bio,
+                        key: const ValueKey('publicProfileBio'),
+                        maxLines: 4,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: scheme.onSurfaceVariant,
+                          height: 1.4,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              const SizedBox(height: 14),
+              if (widget.ownerPreview && _isSelfProfile)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
+                  child: Material(
+                    color: scheme.primaryContainer.withValues(alpha: 0.35),
+                    borderRadius: BorderRadius.circular(16),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 12,
+                      ),
+                      child: Row(
                         children: [
-                          ClipRRect(
-                            borderRadius: const BorderRadius.vertical(
-                              bottom: Radius.circular(22),
-                            ),
-                            child: SizedBox(
-                              height: 172,
-                              width: double.infinity,
-                              child: _CoverImage(url: rp.coverImageUrl),
-                            ),
+                          Icon(
+                            Icons.visibility_outlined,
+                            size: 20,
+                            color: scheme.onPrimaryContainer,
                           ),
-                          Positioned(
-                            top: topPad + 6,
-                            left: 6,
-                            child: const NimonBackButton(
-                              tooltip: 'Back',
-                            ),
-                          ),
-                          Positioned(
-                            left: 20,
-                            right: 20,
-                            bottom: -40,
-                            child: Row(
-                              crossAxisAlignment: CrossAxisAlignment.end,
-                              children: [
-                                _Avatar(
-                                  url: (rp.avatarUrl ?? '').trim().isNotEmpty
-                                      ? rp.avatarUrl!.trim()
-                                      : null,
-                                  radius: 40,
-                                ),
-                                const SizedBox(width: 16),
-                                Expanded(
-                                  child: Padding(
-                                    padding: const EdgeInsets.only(bottom: 6),
-                                    child: Row(
-                                      children: [
-                                        _StatChip(
-                                          value: _remoteMonosStatLabel(),
-                                          label: 'Monos',
-                                        ),
-                                        const SizedBox(width: 10),
-                                        _StatChip(
-                                          value: formatSocialCount(
-                                            _followersCountEffective,
-                                          ),
-                                          label: 'Followers',
-                                        ),
-                                        const SizedBox(width: 10),
-                                        _StatChip(
-                                          value: formatSocialCount(
-                                            rp.followingCount,
-                                          ),
-                                          label: 'Following',
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                              ],
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              'This is how other learners view your page.',
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: scheme.onPrimaryContainer,
+                                height: 1.35,
+                                fontWeight: FontWeight.w600,
+                              ),
                             ),
                           ),
                         ],
                       ),
-                      const SizedBox(height: 8),
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(20, 22, 20, 4),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const SizedBox(height: 8),
-                            Text(
-                              displayName,
-                              style: theme.textTheme.headlineSmall?.copyWith(
-                                fontWeight: FontWeight.w800,
-                                letterSpacing: -0.4,
-                                height: 1.1,
-                              ),
-                            ),
-                            if (handle.isNotEmpty) ...[
-                              const SizedBox(height: 4),
-                              Text(
-                                handle,
-                                style: theme.textTheme.titleSmall?.copyWith(
-                                  color: scheme.onSurfaceVariant,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ],
-                            if (bio.isNotEmpty) ...[
-                              const SizedBox(height: 10),
-                              Text(
-                                bio,
-                                style: theme.textTheme.bodyMedium?.copyWith(
-                                  color: scheme.onSurfaceVariant,
-                                  height: 1.4,
-                                ),
-                              ),
-                            ],
-                          ],
-                        ),
-                      ),
-                      if (widget.ownerPreview && _isSelfProfile)
-                        Padding(
-                          padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-                          child: Material(
-                            color:
-                                scheme.primaryContainer.withValues(alpha: 0.35),
-                            borderRadius: BorderRadius.circular(16),
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 14,
-                                vertical: 12,
-                              ),
-                              child: Row(
-                                children: [
-                                  Icon(
-                                    Icons.visibility_outlined,
-                                    size: 20,
-                                    color: scheme.onPrimaryContainer,
-                                  ),
-                                  const SizedBox(width: 10),
-                                  Expanded(
-                                    child: Text(
-                                      'This is how other learners view your page.',
-                                      style:
-                                          theme.textTheme.bodySmall?.copyWith(
-                                        color: scheme.onPrimaryContainer,
-                                        height: 1.35,
-                                        fontWeight: FontWeight.w600,
-                                      ),
+                    ),
+                  ),
+                )
+              else
+                Padding(
+                  key: const ValueKey('publicProfileActionRow'),
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+                  child: Row(
+                    children: [
+                      if (!_isSelfProfile)
+                        Expanded(
+                          flex: 1,
+                          child: SizedBox(
+                            width: double.infinity,
+                            height: 50,
+                            child: _isFollowingEffective
+                                ? OutlinedButton.icon(
+                                    onPressed: _toggleFollow,
+                                    icon: const Icon(
+                                      Icons.check_rounded,
                                     ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        )
-                      else
-                        Padding(
-                          padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-                          child: Row(
-                            children: [
-                              if (!_isSelfProfile)
-                                Expanded(
-                                  flex: 1,
-                                  child: SizedBox(
-                                    width: double.infinity,
-                                    height: 50,
-                                    child: _isFollowingEffective
-                                        ? OutlinedButton.icon(
-                                            onPressed: _toggleFollow,
-                                            icon: const Icon(
-                                              Icons.check_rounded,
-                                            ),
-                                            label: const Text('Following'),
-                                            style: OutlinedButton.styleFrom(
-                                              minimumSize: const Size(0, 50),
-                                              tapTargetSize:
-                                                  MaterialTapTargetSize
-                                                      .shrinkWrap,
-                                              foregroundColor: scheme.onSurface,
-                                              side: BorderSide(
-                                                color: scheme.outlineVariant
-                                                    .withValues(alpha: 0.75),
-                                              ),
-                                              shape: RoundedRectangleBorder(
-                                                borderRadius:
-                                                    BorderRadius.circular(16),
-                                              ),
-                                              textStyle: theme
-                                                  .textTheme.labelLarge
-                                                  ?.copyWith(
-                                                fontWeight: FontWeight.w700,
-                                              ),
-                                            ),
-                                          )
-                                        : FilledButton.icon(
-                                            onPressed: _toggleFollow,
-                                            icon: const Icon(Icons.add_rounded),
-                                            label: const Text('Follow'),
-                                            style: FilledButton.styleFrom(
-                                              minimumSize: const Size(0, 50),
-                                              tapTargetSize:
-                                                  MaterialTapTargetSize
-                                                      .shrinkWrap,
-                                              backgroundColor: scheme.primary,
-                                              foregroundColor: scheme.onPrimary,
-                                              shape: RoundedRectangleBorder(
-                                                borderRadius:
-                                                    BorderRadius.circular(16),
-                                              ),
-                                              textStyle: theme
-                                                  .textTheme.labelLarge
-                                                  ?.copyWith(
-                                                fontWeight: FontWeight.w800,
-                                              ),
-                                              padding:
-                                                  const EdgeInsets.symmetric(
-                                                horizontal: 14,
-                                              ),
-                                            ),
-                                          ),
-                                  ),
-                                ),
-                              if (!_isSelfProfile) const SizedBox(width: 12),
-                              Expanded(
-                                flex: 1,
-                                child: SizedBox(
-                                  width: double.infinity,
-                                  height: 50,
-                                  child: OutlinedButton.icon(
-                                    onPressed: _shareCreatorProfileLink,
-                                    icon: const Icon(Icons.ios_share_rounded),
-                                    label: const Text('Share'),
+                                    label: const Text('Following'),
                                     style: OutlinedButton.styleFrom(
                                       minimumSize: const Size(0, 50),
                                       tapTargetSize:
@@ -881,59 +861,158 @@ class _PublicProfileScreenState extends ConsumerState<PublicProfileScreen>
                                           theme.textTheme.labelLarge?.copyWith(
                                         fontWeight: FontWeight.w700,
                                       ),
+                                    ),
+                                  )
+                                : FilledButton.icon(
+                                    onPressed: _toggleFollow,
+                                    icon: const Icon(Icons.add_rounded),
+                                    label: const Text('Follow'),
+                                    style: FilledButton.styleFrom(
+                                      minimumSize: const Size(0, 50),
+                                      tapTargetSize:
+                                          MaterialTapTargetSize.shrinkWrap,
+                                      backgroundColor: scheme.primary,
+                                      foregroundColor: scheme.onPrimary,
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(16),
+                                      ),
+                                      textStyle:
+                                          theme.textTheme.labelLarge?.copyWith(
+                                        fontWeight: FontWeight.w800,
+                                      ),
                                       padding: const EdgeInsets.symmetric(
                                         horizontal: 14,
                                       ),
                                     ),
                                   ),
-                                ),
-                              ),
-                            ],
                           ),
                         ),
-                      const SizedBox(height: 8),
-                      Divider(
-                        height: 1,
-                        thickness: 1,
-                        color: scheme.outlineVariant.withValues(alpha: 0.35),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(20, 14, 20, 6),
-                        child: SegmentedButton<int>(
-                          key: const Key(
-                              'public_profile_mono_collections_segments'),
-                          segments: const [
-                            ButtonSegment<int>(
-                              value: 0,
-                              label: Text('Monos'),
+                      if (!_isSelfProfile) const SizedBox(width: 12),
+                      Expanded(
+                        flex: 1,
+                        child: SizedBox(
+                          width: double.infinity,
+                          height: 50,
+                          child: OutlinedButton.icon(
+                            onPressed: _shareCreatorProfileLink,
+                            icon: const Icon(Icons.ios_share_rounded),
+                            label: const Text('Share'),
+                            style: OutlinedButton.styleFrom(
+                              minimumSize: const Size(0, 50),
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              foregroundColor: scheme.onSurface,
+                              side: BorderSide(
+                                color: scheme.outlineVariant
+                                    .withValues(alpha: 0.75),
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                              textStyle: theme.textTheme.labelLarge?.copyWith(
+                                fontWeight: FontWeight.w700,
+                              ),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 14,
+                              ),
                             ),
-                            ButtonSegment<int>(
-                              value: 1,
-                              label: Text('Collections'),
-                            ),
-                          ],
-                          selected: {_remoteProfileMainTab},
-                          onSelectionChanged: (Set<int> next) {
-                            final v = next.first;
-                            setState(() => _remoteProfileMainTab = v);
-                            if (v == 1) {
-                              unawaited(_loadPublicCollections());
-                            }
-                          },
+                          ),
                         ),
                       ),
                     ],
                   ),
                 ),
-                SliverPadding(
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-                  sliver: SliverToBoxAdapter(
-                    child: _remoteProfileMainTab == 0
-                        ? monoSection()
-                        : collectionsSection(),
+              const SizedBox(height: 8),
+            ],
+          ),
+        );
+
+        return Scaffold(
+          backgroundColor: scheme.surface,
+          body: RefreshIndicator(
+            onRefresh: _pullRefreshPublicProfile,
+            child: PublicProfileRemoteNestedScroll(
+              scrollController: _publicProfileScrollController,
+              tabController: _tabController,
+              theme: theme,
+              scheme: scheme,
+              coverExpandedHeight:
+                  PublicProfileRemoteNestedScroll.kRemotePublicToolbarHeight +
+                      kPublicProfileRemoteCoverImageHeight,
+              displayName: mainDisplayName,
+              coverFlexibleBackground: coverFlexibleBackground,
+              profileInfoPanel: profileInfoPanel,
+              onTabBarTap: (index) {
+                if (index == 1) {
+                  unawaited(_loadPublicCollections());
+                }
+              },
+              monoTabBuilder: (nestedContext) {
+                return NotificationListener<ScrollNotification>(
+                  onNotification: (ScrollNotification n) {
+                    if (_tabController.index != 0) return false;
+                    if (n.metrics.extentAfter <=
+                        PublicProfileMonosNotifier.scrollPrefetchExtentPx) {
+                      unawaited(
+                        ref
+                            .read(
+                              publicProfileMonosProvider(_routeUserId).notifier,
+                            )
+                            .maybePrefetchFromScroll(_routeUserId),
+                      );
+                    }
+                    return false;
+                  },
+                  child: CustomScrollView(
+                    key: const PageStorageKey<String>(
+                        'public_profile_remote_monos'),
+                    physics: const AlwaysScrollableScrollPhysics(
+                      parent: BouncingScrollPhysics(),
+                    ),
+                    slivers: [
+                      SliverPadding(
+                        padding: EdgeInsets.fromLTRB(
+                          16,
+                          8,
+                          16,
+                          24 + MediaQuery.paddingOf(nestedContext).bottom,
+                        ),
+                        sliver: SliverToBoxAdapter(
+                          child: KeyedSubtree(
+                            key: const ValueKey('publicProfileMonosList'),
+                            child: monoSection(),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-                ),
-              ],
+                );
+              },
+              collectionsTabBuilder: (nestedContext) {
+                return CustomScrollView(
+                  key: const PageStorageKey<String>(
+                    'public_profile_remote_collections',
+                  ),
+                  physics: const AlwaysScrollableScrollPhysics(
+                    parent: BouncingScrollPhysics(),
+                  ),
+                  slivers: [
+                    SliverPadding(
+                      padding: EdgeInsets.fromLTRB(
+                        16,
+                        8,
+                        16,
+                        24 + MediaQuery.paddingOf(nestedContext).bottom,
+                      ),
+                      sliver: SliverToBoxAdapter(
+                        child: KeyedSubtree(
+                          key: const ValueKey('publicProfileCollectionsList'),
+                          child: collectionsSection(),
+                        ),
+                      ),
+                    ),
+                  ],
+                );
+              },
             ),
           ),
         );

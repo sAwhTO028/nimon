@@ -93,7 +93,9 @@ describe('MediaController (upload)', () => {
       .post('/v1/media/upload/cover')
       .set('Authorization', 'Bearer test-token')
       .expect(400);
-    expect(res.body.message).toContain('file');
+    expect(res.body.message).toBe('validation_failed');
+    expect(Array.isArray(res.body.issues)).toBe(true);
+    expect(res.body.issues[0].field).toBe('media.file');
     await nest.close();
   });
 

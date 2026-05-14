@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:nimon/core/design_system/nimon_color_tokens.dart';
 
 /// V1 floating dock: Mono | Add (center) | Profile — same geometry as the shell.
 class FloatingDockNavBar extends StatelessWidget {
@@ -25,21 +26,19 @@ class FloatingDockNavBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = theme.colorScheme;
+    final tc = theme.colors;
     final bottomInset = MediaQuery.viewPaddingOf(context).bottom;
-    final dockFill = Color.lerp(
-          colorScheme.surface,
-          Colors.white,
-          0.35,
-        ) ??
-        colorScheme.surface;
+    final dockFill = Color.alphaBlend(
+      tc.surface.withValues(alpha: 0.94),
+      tc.appBackground,
+    );
 
     return Padding(
       padding: EdgeInsets.fromLTRB(18, 0, 18, dockOuterBottomPad + bottomInset),
       child: Material(
-        color: dockFill.withOpacity(0.94),
+        color: dockFill,
         elevation: 8,
-        shadowColor: Colors.black.withOpacity(0.14),
+        shadowColor: Colors.black.withValues(alpha: 0.14),
         borderRadius: BorderRadius.circular(dockRadius),
         clipBehavior: Clip.antiAlias,
         child: SizedBox(
@@ -54,7 +53,6 @@ class FloatingDockNavBar extends StatelessWidget {
                   label: 'Mono',
                   isSelected: selectedIndex == 0,
                   onTap: () => onItemTapped(0),
-                  colorScheme: colorScheme,
                   emphasize: false,
                 ),
               ),
@@ -65,7 +63,6 @@ class FloatingDockNavBar extends StatelessWidget {
                   label: 'Add',
                   isSelected: false,
                   onTap: () => onItemTapped(1),
-                  colorScheme: colorScheme,
                   emphasize: true,
                 ),
               ),
@@ -76,7 +73,6 @@ class FloatingDockNavBar extends StatelessWidget {
                   label: 'Profile',
                   isSelected: selectedIndex == 2,
                   onTap: () => onItemTapped(2),
-                  colorScheme: colorScheme,
                   emphasize: false,
                 ),
               ),
@@ -99,7 +95,6 @@ class _DockNavItem extends StatelessWidget {
   final String label;
   final bool isSelected;
   final VoidCallback onTap;
-  final ColorScheme colorScheme;
   final bool emphasize;
 
   const _DockNavItem({
@@ -108,21 +103,18 @@ class _DockNavItem extends StatelessWidget {
     required this.label,
     required this.isSelected,
     required this.onTap,
-    required this.colorScheme,
     required this.emphasize,
   });
 
   @override
   Widget build(BuildContext context) {
-    final muted = Colors.grey.shade600;
-    final inactive = muted.withOpacity(0.88);
-    final selectedColor = colorScheme.primary;
-    final iconColor = emphasize
-        ? colorScheme.primary
-        : (isSelected ? selectedColor : inactive);
-    final labelColor = emphasize
-        ? colorScheme.primary
-        : (isSelected ? selectedColor : inactive);
+    final tc = Theme.of(context).colors;
+    final inactive = tc.textSecondary;
+    final selectedColor = tc.actionPrimary;
+    final iconColor =
+        emphasize ? tc.actionPrimary : (isSelected ? selectedColor : inactive);
+    final labelColor =
+        emphasize ? tc.actionPrimary : (isSelected ? selectedColor : inactive);
     final labelWeight = emphasize
         ? FontWeight.w700
         : (isSelected ? FontWeight.w600 : FontWeight.w500);
@@ -139,7 +131,10 @@ class _DockNavItem extends StatelessWidget {
         child: emphasize
             ? DecoratedBox(
                 decoration: BoxDecoration(
-                  color: colorScheme.primary.withOpacity(0.13),
+                  color: Theme.of(context)
+                      .colors
+                      .actionPrimary
+                      .withValues(alpha: 0.13),
                   shape: BoxShape.circle,
                 ),
                 child: Padding(

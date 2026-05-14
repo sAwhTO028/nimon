@@ -25,7 +25,9 @@ class StepIndicator extends StatelessWidget {
                 width: isActive ? 10 : 6,
                 height: 6,
                 decoration: BoxDecoration(
-                  color: isActive || isCompleted ? Colors.blue : Colors.grey.shade300,
+                  color: isActive || isCompleted
+                      ? Colors.blue
+                      : Colors.grey.shade300,
                   borderRadius: BorderRadius.circular(isActive ? 3 : 3),
                 ),
               ),
@@ -45,9 +47,3 @@ class StepIndicator extends StatelessWidget {
     );
   }
 }
-
-
-
-
-
-

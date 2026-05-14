@@ -70,15 +70,16 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   void initState() {
     super.initState();
     _future = repo.listStories();
-    
+
     // Preload both tab futures immediately with different data sources
-    _featuredFuture = repo.getStories(rank: 'N5'); // Featured stories (N5 level)
+    _featuredFuture =
+        repo.getStories(rank: 'N5'); // Featured stories (N5 level)
     _latestFuture = repo.getStories(rank: 'N4'); // Latest releases (N4 level)
-    
+
     // Initialize controllers
     _tabController = TabController(length: 2, vsync: this, initialIndex: 0);
     _pageController = PageController(initialPage: 0);
-    
+
     // Keep TabBar in sync when user swipes pages
     _pageController.addListener(() {
       final newIndex = _pageController.page?.round() ?? 0;
@@ -210,7 +211,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         blocks: [
           EpisodeBlock(
             type: BlockType.narration,
-            text: 'The rain continued to fall on the ancient streets of Kyoto...',
+            text:
+                'The rain continued to fall on the ancient streets of Kyoto...',
           ),
         ],
       ),
@@ -221,7 +223,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         blocks: [
           EpisodeBlock(
             type: BlockType.narration,
-            text: 'As they climbed higher into the mountains, the air grew thinner...',
+            text:
+                'As they climbed higher into the mountains, the air grew thinner...',
           ),
         ],
       ),
@@ -331,282 +334,291 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       body: SafeArea(
         child: CustomScrollView(
           slivers: [
-              // Header with title and balance
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-              child: Row(
-                children: [
-                  Text('NIMON',
-                          style: Theme.of(context).textTheme.headlineLarge?.copyWith(
-                                fontWeight: FontWeight.w700,
-                                fontSize: 28,
-                                letterSpacing: 0.5,
-                              )),
-                  const Spacer(),
-                  _balancePill('\$ 98'),
-                ],
-              ),
-            ),
-          ),
-
-              // Rank and Category filters
-          SliverToBoxAdapter(child: _rankRow()),
-          SliverToBoxAdapter(child: _categoryRow()),
-          const SliverToBoxAdapter(child: SizedBox(height: 24)),
-
-              // 1) Continue Reading section
-              SliverToBoxAdapter(child: _continueReadingSection()),
-          const SliverToBoxAdapter(child: SizedBox(height: 24)),
-
-              // 2) Recommend Stories section
-              SliverToBoxAdapter(
-                child: SectionHeader(
-                  title: 'Recommend Stories',
-                  sectionKey: SectionKey.recommendStories,
-                  storyRepo: widget.repo,
+            // Header with title and balance
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+                child: Row(
+                  children: [
+                    Text('NIMON',
+                        style:
+                            Theme.of(context).textTheme.headlineLarge?.copyWith(
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 28,
+                                  letterSpacing: 0.5,
+                                )),
+                    const Spacer(),
+                    _balancePill('\$ 98'),
+                  ],
                 ),
               ),
-              const SliverToBoxAdapter(child: SizedBox(height: 16)),
-          SliverToBoxAdapter(
-            child: FutureBuilder<List<Story>>(
-              future: _future,
-              builder: (ctx, snap) {
-                if (snap.connectionState != ConnectionState.done) {
-                  return const SizedBox(
-                      height: 180,
-                      child: Center(child: CircularProgressIndicator()));
-                }
-                final stories = snap.data ?? const <Story>[];
-                _updateStoryLists(stories);
-                return SizedBox(
-                  height: 140 * 3 / 2, // Calculate height from BookCoverCard.md width and aspect ratio
-                  child: ListView.separated(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    scrollDirection: Axis.horizontal,
-                    itemCount: stories.length,
-                    separatorBuilder: (_, __) => const SizedBox(width: 16),
-                    itemBuilder: (ctx, i) {
-                      final s = stories[i];
-                      return BookCoverCard.md(
-                        story: s,
-                        onTap: () => _openDetail(s),
-                      );
-                    },
-                  ),
-                );
-              },
             ),
-          ),
-          const SliverToBoxAdapter(child: SizedBox(height: 24)),
 
-              // PREMIUM HIGHLIGHT BANNER
-              SliverToBoxAdapter(
-                child: PremiumBanner(
-                  onTap: () {
-                    // TODO: navigate to Premium / Paywall (leave as is if route not ready)
-                    // context.push('/premium');
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Premium upgrade coming soon!'),
-                        duration: Duration(seconds: 2),
+            // Rank and Category filters
+            SliverToBoxAdapter(child: _rankRow()),
+            SliverToBoxAdapter(child: _categoryRow()),
+            const SliverToBoxAdapter(child: SizedBox(height: 24)),
+
+            // 1) Continue Reading section
+            SliverToBoxAdapter(child: _continueReadingSection()),
+            const SliverToBoxAdapter(child: SizedBox(height: 24)),
+
+            // 2) Recommend Stories section
+            SliverToBoxAdapter(
+              child: SectionHeader(
+                title: 'Recommend Stories',
+                sectionKey: SectionKey.recommendStories,
+                storyRepo: widget.repo,
+              ),
+            ),
+            const SliverToBoxAdapter(child: SizedBox(height: 16)),
+            SliverToBoxAdapter(
+              child: FutureBuilder<List<Story>>(
+                future: _future,
+                builder: (ctx, snap) {
+                  if (snap.connectionState != ConnectionState.done) {
+                    return const SizedBox(
+                        height: 180,
+                        child: Center(child: CircularProgressIndicator()));
+                  }
+                  final stories = snap.data ?? const <Story>[];
+                  _updateStoryLists(stories);
+                  return SizedBox(
+                    height: 140 *
+                        3 /
+                        2, // Calculate height from BookCoverCard.md width and aspect ratio
+                    child: ListView.separated(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      scrollDirection: Axis.horizontal,
+                      itemCount: stories.length,
+                      separatorBuilder: (_, __) => const SizedBox(width: 16),
+                      itemBuilder: (ctx, i) {
+                        final s = stories[i];
+                        return BookCoverCard.md(
+                          story: s,
+                          onTap: () => _openDetail(s),
+                        );
+                      },
+                    ),
+                  );
+                },
+              ),
+            ),
+            const SliverToBoxAdapter(child: SizedBox(height: 24)),
+
+            // PREMIUM HIGHLIGHT BANNER
+            SliverToBoxAdapter(
+              child: PremiumBanner(
+                onTap: () {
+                  // TODO: navigate to Premium / Paywall (leave as is if route not ready)
+                  // context.push('/premium');
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Premium upgrade coming soon!'),
+                      duration: Duration(seconds: 2),
+                    ),
+                  );
+                },
+              ),
+            ),
+
+            // 3) From the Community section
+            SliverToBoxAdapter(
+              child: CommunitySection(
+                repo: repo,
+                onSeeAllTap: () {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: const Text(
+                          'See all community collections coming soon!'),
+                      action: SnackBarAction(
+                        label: 'OK',
+                        onPressed: () =>
+                            ScaffoldMessenger.of(context).hideCurrentSnackBar(),
                       ),
+                    ),
+                  );
+                },
+              ),
+            ),
+            const SliverToBoxAdapter(child: SizedBox(height: 24)),
+
+            // 4) Quick One-Shot For You section
+            SliverToBoxAdapter(
+              child: QuickOneShotSection(storyRepo: widget.repo),
+            ),
+            const SliverToBoxAdapter(child: SizedBox(height: 24)),
+
+            // 3) Popular Mono writer's collections
+            SliverToBoxAdapter(
+              child: Container(
+                color: const Color(0xFFF8F9FA), // Subtle neutral shade
+                child: Column(
+                  children: [
+                    SectionHeader(
+                      title: "Popular Episode Co-Writer's Collections",
+                      sectionKey: SectionKey.popularMonoCollections,
+                      storyRepo: widget.repo,
+                      showSeeAll: false,
+                    ),
+                    const SizedBox(height: 16),
+                    FutureBuilder<List<Episode>>(
+                      future: _getPopularEpisodes(),
+                      builder: (ctx, snap) {
+                        if (!snap.hasData) {
+                          return const SizedBox(
+                              height: 200,
+                              child:
+                                  Center(child: CircularProgressIndicator()));
+                        }
+                        final episodes = snap.data!;
+                        return MonoCollectionRow(
+                          episodes: episodes,
+                          title: 'Popular Episode\nCo-Writer\'s Collections',
+                        );
+                      },
+                    ),
+                    const SizedBox(height: 24),
+                  ],
+                ),
+              ),
+            ),
+
+            // 4) New Writers Spotlight
+            SliverToBoxAdapter(
+              child: Container(
+                color: Colors.white, // Clean white background
+                margin:
+                    const EdgeInsets.only(bottom: 0), // No extra bottom margin
+                child: Column(
+                  children: [
+                    SectionHeader(
+                      title: "New Writers Spotlight",
+                      sectionKey: SectionKey.newWritersSpotlight,
+                      storyRepo: widget.repo,
+                      showSeeAll: false,
+                    ),
+                    const SizedBox(height: 16),
+                    FutureBuilder<List<Episode>>(
+                      future: _getNewWritersEpisodes(),
+                      builder: (ctx, snap) {
+                        if (!snap.hasData) {
+                          return const SizedBox(
+                              height: 200,
+                              child:
+                                  Center(child: CircularProgressIndicator()));
+                        }
+                        final episodes = snap.data!;
+                        return MonoCollectionRow(
+                          episodes: episodes,
+                          title: 'New Writers\nSpotlight',
+                        );
+                      },
+                    ),
+                    const SizedBox(height: 24),
+                  ],
+                ),
+              ),
+            ),
+
+            // Guaranteed spacing from previous section
+            const SliverToBoxAdapter(child: SizedBox(height: 24)),
+
+            // Top Charts header (isolated)
+            SliverToBoxAdapter(
+              child: SectionHeader(
+                title: 'Top Charts',
+                sectionKey: SectionKey.topCharts,
+                storyRepo: widget.repo,
+              ),
+            ),
+
+            // TabBar with proper spacing
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: TabBar(
+                  controller: _tabController,
+                  onTap: (i) => _pageController.animateToPage(
+                    i,
+                    duration: const Duration(milliseconds: 250),
+                    curve: Curves.easeOut,
+                  ),
+                  indicator: UnderlineTabIndicator(
+                    borderSide: BorderSide(
+                      width: 2,
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
+                    insets: const EdgeInsets.symmetric(horizontal: 24),
+                  ),
+                  labelColor: Theme.of(context).colorScheme.primary,
+                  unselectedLabelColor:
+                      Theme.of(context).colorScheme.onSurfaceVariant,
+                  labelStyle: Theme.of(context).textTheme.labelLarge?.copyWith(
+                        fontWeight: FontWeight.w500,
+                        fontSize: 14,
+                      ),
+                  unselectedLabelStyle:
+                      Theme.of(context).textTheme.labelLarge?.copyWith(
+                            fontWeight: FontWeight.w500,
+                            fontSize: 14,
+                          ),
+                  tabs: const [
+                    Tab(text: 'Featured Stories'),
+                    Tab(text: 'Latest Releases'),
+                  ],
+                ),
+              ),
+            ),
+
+            // Spacing from TabBar to first list item
+            const SliverToBoxAdapter(child: SizedBox(height: 12)),
+
+            // PageView with fixed height (no inner scrolling)
+            SliverToBoxAdapter(
+              child: _topChartsContent(context),
+            ),
+
+            // Trending For You section
+            SliverToBoxAdapter(
+              child: FutureBuilder<List<Story>>(
+                future: _future,
+                builder: (ctx, snap) {
+                  if (snap.hasData) {
+                    return TrendingForYou(
+                      stories: snap.data!.take(5).toList(),
+                      storyRepo: widget.repo,
                     );
-                  },
-                ),
-              ),
-
-
-          // 3) From the Community section
-          SliverToBoxAdapter(
-            child: CommunitySection(
-              repo: repo,
-              onSeeAllTap: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: const Text('See all community collections coming soon!'),
-                    action: SnackBarAction(
-                      label: 'OK',
-                      onPressed: () => ScaffoldMessenger.of(context).hideCurrentSnackBar(),
-                    ),
-                  ),
-                );
-              },
-            ),
-          ),
-          const SliverToBoxAdapter(child: SizedBox(height: 24)),
-
-          // 4) Quick One-Shot For You section
-          SliverToBoxAdapter(
-            child: QuickOneShotSection(storyRepo: widget.repo),
-          ),
-          const SliverToBoxAdapter(child: SizedBox(height: 24)),
-
-              // 3) Popular Mono writer's collections
-          SliverToBoxAdapter(
-            child: Container(
-              color: const Color(0xFFF8F9FA), // Subtle neutral shade
-              child: Column(
-                children: [
-                  SectionHeader(
-                    title: "Popular Episode Co-Writer's Collections",
-                    sectionKey: SectionKey.popularMonoCollections,
-                    storyRepo: widget.repo,
-                    showSeeAll: false,
-                  ),
-                      const SizedBox(height: 16),
-                  FutureBuilder<List<Episode>>(
-                    future: _getPopularEpisodes(),
-                    builder: (ctx, snap) {
-                      if (!snap.hasData) {
-                        return const SizedBox(
-                            height: 200,
-                            child: Center(child: CircularProgressIndicator()));
-                      }
-                      final episodes = snap.data!;
-                      return MonoCollectionRow(
-                        episodes: episodes,
-                        title: 'Popular Episode\nCo-Writer\'s Collections',
-                      );
-                    },
-                  ),
-                  const SizedBox(height: 24),
-                ],
+                  }
+                  return const SizedBox.shrink();
+                },
               ),
             ),
-          ),
+            const SliverToBoxAdapter(child: SizedBox(height: 24)),
 
-              // 4) New Writers Spotlight
-          SliverToBoxAdapter(
-            child: Container(
-              color: Colors.white, // Clean white background
-              margin: const EdgeInsets.only(bottom: 0), // No extra bottom margin
-              child: Column(
-                children: [
-                  SectionHeader(
-                    title: "New Writers Spotlight",
-                    sectionKey: SectionKey.newWritersSpotlight,
-                    storyRepo: widget.repo,
-                    showSeeAll: false,
-                  ),
-                      const SizedBox(height: 16),
-                  FutureBuilder<List<Episode>>(
-                    future: _getNewWritersEpisodes(),
-                    builder: (ctx, snap) {
-                      if (!snap.hasData) {
-                        return const SizedBox(
-                            height: 200,
-                            child: Center(child: CircularProgressIndicator()));
-                      }
-                      final episodes = snap.data!;
-                      return MonoCollectionRow(
-                        episodes: episodes,
-                        title: 'New Writers\nSpotlight',
-                      );
-                    },
-                  ),
-                  const SizedBox(height: 24),
-                ],
+            // Reading Challenges (the last one)
+            SliverToBoxAdapter(
+              child: ReadingChallengesSection(
+                onSelect: (c) {
+                  // TODO: hook to your filtering / discovery route.
+                  // Example (adapt to your router):
+                  // context.push('/discover?category=${Uri.encodeComponent(c.title)}');
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('${c.title} challenge selected!'),
+                      duration: const Duration(seconds: 2),
+                    ),
+                  );
+                },
               ),
             ),
-          ),
 
-              // Guaranteed spacing from previous section
-              const SliverToBoxAdapter(child: SizedBox(height: 24)),
-
-              // Top Charts header (isolated)
-          SliverToBoxAdapter(
-                child: SectionHeader(
-                  title: 'Top Charts',
-                  sectionKey: SectionKey.topCharts,
-                  storyRepo: widget.repo,
-                ),
-              ),
-
-              // TabBar with proper spacing
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: TabBar(
-                    controller: _tabController,
-                    onTap: (i) => _pageController.animateToPage(
-                      i,
-                      duration: const Duration(milliseconds: 250),
-                      curve: Curves.easeOut,
-                    ),
-                    indicator: UnderlineTabIndicator(
-                      borderSide: BorderSide(
-                        width: 2,
-                        color: Theme.of(context).colorScheme.primary,
-                      ),
-                      insets: const EdgeInsets.symmetric(horizontal: 24),
-                    ),
-                    labelColor: Theme.of(context).colorScheme.primary,
-                    unselectedLabelColor: Theme.of(context).colorScheme.onSurfaceVariant,
-                    labelStyle: Theme.of(context).textTheme.labelLarge?.copyWith(
-                      fontWeight: FontWeight.w500,
-                      fontSize: 14,
-                    ),
-                    unselectedLabelStyle: Theme.of(context).textTheme.labelLarge?.copyWith(
-                      fontWeight: FontWeight.w500,
-                      fontSize: 14,
-                    ),
-                    tabs: const [
-                      Tab(text: 'Featured Stories'),
-                      Tab(text: 'Latest Releases'),
-                    ],
-                  ),
-                ),
-              ),
-
-              // Spacing from TabBar to first list item
-              const SliverToBoxAdapter(child: SizedBox(height: 12)),
-
-              // PageView with fixed height (no inner scrolling)
-              SliverToBoxAdapter(
-                child: _topChartsContent(context),
-              ),
-              
-              // Trending For You section
-              SliverToBoxAdapter(
-                child: FutureBuilder<List<Story>>(
-                  future: _future,
-                  builder: (ctx, snap) {
-                    if (snap.hasData) {
-                      return TrendingForYou(
-                        stories: snap.data!.take(5).toList(),
-                        storyRepo: widget.repo,
-                      );
-                    }
-                    return const SizedBox.shrink();
-                  },
-                ),
-              ),
-              const SliverToBoxAdapter(child: SizedBox(height: 24)),
-              
-              // Reading Challenges (the last one)
-              SliverToBoxAdapter(
-                child: ReadingChallengesSection(
-                  onSelect: (c) {
-                    // TODO: hook to your filtering / discovery route.
-                    // Example (adapt to your router):
-                    // context.push('/discover?category=${Uri.encodeComponent(c.title)}');
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('${c.title} challenge selected!'),
-                        duration: const Duration(seconds: 2),
-                      ),
-                    );
-                  },
-                ),
-              ),
-              
-              // tiny bottom space only
-              SliverToBoxAdapter(child: SizedBox(height: pad + 16)),
-            ],
-          ),
+            // tiny bottom space only
+            SliverToBoxAdapter(child: SizedBox(height: pad + 16)),
+          ],
         ),
-      );
+      ),
+    );
   }
 
   // ───────────────────────── widgets ─────────────────────────
@@ -614,10 +626,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   // Top Charts content with PageView and fixed height
   Widget _topChartsContent(BuildContext context) {
     final bottom = MediaQuery.of(context).viewPadding.bottom;
-    const rowH = 96.0;   // height of one compact row
-    const gap = 12.0;    // space between rows
-    const maxCount = 5;  // maximum rows to show
-    final contentHeight = (rowH * maxCount) + (gap * (maxCount - 1)) + 16 + bottom;
+    const rowH = 96.0; // height of one compact row
+    const gap = 12.0; // space between rows
+    const maxCount = 5; // maximum rows to show
+    final contentHeight =
+        (rowH * maxCount) + (gap * (maxCount - 1)) + 16 + bottom;
 
     return SizedBox(
       height: contentHeight,
@@ -679,10 +692,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.8),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Theme.of(context).colorScheme.outline.withOpacity(0.2)),
+        border: Border.all(
+            color: Theme.of(context).colorScheme.outline.withOpacity(0.2)),
       ),
       child: Text(
-        text, 
+        text,
         style: TextStyle(
           fontWeight: FontWeight.w600,
           color: Theme.of(context).colorScheme.onSurfaceVariant,
@@ -692,10 +706,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     );
   }
 
-
   Widget _continueReadingSection() {
     final episodes = _getContinueReadingEpisodes();
-    
+
     // Hide section if no episodes
     if (episodes.isEmpty) {
       return const SizedBox.shrink();
@@ -732,13 +745,14 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   Widget _buildEpisodeCard(BuildContext context, Episode episode) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
-    
+
     // Placeholder metadata since Episode doesn't link Story details directly
     const defaultCategory = 'Love';
     const jlpt = 'N5';
     const writer = 'WRITER NAME';
     const likes = 4200;
-    final cover = 'https://images.unsplash.com/photo-1519638399535-1b036603ac77?w=800';
+    final cover =
+        'https://images.unsplash.com/photo-1519638399535-1b036603ac77?w=800';
 
     return Container(
       width: 150,
@@ -756,11 +770,12 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             likes: likes,
             readTime: '5 min',
             category: defaultCategory,
-            preview: episode.preview.isNotEmpty 
-                ? episode.preview 
-                : getMockEpisodePreview(episode.index), // Use canonical mock preview
+            preview: episode.preview.isNotEmpty
+                ? episode.preview
+                : getMockEpisodePreview(
+                    episode.index), // Use canonical mock preview
           );
-          
+
           showEpisodeBottomSheetFromMeta(
             context,
             episodeMeta,
@@ -796,32 +811,33 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                             _buildPlaceholder(context),
                       ),
                     ),
-                    
+
                     // Top-left badge
                     Positioned(
                       top: 8,
                       left: 8,
                       child: _buildTypeBadge(context, 'Episode'),
                     ),
-                    
+
                     // Top-right JLPT chip
                     Positioned(
                       top: 8,
                       right: 8,
                       child: _buildJLPTChip(context, jlpt),
                     ),
-                    
+
                     // Blur title band overlay
                     _buildTitleBandWithBlur(context, episode),
                   ],
                 ),
               ),
-              
+
               // Writer info section
               Expanded(
                 flex: 29,
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                   decoration: BoxDecoration(
                     color: colorScheme.surface,
                     borderRadius: const BorderRadius.only(
@@ -845,7 +861,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                         ),
                       ),
                       const SizedBox(width: 6),
-                      
+
                       // Writer info
                       Expanded(
                         child: Column(
@@ -888,7 +904,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   Widget _buildTitleBandWithBlur(BuildContext context, Episode episode) {
     final theme = Theme.of(context);
     final isDarkMode = theme.brightness == Brightness.dark;
-    
+
     return Positioned(
       bottom: 0,
       left: 0,
@@ -904,7 +920,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             width: double.infinity,
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             decoration: BoxDecoration(
-              color: isDarkMode 
+              color: isDarkMode
                   ? Colors.black.withOpacity(0.4)
                   : Colors.black.withOpacity(0.3),
             ),
@@ -934,7 +950,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
   Widget _buildTypeBadge(BuildContext context, String label) {
     final colorScheme = Theme.of(context).colorScheme;
-    
+
     return Container(
       height: 28,
       padding: const EdgeInsets.symmetric(horizontal: 10),
@@ -966,7 +982,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
   Widget _buildJLPTChip(BuildContext context, String jlpt) {
     final colorScheme = Theme.of(context).colorScheme;
-    
+
     return Container(
       height: 28,
       padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -989,7 +1005,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
   Widget _buildPlaceholder(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    
+
     return Container(
       color: colorScheme.surfaceVariant,
       child: Center(
@@ -1001,8 +1017,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       ),
     );
   }
-
-
 
   Widget _heroCard(BuildContext context, int i) {
     return ClipRRect(
@@ -1090,8 +1104,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     );
   }
 
-
-
   // Removed _fromTheCommunitySection() - now using CommunitySection widget
 
   Widget _buildSeeMoreCard(BuildContext context) {
@@ -1111,7 +1123,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 content: const Text('See more stories coming soon!'),
                 action: SnackBarAction(
                   label: 'OK',
-                  onPressed: () => ScaffoldMessenger.of(context).hideCurrentSnackBar(),
+                  onPressed: () =>
+                      ScaffoldMessenger.of(context).hideCurrentSnackBar(),
                 ),
               ),
             );
@@ -1131,45 +1144,46 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             ),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
-      children: [
+              children: [
                 // Icon
-        Container(
+                Container(
                   width: 80,
                   height: 80,
                   decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.primary.withOpacity(0.2),
+                    color:
+                        Theme.of(context).colorScheme.primary.withOpacity(0.2),
                     borderRadius: BorderRadius.circular(40),
                   ),
                   child: Icon(
                     Icons.add_circle_outline,
                     size: 40,
-                color: Theme.of(context).colorScheme.primary,
-              ),
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
                 ),
                 const SizedBox(height: 16),
-                
+
                 // Text content
                 Text(
                   'See More Stories',
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    color: Theme.of(context).colorScheme.primary,
-                    fontWeight: FontWeight.w700,
-                  ),
+                        color: Theme.of(context).colorScheme.primary,
+                        fontWeight: FontWeight.w700,
+                      ),
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 8),
                 Text(
                   'Discover more stories and adventures',
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
                   maxLines: 3,
                   overflow: TextOverflow.ellipsis,
                   textAlign: TextAlign.center,
                 ),
-            ],
+              ],
+            ),
           ),
-        ),
         ),
       ),
     );
@@ -1179,55 +1193,57 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 // Top Charts list widget with proper bottom padding
 class _TopChartListWidget extends StatelessWidget {
   final List<Story> items;
-  
+
   _TopChartListWidget({required this.items});
-  
+
   @override
   Widget build(BuildContext context) {
     final bottom = MediaQuery.of(context).viewPadding.bottom;
     final navH = kBottomNavigationBarHeight;
     final bottomPadding = bottom + navH + 16;
-    
+
     final displayItems = items.take(5).toList(); // Show only 5 items
-    
+
     return ListView.separated(
-      padding: EdgeInsets.fromLTRB(16, 12, 16, bottomPadding), // Safe bottom padding
-      itemCount: displayItems.length + (items.length > 5 ? 1 : 0), // +1 for See More button
+      padding:
+          EdgeInsets.fromLTRB(16, 12, 16, bottomPadding), // Safe bottom padding
+      itemCount: displayItems.length +
+          (items.length > 5 ? 1 : 0), // +1 for See More button
       separatorBuilder: (_, __) => Divider(
         height: 1,
         color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.3),
         thickness: 0.5,
       ),
-           itemBuilder: (context, index) {
+      itemBuilder: (context, index) {
         if (index >= displayItems.length) {
           // See More button
           return _buildSeeMoreButton(context);
         }
-        
-             final s = displayItems[index];
-             final episodeCount = 8 + index; // placeholder
-             final desc = (s.description?.isNotEmpty == true)
-                 ? s.description!
-                 : 'Description Description Description Description Description Description Description';
 
-             return Container(
+        final s = displayItems[index];
+        final episodeCount = 8 + index; // placeholder
+        final desc = (s.description?.isNotEmpty == true)
+            ? s.description!
+            : 'Description Description Description Description Description Description Description';
+
+        return Container(
           decoration: BoxDecoration(
-                 color: Theme.of(context).colorScheme.surface,
+            color: Theme.of(context).colorScheme.surface,
             borderRadius: BorderRadius.circular(10),
           ),
           child: Material(
             color: Colors.transparent,
-                 child: InkWell(
+            child: InkWell(
               borderRadius: BorderRadius.circular(10),
               onTap: () {
                 // Navigate to story detail
                 context.push('/story/${s.id}');
               },
-                   child: Padding(
+              child: Padding(
                 padding: const EdgeInsets.all(12),
-                     child: Row(
+                child: Row(
                   crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
+                  children: [
                     // Compact book cover thumbnail (72-76dp width, 2:3 ratio)
                     Container(
                       width: 72,
@@ -1237,86 +1253,101 @@ class _TopChartListWidget extends StatelessWidget {
                       ),
                       child: ClipRRect(
                         borderRadius: BorderRadius.circular(10),
-                           child: Image.network(
-                          s.coverUrl ?? 'https://picsum.photos/seed/${s.id}/600/900',
-                             fit: BoxFit.cover,
-                             loadingBuilder: (context, child, loadingProgress) {
-                               if (loadingProgress == null) return child;
-                               return Container(
-                              color: Theme.of(context).colorScheme.surfaceVariant,
-                                 child: const Center(
-                                   child: CircularProgressIndicator(strokeWidth: 2),
-                                 ),
-                               );
-                             },
-                             errorBuilder: (context, error, stackTrace) {
-                               return Container(
-                              color: Theme.of(context).colorScheme.surfaceVariant,
+                        child: Image.network(
+                          s.coverUrl ??
+                              'https://picsum.photos/seed/${s.id}/600/900',
+                          fit: BoxFit.cover,
+                          loadingBuilder: (context, child, loadingProgress) {
+                            if (loadingProgress == null) return child;
+                            return Container(
+                              color:
+                                  Theme.of(context).colorScheme.surfaceVariant,
                               child: const Center(
-                                child: Icon(Icons.book, size: 24, color: Colors.grey),
+                                child:
+                                    CircularProgressIndicator(strokeWidth: 2),
                               ),
-                               );
-                             },
-                           ),
-                         ),
+                            );
+                          },
+                          errorBuilder: (context, error, stackTrace) {
+                            return Container(
+                              color:
+                                  Theme.of(context).colorScheme.surfaceVariant,
+                              child: const Center(
+                                child: Icon(Icons.book,
+                                    size: 24, color: Colors.grey),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
                     ),
                     const SizedBox(width: 12),
 
                     // Title and description
-                         Expanded(
-                           child: Column(
-                             crossAxisAlignment: CrossAxisAlignment.start,
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         mainAxisAlignment: MainAxisAlignment.center,
-                             children: [
-                               Text(
-                                 s.title,
-                                 style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        children: [
+                          Text(
+                            s.title,
+                            style: Theme.of(context)
+                                .textTheme
+                                .titleMedium
+                                ?.copyWith(
                                   fontWeight: FontWeight.w600,
                                   fontSize: 16,
-                                  color: Theme.of(context).colorScheme.onSurface,
+                                  color:
+                                      Theme.of(context).colorScheme.onSurface,
                                   height: 1.2,
-                                     ),
-                                 maxLines: 1,
-                                 overflow: TextOverflow.ellipsis,
+                                ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                             softWrap: false,
-                               ),
+                          ),
                           const SizedBox(height: 4),
-                               Text(
-                                 desc,
-                                 maxLines: 2,
-                                 overflow: TextOverflow.ellipsis,
-                                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                   color: Theme.of(context).colorScheme.onSurfaceVariant,
-                              fontSize: 13,
-                              height: 1.2,
-                                 ),
-                               ),
-            ],
-          ),
-        ),
+                          Text(
+                            desc,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context)
+                                .textTheme
+                                .bodyMedium
+                                ?.copyWith(
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .onSurfaceVariant,
+                                  fontSize: 13,
+                                  height: 1.2,
+                                ),
+                          ),
+                        ],
+                      ),
+                    ),
 
                     const SizedBox(width: 12),
 
-                         // Episode count
-                         Text(
-                           '$episodeCount Episodes',
+                    // Episode count
+                    Text(
+                      '$episodeCount Episodes',
                       style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                                 color: Theme.of(context).colorScheme.onSurfaceVariant,
+                            color:
+                                Theme.of(context).colorScheme.onSurfaceVariant,
                             fontWeight: FontWeight.w500,
                             fontSize: 13,
-                               ),
+                          ),
                       textAlign: TextAlign.right,
-                         ),
-                       ],
-                     ),
-                   ),
-                 ),
-               ),
-             );
-           },
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
-  
+
   Widget _buildSeeMoreButton(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
@@ -1333,7 +1364,8 @@ class _TopChartListWidget extends StatelessWidget {
                 content: const Text('See more stories coming soon!'),
                 action: SnackBarAction(
                   label: 'OK',
-                  onPressed: () => ScaffoldMessenger.of(context).hideCurrentSnackBar(),
+                  onPressed: () =>
+                      ScaffoldMessenger.of(context).hideCurrentSnackBar(),
                 ),
               ),
             );
@@ -1346,16 +1378,16 @@ class _TopChartListWidget extends StatelessWidget {
                 Text(
                   'See More',
                   style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    fontWeight: FontWeight.w500,
-                    fontSize: 13,
-                  ),
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        fontWeight: FontWeight.w500,
+                        fontSize: 13,
+                      ),
                 ),
                 const SizedBox(width: 4),
                 Icon(
                   Icons.arrow_forward_ios,
                   size: 12,
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
               ],
             ),
@@ -1375,13 +1407,12 @@ class _TopChartListWidget extends StatelessWidget {
   }
 }
 
-
 // See All button widget
 class SeeAllButton extends StatelessWidget {
   final VoidCallback? onTap;
-  
+
   const SeeAllButton({Key? key, this.onTap}) : super(key: key);
-  
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -1393,29 +1424,30 @@ class SeeAllButton extends StatelessWidget {
         color: Colors.transparent,
         child: InkWell(
           borderRadius: BorderRadius.circular(16),
-          onTap: onTap ?? () {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: const Text('See all Top Charts coming soon!'),
-                action: SnackBarAction(
-                  label: 'OK',
-                  onPressed: () {},
-                ),
-              ),
-            );
-          },
+          onTap: onTap ??
+              () {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: const Text('See all Top Charts coming soon!'),
+                    action: SnackBarAction(
+                      label: 'OK',
+                      onPressed: () {},
+                    ),
+                  ),
+                );
+              },
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
             child: Row(
               mainAxisSize: MainAxisSize.min,
-      children: [
+              children: [
                 Text(
                   'See all',
                   style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    fontWeight: FontWeight.w500,
-                    fontSize: 13,
-                  ),
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        fontWeight: FontWeight.w500,
+                        fontSize: 13,
+                      ),
                 ),
                 const SizedBox(width: 4),
                 Icon(
@@ -1435,13 +1467,13 @@ class SeeAllButton extends StatelessWidget {
 // Fixed Top Chart widget showing exactly 5 rows without scrolling
 class _TopChartFixed extends StatelessWidget {
   final List<Story> items;
-  
+
   _TopChartFixed({required this.items});
-  
+
   @override
   Widget build(BuildContext context) {
     final visible = items.take(5).toList();
-    
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Column(
@@ -1461,12 +1493,12 @@ class _TopChartFixed extends StatelessWidget {
 class _TopChartRow extends StatelessWidget {
   final Story story;
   final int episodeCount;
-  
+
   _TopChartRow({
     required this.story,
     required this.episodeCount,
   });
-  
+
   @override
   Widget build(BuildContext context) {
     final desc = (story.description?.isNotEmpty == true)
@@ -1504,7 +1536,8 @@ class _TopChartRow extends StatelessWidget {
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(10),
                     child: Image.network(
-                      story.coverUrl ?? 'https://picsum.photos/seed/${story.id}/600/900',
+                      story.coverUrl ??
+                          'https://picsum.photos/seed/${story.id}/600/900',
                       fit: BoxFit.cover,
                       loadingBuilder: (context, child, loadingProgress) {
                         if (loadingProgress == null) return child;
@@ -1519,7 +1552,8 @@ class _TopChartRow extends StatelessWidget {
                         return Container(
                           color: Theme.of(context).colorScheme.surfaceVariant,
                           child: const Center(
-                            child: Icon(Icons.book, size: 24, color: Colors.grey),
+                            child:
+                                Icon(Icons.book, size: 24, color: Colors.grey),
                           ),
                         );
                       },
@@ -1535,12 +1569,15 @@ class _TopChartRow extends StatelessWidget {
                     children: [
                       Text(
                         story.title,
-                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w600,
-                          fontSize: 16,
-                          color: Theme.of(context).colorScheme.onSurface,
-                          height: 1.2,
-                        ),
+                        style: Theme.of(context)
+                            .textTheme
+                            .titleMedium
+                            ?.copyWith(
+                              fontWeight: FontWeight.w600,
+                              fontSize: 16,
+                              color: Theme.of(context).colorScheme.onSurface,
+                              height: 1.2,
+                            ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         softWrap: false,
@@ -1551,10 +1588,12 @@ class _TopChartRow extends StatelessWidget {
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                         style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
-                          fontSize: 13,
-                          height: 1.2,
-                        ),
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .onSurfaceVariant,
+                              fontSize: 13,
+                              height: 1.2,
+                            ),
                       ),
                     ],
                   ),
@@ -1564,10 +1603,10 @@ class _TopChartRow extends StatelessWidget {
                 Text(
                   '$episodeCount Episodes',
                   style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    fontWeight: FontWeight.w500,
-                    fontSize: 13,
-                  ),
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        fontWeight: FontWeight.w500,
+                        fontSize: 13,
+                      ),
                   textAlign: TextAlign.right,
                 ),
               ],

@@ -98,7 +98,8 @@ class CreateMonoNotifier extends StateNotifier<CreateMonoState> {
   }
 }
 
-final createMonoProvider = StateNotifierProvider<CreateMonoNotifier, CreateMonoState>((ref) {
+final createMonoProvider =
+    StateNotifierProvider<CreateMonoNotifier, CreateMonoState>((ref) {
   return CreateMonoNotifier();
 });
 
@@ -242,7 +243,8 @@ class CreateMonoScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildTab(String label, CreationType type, bool isSelected, VoidCallback onTap) {
+  Widget _buildTab(
+      String label, CreationType type, bool isSelected, VoidCallback onTap) {
     return GestureDetector(
       onTap: onTap,
       child: Container(

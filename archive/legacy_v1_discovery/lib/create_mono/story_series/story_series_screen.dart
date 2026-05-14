@@ -148,7 +148,7 @@ class StorySeriesSmartCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final primaryColor = theme.colorScheme.primary;
-    
+
     return Container(
       height: kStorySeriesCardHeight,
       child: AnimatedScale(
@@ -201,7 +201,8 @@ class StorySeriesSmartCard extends StatelessWidget {
                   ),
                   // Text block: center-left, shifted to the right of the cover image
                   Positioned.fill(
-                    left: 120, // enough to clear the cover image width (72) + spacing (12) + extra margin
+                    left:
+                        120, // enough to clear the cover image width (72) + spacing (12) + extra margin
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -516,42 +517,42 @@ class StorySeriesScreenState extends State<StorySeriesScreen> {
                     child: AnimatedSwitcher(
                       duration: const Duration(milliseconds: 300),
                       child: StorySeriesSmartCard(
-                      key: ValueKey(
-                          '${isNewSeries}_${_joinSearchState}_${joinedSeries?.seriesTitle}'),
-                      modeLabel:
-                          isNewSeries ? 'New Series' : 'Join by Story Code',
-                      level: isNewSeries
-                          ? (isEmptyState ? 'N4' : _selectedLevel)
-                          : _getJoinCardLevel(),
-                      seriesTitle: isNewSeries
-                          ? (isEmptyState
-                              ? 'Please select your level and category'
-                              : (_seriesTitleController.text.isNotEmpty
-                                  ? _seriesTitleController.text
-                                  : 'Series Title Name'))
-                          : _getJoinCardTitle(),
-                      episodeTitle: isNewSeries
-                          ? (isEmptyState
-                              ? 'Then enter a Series Title and Episode Title'
-                              : (_episodeTitleController.text.isNotEmpty
-                                  ? '${_episodeTitleController.text} (ep-1)'
-                                  : 'Episode Title Name (ep-1)'))
-                          : _getJoinCardEpisodeTitle(),
-                      description: isNewSeries
-                          ? (isEmptyState
-                              ? 'Start by choosing a JLPT level and category below. We\'ll update this preview as you type.'
-                              : (_descriptionController.text.isNotEmpty
-                                  ? _descriptionController.text
-                                  : 'Enter a description for your new story series.'))
-                          : _getJoinCardDescription(),
-                      category: isNewSeries
-                          ? (isEmptyState
-                              ? '—'
-                              : (_selectedCategory ?? 'Category'))
-                          : _getJoinCardCategory(),
-                      isActive: index == activeCardIndex,
-                      coverImage: isNewSeries ? _newSeriesCover : null,
-                      onTapCover: isNewSeries ? _pickNewSeriesCover : null,
+                        key: ValueKey(
+                            '${isNewSeries}_${_joinSearchState}_${joinedSeries?.seriesTitle}'),
+                        modeLabel:
+                            isNewSeries ? 'New Series' : 'Join by Story Code',
+                        level: isNewSeries
+                            ? (isEmptyState ? 'N4' : _selectedLevel)
+                            : _getJoinCardLevel(),
+                        seriesTitle: isNewSeries
+                            ? (isEmptyState
+                                ? 'Please select your level and category'
+                                : (_seriesTitleController.text.isNotEmpty
+                                    ? _seriesTitleController.text
+                                    : 'Series Title Name'))
+                            : _getJoinCardTitle(),
+                        episodeTitle: isNewSeries
+                            ? (isEmptyState
+                                ? 'Then enter a Series Title and Episode Title'
+                                : (_episodeTitleController.text.isNotEmpty
+                                    ? '${_episodeTitleController.text} (ep-1)'
+                                    : 'Episode Title Name (ep-1)'))
+                            : _getJoinCardEpisodeTitle(),
+                        description: isNewSeries
+                            ? (isEmptyState
+                                ? 'Start by choosing a JLPT level and category below. We\'ll update this preview as you type.'
+                                : (_descriptionController.text.isNotEmpty
+                                    ? _descriptionController.text
+                                    : 'Enter a description for your new story series.'))
+                            : _getJoinCardDescription(),
+                        category: isNewSeries
+                            ? (isEmptyState
+                                ? '—'
+                                : (_selectedCategory ?? 'Category'))
+                            : _getJoinCardCategory(),
+                        isActive: index == activeCardIndex,
+                        coverImage: isNewSeries ? _newSeriesCover : null,
+                        onTapCover: isNewSeries ? _pickNewSeriesCover : null,
                       ),
                     ),
                   );

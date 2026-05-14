@@ -1,9 +1,10 @@
 import { extname } from 'node:path';
+import { UnsupportedMediaTypeException } from '@nestjs/common';
+import { throwValidationFailed } from '../../common/validation/validation-exception';
 import {
-  BadRequestException,
-  PayloadTooLargeException,
-  UnsupportedMediaTypeException,
-} from '@nestjs/common';
+  issueMediaFileEmpty,
+  issueMediaFileRequired,
+} from '../../common/validation/media-validation';
 import type { MulterMemoryUploadedFile } from './media-upload.types';
 
 const OCTET_STREAM = 'application/octet-stream';
@@ -174,17 +175,9 @@ export function assertFilePresent(
   file: MulterMemoryUploadedFile | undefined,
 ): asserts file is MulterMemoryUploadedFile {
   if (!file) {
-    throw new BadRequestException('Missing multipart field "file".');
+    throwValidationFailed([issueMediaFileRequired()]);
   }
   if (!Buffer.isBuffer(file.buffer) || file.buffer.length === 0) {
-    throw new BadRequestException('Missing multipart field "file".');
-  }
-}
-
-export function assertWithinMax(sizeBytes: number, maxBytes: number): void {
-  if (sizeBytes > maxBytes) {
-    throw new PayloadTooLargeException(
-      `File exceeds maximum allowed size of ${maxBytes} bytes.`,
-    );
+    throwValidationFailed([issueMediaFileEmpty()]);
   }
 }

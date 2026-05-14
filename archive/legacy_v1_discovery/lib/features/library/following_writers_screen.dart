@@ -80,9 +80,8 @@ class _WriterListItem extends StatelessWidget {
       leading: CircleAvatar(
         radius: 24,
         backgroundColor: Theme.of(context).colorScheme.primary.withOpacity(0.1),
-        backgroundImage: writer.avatarUrl != null
-            ? NetworkImage(writer.avatarUrl!)
-            : null,
+        backgroundImage:
+            writer.avatarUrl != null ? NetworkImage(writer.avatarUrl!) : null,
         child: writer.avatarUrl == null
             ? Text(
                 writer.initial,
@@ -108,4 +107,3 @@ class _WriterListItem extends StatelessWidget {
     );
   }
 }
-

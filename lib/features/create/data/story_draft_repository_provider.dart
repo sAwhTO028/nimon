@@ -13,6 +13,7 @@ final storyDraftRepositoryProvider = Provider<StoryDraftRepository>((ref) {
     return RemoteStoryDraftRepository(
       apiBaseUrl: RemoteBackendConfig.apiBaseUrl,
       authHeaderBuilder: ref.watch(authHeaderBuilderProvider),
+      sendWithAuth401Recovery: ref.watch(nimonSendWithAuth401RecoveryProvider),
       resolveRemoteOwnerId: () => ref.read(currentUserIdProvider),
       onPublishProgress: (msg) {
         ref.read(creatorPublishStatusTextProvider.notifier).state = msg;

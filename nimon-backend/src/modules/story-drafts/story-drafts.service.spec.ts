@@ -249,6 +249,7 @@ describe('StoryDraftsService.publishFullLearn + publishReadOnly content merge', 
     publishedMonoFindUnique?: jest.Mock;
     publishedMonoUpdate?: jest.Mock;
     publishedMonoCreate?: jest.Mock;
+    publishedMonoCount?: jest.Mock;
   }) {
     return jest.fn(async (fn: (tx: any) => Promise<any>) => {
       const tx = {
@@ -262,6 +263,7 @@ describe('StoryDraftsService.publishFullLearn + publishReadOnly content merge', 
           create:
             mocks.publishedMonoCreate ??
             jest.fn().mockResolvedValue({ id: 'new-mono' }),
+          count: mocks.publishedMonoCount ?? jest.fn().mockResolvedValue(0),
         },
       };
       return fn(tx);
@@ -291,7 +293,7 @@ describe('StoryDraftsService.publishFullLearn + publishReadOnly content merge', 
       category: 'cat',
       level: 'n5',
       description: 'desc',
-      targetDurationBandKey: '5_7',
+      targetDurationBandKey: null,
       moduleWorkflowStatuses: {
         vocabulary_kanji: 'completed',
         grammar: 'completed',
@@ -309,13 +311,47 @@ describe('StoryDraftsService.publishFullLearn + publishReadOnly content merge', 
         },
       ],
       vocabEntries: [
-        { order: 1, content: { id: 'second' } },
-        { order: 0, content: { id: 'first' } },
+        {
+          order: 0,
+          content: {
+            termJapanese: 'こんにちは',
+            type: 'vocabulary',
+            reading: 'こんにちは',
+            glosses: { my: 'hello' },
+          },
+        },
+        {
+          order: 1,
+          content: {
+            termJapanese: '私',
+            type: 'kanji',
+            reading: 'わたし',
+            glosses: { en: 'I' },
+          },
+        },
       ],
-      grammarEntries: [{ order: 0, content: { id: 'g1' } }],
+      grammarEntries: [
+        { order: 0, content: { headline: 'について（パターン）' } },
+      ],
       quizEntries: [
-        { order: 0, content: { id: 'q1' } },
-        { order: 1, content: null },
+        {
+          order: 0,
+          content: {
+            category: 'vocabulary',
+            prompt: 'Choose the best meaning for the greeting?',
+            options: ['hello', 'goodbye', 'sorry', 'please'],
+            correctIndex: 0,
+          },
+        },
+        {
+          order: 1,
+          content: {
+            category: 'grammar',
+            prompt: 'Pick the grammar note that fits this story?',
+            options: ['opt a', 'opt b', 'opt c', 'opt d'],
+            correctIndex: 2,
+          },
+        },
       ],
       audios: [{ kind: 'storyAudio', content: { id: 'aud', sourceUrl: 'https://cdn/x.mp3' } }],
     };
@@ -366,11 +402,10 @@ describe('StoryDraftsService.publishFullLearn + publishReadOnly content merge', 
     expect(learn.schemaVersion).toBe(1);
     const vocab = learn.vocabularyKanji as { entries: Array<{ id: string }> };
     expect(vocab.entries).toHaveLength(2);
-    expect(vocab.entries[0].id).toBe('first');
-    expect(vocab.entries[1].id).toBe('second');
+    expect(vocab.entries[0].termJapanese).toBe('こんにちは');
+    expect(vocab.entries[1].termJapanese).toBe('私');
     expect((learn.grammar as { entries: unknown[] }).entries).toHaveLength(1);
     expect((learn.quiz as { entries: unknown[] }).entries).toHaveLength(2);
-    expect((learn.quiz as { entries: Record<string, unknown>[] }).entries[1]).toEqual({});
     const audio = learn.audio as { storyAudio: Record<string, unknown> | null };
     expect(audio.storyAudio).toEqual({ id: 'aud', sourceUrl: 'https://cdn/x.mp3' });
   });
@@ -386,7 +421,7 @@ describe('StoryDraftsService.publishFullLearn + publishReadOnly content merge', 
       category: 'cat',
       level: 'n5',
       description: 'desc',
-      targetDurationBandKey: '5_7',
+      targetDurationBandKey: null,
       moduleWorkflowStatuses: {
         vocabulary_kanji: 'completed',
         grammar: 'completed',
@@ -394,9 +429,31 @@ describe('StoryDraftsService.publishFullLearn + publishReadOnly content merge', 
         audio: 'completed',
       },
       sentences: [{ order: 0, content: { japaneseText: 'あ' } }],
-      vocabEntries: [],
-      grammarEntries: [],
-      quizEntries: [],
+      vocabEntries: [
+        {
+          order: 0,
+          content: {
+            termJapanese: 'あ',
+            type: 'vocabulary',
+            reading: 'あ',
+            glosses: { my: 'Ah' },
+          },
+        },
+      ],
+      grammarEntries: [
+        { order: 0, content: { headline: 'パターン見出し' } },
+      ],
+      quizEntries: [
+        {
+          order: 0,
+          content: {
+            category: 'vocabulary',
+            prompt: 'Sample quiz question text here?',
+            options: ['a', 'b', 'c', 'd'],
+            correctIndex: 1,
+          },
+        },
+      ],
       audios: [],
     };
 
@@ -425,11 +482,11 @@ describe('StoryDraftsService.publishFullLearn + publishReadOnly content merge', 
       ownerId,
       version: 7,
       publishedMonoId: monoId,
-      title: 'T',
+      title: 'Valid story title',
       category: 'c',
       level: 'n5',
       description: 'd',
-      targetDurationBandKey: '5_7',
+      targetDurationBandKey: null,
       sentences: [{ order: 0, content: { japaneseText: 'こんにちは' } }],
       schemaVersion: 1,
       createdAt: new Date('2026-01-01'),
@@ -487,11 +544,11 @@ describe('StoryDraftsService.publishFullLearn + publishReadOnly content merge', 
       ownerId,
       version: 8,
       publishedMonoId: monoId,
-      title: 'T',
+      title: 'Valid story title',
       category: 'c',
       level: 'n5',
       description: 'd',
-      targetDurationBandKey: '5_7',
+      targetDurationBandKey: null,
       sentences: [
         { order: 2, content: { japaneseText: '三', meanings: { en: 'three' } } },
         { order: 0, content: { japaneseText: '一' } },
@@ -734,7 +791,7 @@ describe('StoryDraftsService.updateDraft', () => {
     expect(data.publishState).toBe(PublishState.draft);
   });
 
-  it('persisted draft_sentences.rows use sentence orderIndex (reorder)', async () => {
+  it('persisted draft_sentences.rows use request array order (reorder), sequential order 0..n-1', async () => {
     const reorderBody = {
       ...minimalWriteBody,
       sentences: [
@@ -814,7 +871,109 @@ describe('StoryDraftsService.updateDraft', () => {
 
     await new StoryDraftsService(prisma).updateDraft(ownerId, draftId, reorderBody as any, '"v1"');
 
-    const rows = createMany.mock.calls[0][0].data as Array<{ order: number }>;
-    expect(rows.map((r) => r.order)).toEqual([2, 0, 1]);
+    const rows = createMany.mock.calls[0][0].data as Array<{
+      order: number;
+      content: { japaneseText?: string; orderIndex?: number };
+    }>;
+    expect(rows.map((r) => r.order)).toEqual([0, 1, 2]);
+    expect(rows.map((r) => r.content.japaneseText)).toEqual(['三', '一', '二']);
+    expect(rows.map((r) => r.content.orderIndex)).toEqual([0, 1, 2]);
+  });
+
+  it('persisted draft_sentences: duplicate incoming orderIndex does not fail; all rows kept', async () => {
+    const dupBody = {
+      ...minimalWriteBody,
+      sentences: [
+        { orderIndex: 0, id: 'a', japaneseText: 'A' },
+        { orderIndex: 0, id: 'b', japaneseText: 'B' },
+        { orderIndex: 1, id: 'c', japaneseText: 'C' },
+      ],
+    };
+
+    const createMany = jest.fn().mockResolvedValue(undefined);
+    const reloaded = {
+      id: draftId,
+      ownerId,
+      version: 2,
+      schemaVersion: 1,
+      createdAt: new Date('2026-01-01'),
+      updatedAt: new Date('2026-01-02'),
+      title: 'T2',
+      category: 'cat',
+      level: 'n5',
+      description: 'd2',
+      promptSourceNote: '',
+      targetDurationBandKey: '5_7',
+      coverImageUrl: null,
+      publishState: PublishState.draft,
+      publishedMonoId: null,
+      readingOnlyPublishedAt: null,
+      fullLearnPublishedAt: null,
+      moduleWorkflowStatuses: {},
+      sentences: [],
+      vocabEntries: [],
+      grammarEntries: [],
+      quizEntries: [],
+      audios: [],
+    };
+
+    const findFirst = jest
+      .fn()
+      .mockResolvedValueOnce({
+        version: 1,
+        publishState: PublishState.draft,
+        publishedMonoId: null,
+      })
+      .mockResolvedValueOnce(reloaded);
+
+    const prisma = {
+      $transaction: jest.fn(async (fn: (tx: any) => Promise<any>) => {
+        const tx = {
+          storyDraft: {
+            findFirst,
+            updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+          },
+          draftSentence: {
+            deleteMany: jest.fn().mockResolvedValue(undefined),
+            createMany,
+          },
+          draftVocabEntry: {
+            deleteMany: jest.fn().mockResolvedValue(undefined),
+            createMany: jest.fn().mockResolvedValue(undefined),
+          },
+          draftGrammarEntry: {
+            deleteMany: jest.fn().mockResolvedValue(undefined),
+            createMany: jest.fn().mockResolvedValue(undefined),
+          },
+          draftQuizEntry: {
+            deleteMany: jest.fn().mockResolvedValue(undefined),
+            createMany: jest.fn().mockResolvedValue(undefined),
+          },
+          draftAudio: {
+            deleteMany: jest.fn().mockResolvedValue(undefined),
+            create: jest.fn(),
+          },
+        };
+        return fn(tx);
+      }),
+    } as any;
+
+    const svc = new StoryDraftsService(prisma);
+    const logWarn = jest.fn();
+    (svc as any).logger = { warn: logWarn };
+
+    await svc.updateDraft(ownerId, draftId, dupBody as any, '"v1"');
+
+    expect(logWarn).toHaveBeenCalledWith(
+      expect.stringContaining('duplicate orderIndex'),
+    );
+    const rows = createMany.mock.calls[0][0].data as Array<{
+      order: number;
+      content: { japaneseText?: string };
+    }>;
+    expect(rows).toHaveLength(3);
+    expect(rows.map((r) => r.order)).toEqual([0, 1, 2]);
+    expect(rows.map((r) => r.content.japaneseText)).toEqual(['A', 'B', 'C']);
+
   });
 });

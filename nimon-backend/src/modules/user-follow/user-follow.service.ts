@@ -3,6 +3,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { MediaUrlCanonicalizerService } from '../media/media-url-canonicalizer.service';
 import { PrismaService } from '../prisma/prisma.service';
 import type {
   FollowStateDto,
@@ -14,7 +15,10 @@ type CursorPayload = { c: string; i: string };
 
 @Injectable()
 export class UserFollowService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly media: MediaUrlCanonicalizerService,
+  ) {}
 
   private encodeCursor(createdAt: Date, followingId: string): string {
     const payload: CursorPayload = { c: createdAt.toISOString(), i: followingId };
@@ -170,7 +174,7 @@ export class UserFollowService {
         userId: r.followingId,
         handle: r.following.profile?.handle ?? null,
         displayName: r.following.profile?.displayName ?? null,
-        avatarUrl: r.following.profile?.avatarUrl ?? null,
+        avatarUrl: this.media.url(r.following.profile?.avatarUrl ?? null),
         followedAt: r.createdAt.toISOString(),
       })),
       nextCursor,
@@ -243,7 +247,7 @@ export class UserFollowService {
         userId: r.followerId,
         handle: r.follower.profile?.handle ?? null,
         displayName: r.follower.profile?.displayName ?? null,
-        avatarUrl: r.follower.profile?.avatarUrl ?? null,
+        avatarUrl: this.media.url(r.follower.profile?.avatarUrl ?? null),
         followedAt: r.createdAt.toISOString(),
       })),
       nextCursor,

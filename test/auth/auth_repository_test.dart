@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
+import 'package:nimon/core/validation/http_validation_failed_exception.dart';
 import 'package:nimon/features/auth/auth_repository.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -50,6 +51,41 @@ void main() {
     expect(me.email, 'a@b.com');
     expect(me.displayName, 'A');
     expect(me.handle, 'a');
+  });
+
+  test(
+      'register 400 validation_failed throws HttpValidationFailedException first',
+      () async {
+    final client = MockClient((request) async {
+      if (request.url.path == '/v1/auth/register') {
+        return http.Response(
+          jsonEncode({
+            'statusCode': 400,
+            'message': 'validation_failed',
+            'issues': [
+              {
+                'code': 'auth.email.invalid',
+                'field': 'email',
+                'messageKey': 'auth.email.invalid',
+                'severity': 'blocking',
+                'source': 'auth-validation',
+              },
+            ],
+          }),
+          400,
+          headers: {'content-type': 'application/json'},
+        );
+      }
+      fail('unexpected ${request.url}');
+    });
+    final repo = AuthRepository(
+      apiBaseUrl: 'http://127.0.0.1:9',
+      httpClient: client,
+    );
+    await expectLater(
+      repo.register(email: 'x@y.com', password: 'password12'),
+      throwsA(isA<HttpValidationFailedException>()),
+    );
   });
 
   test('login maps ClientException to friendly connection message', () async {

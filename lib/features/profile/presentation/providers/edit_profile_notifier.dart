@@ -2,7 +2,12 @@ import 'dart:async' show unawaited;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:nimon/core/validation/form_validation_adapter.dart';
+import 'package:nimon/core/validation/http_validation_failed_exception.dart';
+import 'package:nimon/core/validation/profile_validators.dart';
+import 'package:nimon/core/validation/validation_issue.dart';
 import 'package:nimon/features/auth/auth_providers.dart';
+import 'package:nimon/core/media/media_upload_error_mapper.dart';
 import 'package:nimon/features/create/data/media_upload_repository.dart';
 import 'package:nimon/features/create/data/media_upload_repository_provider.dart';
 import 'package:nimon/features/create/data/remote_backend_config.dart';
@@ -17,6 +22,7 @@ final remoteMeProfileRepositoryProvider = Provider<MeProfileRepository>((ref) {
   return RemoteMeProfileRepository(
     apiBaseUrl: RemoteBackendConfig.apiBaseUrl,
     authHeaderBuilder: ref.watch(authHeaderBuilderProvider),
+    sendWithAuth401Recovery: ref.watch(nimonSendWithAuth401RecoveryProvider),
   );
 });
 
@@ -50,6 +56,10 @@ class EditProfileState {
     required this.bio,
     this.errorMessage,
     this.lastSavedAtMs,
+    this.profileFieldErrors = const {},
+    this.profileBannerIssue,
+    this.mediaUploadError,
+    this.mediaUploadSurface,
   });
 
   final bool loading;
@@ -66,6 +76,16 @@ class EditProfileState {
 
   final String? errorMessage;
   final int? lastSavedAtMs;
+
+  /// Keys: [validateDisplayName] / [validateHandle] / [validateBio] `field` ids.
+  final Map<String, ValidationIssue> profileFieldErrors;
+
+  /// HTTP validation issue not mapped to a profile field (shown as snackbar).
+  final ValidationIssue? profileBannerIssue;
+
+  /// Raw upload failure for localized messaging in UI.
+  final Object? mediaUploadError;
+  final MediaUploadSurface? mediaUploadSurface;
 
   bool get hasLoaded =>
       !loading &&
@@ -88,7 +108,14 @@ class EditProfileState {
     String? coverImageUrl,
     String? bio,
     String? errorMessage,
+    bool clearErrorMessage = false,
     int? lastSavedAtMs,
+    Map<String, ValidationIssue>? profileFieldErrors,
+    ValidationIssue? profileBannerIssue,
+    bool clearProfileBannerIssue = false,
+    Object? mediaUploadError,
+    MediaUploadSurface? mediaUploadSurface,
+    bool clearMediaUpload = false,
   }) {
     return EditProfileState(
       loading: loading ?? this.loading,
@@ -101,8 +128,18 @@ class EditProfileState {
       avatarUrl: avatarUrl ?? this.avatarUrl,
       coverImageUrl: coverImageUrl ?? this.coverImageUrl,
       bio: bio ?? this.bio,
-      errorMessage: errorMessage,
+      errorMessage:
+          clearErrorMessage ? null : (errorMessage ?? this.errorMessage),
       lastSavedAtMs: lastSavedAtMs ?? this.lastSavedAtMs,
+      profileFieldErrors: profileFieldErrors ?? this.profileFieldErrors,
+      profileBannerIssue: clearProfileBannerIssue
+          ? null
+          : (profileBannerIssue ?? this.profileBannerIssue),
+      mediaUploadError:
+          clearMediaUpload ? null : (mediaUploadError ?? this.mediaUploadError),
+      mediaUploadSurface: clearMediaUpload
+          ? null
+          : (mediaUploadSurface ?? this.mediaUploadSurface),
     );
   }
 
@@ -119,6 +156,10 @@ class EditProfileState {
     bio: '',
     errorMessage: null,
     lastSavedAtMs: null,
+    profileFieldErrors: {},
+    profileBannerIssue: null,
+    mediaUploadError: null,
+    mediaUploadSurface: null,
   );
 }
 
@@ -144,7 +185,13 @@ class EditProfileNotifier extends StateNotifier<EditProfileState> {
   EditProfilePickImageFn get _pick => _ref.read(editProfilePickImageProvider);
 
   Future<void> load() async {
-    state = state.copyWith(loading: true, errorMessage: null);
+    state = state.copyWith(
+      loading: true,
+      clearErrorMessage: true,
+      clearProfileBannerIssue: true,
+      clearMediaUpload: true,
+      profileFieldErrors: {},
+    );
     try {
       final res = await _repo.fetchMyProfile();
       state = state.copyWith(
@@ -156,21 +203,40 @@ class EditProfileNotifier extends StateNotifier<EditProfileState> {
         avatarUrl: (res.avatarUrl ?? '').trim(),
         coverImageUrl: (res.coverImageUrl ?? '').trim(),
         bio: (res.bio ?? '').trim(),
-        errorMessage: null,
+        clearErrorMessage: true,
+        clearProfileBannerIssue: true,
+        clearMediaUpload: true,
+        profileFieldErrors: {},
       );
     } catch (e) {
       state = state.copyWith(
         loading: false,
         errorMessage: e is StateError ? e.message : 'Could not load profile.',
+        clearProfileBannerIssue: true,
       );
     }
   }
 
-  void setDisplayName(String v) => state = state.copyWith(displayName: v);
-  void setHandle(String v) => state = state.copyWith(handle: v);
+  void setDisplayName(String v) {
+    final fe = Map<String, ValidationIssue>.from(state.profileFieldErrors);
+    fe.remove('displayName');
+    state = state.copyWith(displayName: v, profileFieldErrors: fe);
+  }
+
+  void setHandle(String v) {
+    final fe = Map<String, ValidationIssue>.from(state.profileFieldErrors);
+    fe.remove('handle');
+    state = state.copyWith(handle: v, profileFieldErrors: fe);
+  }
+
   void setAvatarUrl(String v) => state = state.copyWith(avatarUrl: v);
   void setCoverImageUrl(String v) => state = state.copyWith(coverImageUrl: v);
-  void setBio(String v) => state = state.copyWith(bio: v);
+
+  void setBio(String v) {
+    final fe = Map<String, ValidationIssue>.from(state.profileFieldErrors);
+    fe.remove('bio');
+    state = state.copyWith(bio: v, profileFieldErrors: fe);
+  }
 
   Future<void> pickAndUploadAvatar({ImageSource source = ImageSource.gallery}) {
     return _pickAndUpload(
@@ -195,7 +261,9 @@ class EditProfileNotifier extends StateNotifier<EditProfileState> {
     if (state.saving) return;
 
     state = state.copyWith(
-      errorMessage: null,
+      clearErrorMessage: true,
+      clearProfileBannerIssue: true,
+      clearMediaUpload: true,
       uploadingAvatar: kind == _UploadKind.avatar ? true : null,
       uploadingCover: kind == _UploadKind.cover ? true : null,
     );
@@ -215,10 +283,15 @@ class EditProfileNotifier extends StateNotifier<EditProfileState> {
       } else {
         state = state.copyWith(coverImageUrl: res.url.trim());
       }
-    } on MediaUploadException catch (e) {
-      state = state.copyWith(errorMessage: e.userMessage);
-    } catch (_) {
-      state = state.copyWith(errorMessage: 'Upload failed. Please try again.');
+    } catch (e) {
+      state = state.copyWith(
+        clearErrorMessage: true,
+        clearProfileBannerIssue: true,
+        mediaUploadError: e,
+        mediaUploadSurface: kind == _UploadKind.avatar
+            ? MediaUploadSurface.profileAvatar
+            : MediaUploadSurface.profileCover,
+      );
     } finally {
       state = state.copyWith(
         uploadingAvatar: kind == _UploadKind.avatar ? false : null,
@@ -229,7 +302,11 @@ class EditProfileNotifier extends StateNotifier<EditProfileState> {
 
   Future<void> save() async {
     if (state.saving) return;
-    state = state.copyWith(saving: true, errorMessage: null);
+    state = state.copyWith(
+      saving: true,
+      errorMessage: null,
+      profileFieldErrors: {},
+    );
 
     String? norm(String raw) {
       final t = raw.trim();
@@ -245,6 +322,24 @@ class EditProfileNotifier extends StateNotifier<EditProfileState> {
     final avatarUrl = norm(state.avatarUrl) ?? '';
     final coverImageUrl = norm(state.coverImageUrl) ?? '';
     final bio = norm(state.bio) ?? '';
+
+    final dnRes = validateDisplayName(displayName);
+    final hRes = validateHandle(state.handle);
+    final bRes = validateBio(bio.isEmpty ? null : bio);
+    if (!dnRes.ok || !hRes.ok || !bRes.ok) {
+      final dnErr = firstBlockingIssueForField(dnRes, 'displayName');
+      final hErr = firstBlockingIssueForField(hRes, 'handle');
+      final bErr = firstBlockingIssueForField(bRes, 'bio');
+      state = state.copyWith(
+        saving: false,
+        profileFieldErrors: {
+          if (dnErr != null) 'displayName': dnErr,
+          if (hErr != null) 'handle': hErr,
+          if (bErr != null) 'bio': bErr,
+        },
+      );
+      return;
+    }
 
     try {
       await _repo.patchMyProfile(
@@ -273,8 +368,20 @@ class EditProfileNotifier extends StateNotifier<EditProfileState> {
 
       state = state.copyWith(
         saving: false,
-        errorMessage: null,
+        clearErrorMessage: true,
+        clearProfileBannerIssue: true,
+        profileFieldErrors: {},
         lastSavedAtMs: DateTime.now().millisecondsSinceEpoch,
+      );
+    } on HttpValidationFailedException catch (e) {
+      final fe = blockingIssuesByField(e.issues);
+      final extra = firstUnhandledBlockingIssue(e.issues, fe.keys.toSet());
+      state = state.copyWith(
+        saving: false,
+        profileFieldErrors: fe,
+        clearErrorMessage: true,
+        profileBannerIssue: extra,
+        clearProfileBannerIssue: extra == null,
       );
     } catch (e) {
       state = state.copyWith(
@@ -282,6 +389,7 @@ class EditProfileNotifier extends StateNotifier<EditProfileState> {
         errorMessage: e is StateError
             ? e.message
             : 'Could not save profile. Please try again.',
+        clearProfileBannerIssue: true,
       );
     }
   }

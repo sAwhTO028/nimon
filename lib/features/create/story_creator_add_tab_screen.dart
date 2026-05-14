@@ -8,6 +8,8 @@ import 'package:nimon/features/create/creator_back_policy.dart';
 import 'package:nimon/features/create/creator_processing_copy.dart';
 import 'package:nimon/features/create/data/dto/draft_list_summary_dto.dart';
 import 'package:nimon/features/create/presentation/providers/story_creator_add_tab_draft_summary_provider.dart';
+import 'package:nimon/core/validation/protected_action.dart';
+import 'package:nimon/core/validation/protected_action_guard.dart';
 import 'package:nimon/features/create/story_creator_provider.dart';
 import 'package:nimon/features/profile/profile_processing_refresh.dart';
 import 'package:nimon/features/profile/profile_navigation_helpers.dart';
@@ -16,9 +18,6 @@ import 'package:nimon/ui/widgets/nimon_circle_nav_button.dart';
 /// Add tab V1: lightweight creator hub for continuing local drafts or starting new.
 class StoryCreatorAddTabScreen extends ConsumerWidget {
   const StoryCreatorAddTabScreen({super.key});
-
-  static const _ink = Color(0xFF1A1917);
-  static const _muted = Color(0xFF5C5A55);
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -58,6 +57,12 @@ class StoryCreatorAddTabScreen extends ConsumerWidget {
 
   static Future<void> _createNewStory(
       BuildContext context, WidgetRef ref) async {
+    if (!await ensureProtectedActionAllowed(
+      context,
+      action: ProtectedActionType.createStory,
+    )) {
+      return;
+    }
     // Start a brand-new ephemeral session. Persist only after first meaningful edit.
     ref.read(storyCreatorDraftProvider.notifier).reset();
     if (!context.mounted) return;
@@ -276,10 +281,11 @@ class _SectionHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final cs = theme.colorScheme;
     return Text(
       title,
       style: theme.textTheme.labelLarge?.copyWith(
-        color: StoryCreatorAddTabScreen._muted.withValues(alpha: 0.9),
+        color: cs.onSurfaceVariant,
         fontWeight: FontWeight.w800,
         letterSpacing: 0.4,
       ),
@@ -414,7 +420,7 @@ class _FeaturedDraftCard extends StatelessWidget {
                             fontWeight: FontWeight.w900,
                             height: 1.15,
                             letterSpacing: -0.25,
-                            color: StoryCreatorAddTabScreen._ink,
+                            color: cs.onSurface,
                           ),
                         ),
                         const SizedBox(height: 6),
@@ -461,7 +467,7 @@ class _FeaturedDraftCard extends StatelessWidget {
                             : 'Continue editing',
                         style: theme.textTheme.labelLarge?.copyWith(
                           fontWeight: FontWeight.w800,
-                          color: StoryCreatorAddTabScreen._ink,
+                          color: cs.onSurface,
                         ),
                       ),
                       const SizedBox(height: 6),
@@ -613,7 +619,7 @@ class _MiniChip extends StatelessWidget {
           label,
           style: theme.textTheme.labelSmall?.copyWith(
             fontWeight: FontWeight.w800,
-            color: cs.onSurface.withValues(alpha: 0.82),
+            color: cs.onSurface,
             height: 1.0,
           ),
         ),

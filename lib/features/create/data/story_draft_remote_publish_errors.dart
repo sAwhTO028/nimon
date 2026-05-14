@@ -1,5 +1,7 @@
 import 'dart:convert';
 
+import 'package:nimon/core/validation/validation_issue.dart';
+
 /// Thrown on non-2xx draft HTTP responses so [Exception.toString] is UI-safe
 /// (avoids `Bad state:` prefixes from [StateError]).
 class StoryDraftHttpResponseException implements Exception {
@@ -9,6 +11,17 @@ class StoryDraftHttpResponseException implements Exception {
 
   @override
   String toString() => message;
+}
+
+/// Backend publish gate (`400` + `validation_failed`) with structured issues.
+class StoryDraftValidationFailedException implements Exception {
+  StoryDraftValidationFailedException(this.issues);
+
+  final List<ValidationIssue> issues;
+
+  @override
+  String toString() =>
+      'StoryDraftValidationFailedException(${issues.length} issues)';
 }
 
 /// User-facing copy when the backend rejects Full Learn because no PublishedMono exists yet.

@@ -25,6 +25,7 @@ import 'package:nimon/features/profile/data/remote_published_mono_repository.dar
 import 'package:nimon/core/format_social_count.dart';
 import 'package:nimon/features/profile/data/profile_public_providers.dart';
 import 'package:nimon/features/profile/presentation/owner_profile_header_stats.dart';
+import 'package:nimon/features/profile/presentation/profile_published_monos_scroll_prefetch.dart';
 import 'package:nimon/features/profile/presentation/providers/profile_published_mono_pager.dart';
 import 'package:nimon/features/profile/presentation/providers/profile_saved_mono_pager.dart';
 import 'package:nimon/features/profile/presentation/providers/profile_workspace_draft_pager.dart';
@@ -35,15 +36,31 @@ import 'package:nimon/features/profile/profile_navigation_drawer.dart';
 import 'package:nimon/features/profile/profile_push_drawer_scope.dart';
 import 'package:nimon/features/profile/mono_story_list_row.dart';
 import 'package:nimon/features/profile/profile_processing_refresh.dart';
-import 'package:nimon/features/profile/saved_library_copy.dart';
+import 'package:nimon/features/profile/workspace_draft_menu_policy.dart';
 import 'package:nimon/features/profile/public_profile_widgets.dart';
 import 'package:nimon/features/profile/owner_creator_collection_detail_screen.dart';
 import 'package:nimon/ui/widgets/nimon_circle_nav_button.dart';
 import 'package:nimon/features/auth/auth_session_state.dart';
 import 'package:nimon/features/auth/auth_providers.dart';
 import 'package:nimon/features/profile/presentation/add_to_collection_sheet.dart';
+import 'package:nimon/features/profile/presentation/profile_saved_remote_tab.dart';
+import 'package:nimon/features/profile/presentation/widgets/profile_collection_bottom_sheet_frame.dart';
+import 'package:nimon/features/profile/presentation/profile_workspace_section_header.dart';
 import 'package:nimon/features/profile/presentation/providers/my_creator_collections_notifier.dart';
-import 'package:nimon/features/mono/data/mono_feed_providers.dart';
+import 'package:nimon/core/design_system/nimon_color_tokens.dart';
+import 'package:nimon/features/profile/discard_published_edit_staging_overlay_flow.dart';
+import 'package:nimon/core/validation/collection_validators.dart';
+import 'package:nimon/core/validation/form_validation_adapter.dart';
+import 'package:nimon/core/validation/localized_validation_messages.dart';
+import 'package:nimon/core/validation/http_validation_failed_exception.dart';
+import 'package:nimon/ui/quota_exceeded_dialog.dart';
+import 'package:nimon/widgets/floating_dock_nav_bar.dart';
+
+/// Bottom padding inside profile folder list scroll views so the last row can
+/// scroll fully above [FloatingDockNavBar] (shell uses [Scaffold.extendBody]).
+double _profileFloatingDockScrollClearance(BuildContext context) {
+  return FloatingDockNavBar.dockOccupiedZoneHeight(context) + 12;
+}
 
 class _OneShortItem {
   final String id;
@@ -93,14 +110,14 @@ Future<String?> _showCollectionNameBottomSheet(
     context: context,
     useRootNavigator: true,
     isScrollControlled: true,
-    showDragHandle: true,
-    backgroundColor: Colors.white,
-    shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-    ),
-    builder: (ctx) => _CollectionNameSheet(
-      headline: headline,
-      initialName: initialName,
+    useSafeArea: true,
+    showDragHandle: false,
+    backgroundColor: Colors.transparent,
+    builder: (ctx) => ProfileCollectionBottomSheetFrame(
+      child: _CollectionNameSheet(
+        headline: headline,
+        initialName: initialName,
+      ),
     ),
   );
 }
@@ -120,6 +137,7 @@ class _CollectionNameSheet extends StatefulWidget {
 
 class _CollectionNameSheetState extends State<_CollectionNameSheet> {
   late final TextEditingController _ctrl;
+  String? _nameError;
 
   @override
   void initState() {
@@ -134,74 +152,76 @@ class _CollectionNameSheetState extends State<_CollectionNameSheet> {
   }
 
   void _submit() {
+    final res = validateCollectionName(_ctrl.text);
+    final err = firstBlockingMessageForField(res, 'collection.title');
+    if (err != null) {
+      setState(() => _nameError = err);
+      return;
+    }
+    setState(() => _nameError = null);
     Navigator.of(context).pop<String>(_ctrl.text.trim());
   }
 
   @override
   Widget build(BuildContext context) {
-    final bottomSafe = MediaQuery.paddingOf(context).bottom;
-    return AnimatedPadding(
-      padding: EdgeInsets.only(
-        bottom: MediaQuery.viewInsetsOf(context).bottom,
-      ),
-      duration: const Duration(milliseconds: 120),
-      curve: Curves.easeOut,
-      child: Padding(
-        padding: EdgeInsets.fromLTRB(20, 0, 20, 16 + bottomSafe),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(
-              widget.headline,
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w800,
-                  ),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: _ctrl,
-              autofocus: true,
-              textInputAction: TextInputAction.done,
-              decoration: const InputDecoration(
-                hintText: 'Collection name',
-                border: OutlineInputBorder(),
+    final scheme = Theme.of(context).colorScheme;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          widget.headline,
+          style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                fontWeight: FontWeight.w800,
+                color: scheme.onSurface,
               ),
-              onSubmitted: (_) => _submit(),
+        ),
+        const SizedBox(height: 16),
+        TextField(
+          controller: _ctrl,
+          autofocus: true,
+          textInputAction: TextInputAction.done,
+          decoration: InputDecoration(
+            hintText: 'Collection name',
+            border: const OutlineInputBorder(),
+            errorText: _nameError,
+          ),
+          onChanged: (_) {
+            if (_nameError != null) setState(() => _nameError = null);
+          },
+          onSubmitted: (_) => _submit(),
+        ),
+        const SizedBox(height: 20),
+        Row(
+          children: [
+            Expanded(
+              child: OutlinedButton(
+                onPressed: () => Navigator.of(context).pop<String>(),
+                style: OutlinedButton.styleFrom(
+                  minimumSize: const Size(0, 44),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                child: const Text('Cancel'),
+              ),
             ),
-            const SizedBox(height: 20),
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: () => Navigator.of(context).pop<String>(),
-                    style: OutlinedButton.styleFrom(
-                      minimumSize: const Size(0, 44),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                    child: const Text('Cancel'),
+            const SizedBox(width: 12),
+            Expanded(
+              child: FilledButton(
+                onPressed: _submit,
+                style: FilledButton.styleFrom(
+                  minimumSize: const Size(0, 44),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
                   ),
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: FilledButton(
-                    onPressed: _submit,
-                    style: FilledButton.styleFrom(
-                      minimumSize: const Size(0, 44),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                    child: const Text('Save'),
-                  ),
-                ),
-              ],
+                child: const Text('Save'),
+              ),
             ),
           ],
         ),
-      ),
+      ],
     );
   }
 }
@@ -474,6 +494,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
               willCallGet: true,
               rawCount: p.items.length,
               mappedCount: p.items.length,
+              hasMore: p.hasMore,
+              nextCursor: p.nextCursor,
+              totalCount: p.totalCount,
             );
             if (!mounted) return;
             setState(() {
@@ -509,6 +532,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
     required bool willCallGet,
     int? rawCount,
     int? mappedCount,
+    bool? hasMore,
+    String? nextCursor,
+    int? totalCount,
   }) {
     final qTab = (() {
       if (!mounted) return null;
@@ -534,10 +560,14 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
     }
     final rc = rawCount == null ? '—' : '$rawCount';
     final mc = mappedCount == null ? '—' : '$mappedCount';
+    final hm = hasMore == null ? '—' : '$hasMore';
+    final nc =
+        nextCursor == null ? '—' : (nextCursor.isEmpty ? '(empty)' : '(set)');
+    final tc = totalCount == null ? '—' : '$totalCount';
 
     // One-line trace (visible in debug/profile consoles).
     debugPrint(
-      '[Profile Published] $stage: useRemote=${RemoteBackendConfig.useRemoteDrafts} base=${RemoteBackendConfig.apiBaseUrl} routeTab=$qTab initialTabIndex=$initialTabW currentTabIndex=$tabIndex willGET=$willCallGet raw=$rc mapped=$mc editingCount=${editingIdSet.length} shown=$displayed loose=${looseForLog.length} publishedLoadRan=${stage != 'skip (useRemoteDrafts off)'}',
+      '[Profile Published] $stage: useRemote=${RemoteBackendConfig.useRemoteDrafts} base=${RemoteBackendConfig.apiBaseUrl} routeTab=$qTab initialTabIndex=$initialTabW currentTabIndex=$tabIndex willGET=$willCallGet raw=$rc mapped=$mc hasMore=$hm nextCursor=$nc totalCount=$tc editingCount=${editingIdSet.length} shown=$displayed loose=${looseForLog.length} publishedLoadRan=${stage != 'skip (useRemoteDrafts off)'}',
     );
 
     if (kDebugMode) {
@@ -1046,11 +1076,12 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
       // Root navigator so system Back dismisses this sheet before any shell route pops.
       useRootNavigator: true,
       showDragHandle: true,
-      backgroundColor: Colors.white,
+      backgroundColor: Theme.of(context).colors.surface,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (ctx) {
+        final tc = Theme.of(ctx).colors;
         return Padding(
           padding: EdgeInsets.fromLTRB(
               20, 0, 20, 16 + MediaQuery.of(ctx).padding.bottom),
@@ -1070,7 +1101,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                 maxLines: 3,
                 overflow: TextOverflow.ellipsis,
                 style: Theme.of(ctx).textTheme.bodyMedium?.copyWith(
-                      color: Colors.black.withOpacity(0.62),
+                      color: tc.textSecondary,
                     ),
               ),
               const SizedBox(height: 20),
@@ -1089,6 +1120,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
                         ),
+                        side: BorderSide(color: tc.border),
+                        foregroundColor: tc.textPrimary,
                       ),
                       child: const Text('Unsave'),
                     ),
@@ -1109,6 +1142,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
                         ),
+                        backgroundColor: tc.actionPrimary,
+                        foregroundColor: Theme.of(ctx).colorScheme.onPrimary,
                       ),
                       child: const Text('Add Note'),
                     ),
@@ -1127,11 +1162,13 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
       context: context,
       useRootNavigator: false,
       showDragHandle: true,
-      backgroundColor: Colors.white,
+      backgroundColor: Theme.of(context).colors.surface,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (ctx) {
+        final tc = Theme.of(ctx).colors;
+        final cs = Theme.of(ctx).colorScheme;
         return Padding(
           padding: EdgeInsets.fromLTRB(
               20, 0, 20, 16 + MediaQuery.of(ctx).padding.bottom),
@@ -1143,6 +1180,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                 item.title,
                 style: Theme.of(ctx).textTheme.titleMedium?.copyWith(
                       fontWeight: FontWeight.w800,
+                      color: tc.textPrimary,
                     ),
               ),
               const SizedBox(height: 8),
@@ -1151,7 +1189,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                 maxLines: 3,
                 overflow: TextOverflow.ellipsis,
                 style: Theme.of(ctx).textTheme.bodyMedium?.copyWith(
-                      color: Colors.black.withOpacity(0.62),
+                      color: tc.textSecondary,
                     ),
               ),
               const SizedBox(height: 20),
@@ -1175,8 +1213,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                       },
                       style: FilledButton.styleFrom(
                         minimumSize: const Size(0, 44),
-                        backgroundColor: const Color(0xFFDF3B3B),
-                        foregroundColor: Colors.white,
+                        backgroundColor: cs.error,
+                        foregroundColor: cs.onError,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
                         ),
@@ -1202,6 +1240,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
                         ),
+                        side: BorderSide(color: tc.border),
+                        foregroundColor: tc.textPrimary,
                       ),
                       child: const Text('Edit'),
                     ),
@@ -1223,11 +1263,13 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
       context: context,
       useRootNavigator: true,
       showDragHandle: true,
-      backgroundColor: Colors.white,
+      backgroundColor: Theme.of(context).colors.surface,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (ctx) {
+        final tc = Theme.of(ctx).colors;
+        final cs = Theme.of(ctx).colorScheme;
         final ro = draft == null ? null : computeReadOnlyReady(draft);
         final fl = draft == null ? null : computeFullLearnReady(draft);
         final canReadOnly = ro?.ready == true;
@@ -1247,6 +1289,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                 item.title,
                 style: Theme.of(ctx).textTheme.titleMedium?.copyWith(
                       fontWeight: FontWeight.w800,
+                      color: tc.textPrimary,
                     ),
               ),
               const SizedBox(height: 6),
@@ -1254,7 +1297,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                 item.processingStatusLabel ?? 'Draft only',
                 style: Theme.of(ctx).textTheme.labelLarge?.copyWith(
                       fontWeight: FontWeight.w800,
-                      color: Colors.black.withOpacity(0.62),
+                      color: tc.textSecondary,
                     ),
               ),
               const SizedBox(height: 8),
@@ -1263,7 +1306,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                 maxLines: 3,
                 overflow: TextOverflow.ellipsis,
                 style: Theme.of(ctx).textTheme.bodyMedium?.copyWith(
-                      color: Colors.black.withOpacity(0.62),
+                      color: tc.textSecondary,
                     ),
               ),
               if ((ro?.unmetMessages.isNotEmpty ?? false) ||
@@ -1271,9 +1314,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                 const SizedBox(height: 14),
                 DecoratedBox(
                   decoration: BoxDecoration(
-                    color: Colors.grey.shade100,
+                    color: tc.appBackground,
                     borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: Colors.black.withOpacity(0.06)),
+                    border: Border.all(color: tc.border),
                   ),
                   child: Padding(
                     padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
@@ -1284,6 +1327,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                           'Readiness',
                           style: Theme.of(ctx).textTheme.labelLarge?.copyWith(
                                 fontWeight: FontWeight.w900,
+                                color: tc.textPrimary,
                               ),
                         ),
                         const SizedBox(height: 8),
@@ -1292,7 +1336,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                             'Read-only not ready:',
                             style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
                                   fontWeight: FontWeight.w800,
-                                  color: Colors.black.withOpacity(0.72),
+                                  color: tc.textPrimary,
                                 ),
                           ),
                           const SizedBox(height: 4),
@@ -1301,7 +1345,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                               '• $m',
                               style:
                                   Theme.of(ctx).textTheme.bodySmall?.copyWith(
-                                        color: Colors.black.withOpacity(0.65),
+                                        color: tc.textSecondary,
                                         fontWeight: FontWeight.w600,
                                       ),
                             ),
@@ -1312,7 +1356,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                             'Full Learn not ready:',
                             style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
                                   fontWeight: FontWeight.w800,
-                                  color: Colors.black.withOpacity(0.72),
+                                  color: tc.textPrimary,
                                 ),
                           ),
                           const SizedBox(height: 4),
@@ -1321,7 +1365,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                               '• $m',
                               style:
                                   Theme.of(ctx).textTheme.bodySmall?.copyWith(
-                                        color: Colors.black.withOpacity(0.65),
+                                        color: tc.textSecondary,
                                         fontWeight: FontWeight.w600,
                                       ),
                             ),
@@ -1352,6 +1396,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
                         ),
+                        backgroundColor: tc.actionPrimary,
+                        foregroundColor: cs.onPrimary,
+                        disabledBackgroundColor:
+                            tc.disabled.withValues(alpha: 0.35),
+                        disabledForegroundColor: tc.textSecondary,
                       ),
                       child: const Text('Upload Read-only'),
                     ),
@@ -1375,6 +1424,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
                         ),
+                        backgroundColor: tc.actionPrimary,
+                        foregroundColor: cs.onPrimary,
+                        disabledBackgroundColor:
+                            tc.disabled.withValues(alpha: 0.35),
+                        disabledForegroundColor: tc.textSecondary,
                       ),
                       child: const Text('Upload Full Learn'),
                     ),
@@ -1403,8 +1457,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                       label: const Text('Delete'),
                       style: FilledButton.styleFrom(
                         minimumSize: const Size(0, 44),
-                        backgroundColor: const Color(0xFFDF3B3B),
-                        foregroundColor: Colors.white,
+                        backgroundColor: cs.error,
+                        foregroundColor: cs.onError,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
                         ),
@@ -1431,6 +1485,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
                         ),
+                        backgroundColor: tc.actionPrimary,
+                        foregroundColor: cs.onPrimary,
+                        disabledBackgroundColor:
+                            tc.disabled.withValues(alpha: 0.35),
+                        disabledForegroundColor: tc.textSecondary,
                       ),
                       child: const Text('Continue'),
                     ),
@@ -1500,11 +1559,23 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
       ownerAvatarUrl = null;
     }
 
-    final publishedStatLabel = publishedCountLabelForOwnerHeader(
-      useRemoteBackend: RemoteBackendConfig.useRemoteDrafts,
-      mockFallbackCount: _uploadedMock.length,
-      publishedState: publishedPagerState,
-    );
+    final String publishedStatLabel;
+    if (RemoteBackendConfig.useRemoteDrafts) {
+      if (publishedPagerState.isInitialLoading &&
+          publishedPagerState.items.isEmpty) {
+        publishedStatLabel = '…';
+      } else {
+        final n =
+            publishedPagerState.totalCount ?? publishedPagerState.items.length;
+        publishedStatLabel = formatSocialCount(n);
+      }
+    } else {
+      publishedStatLabel = publishedCountLabelForOwnerHeader(
+        useRemoteBackend: false,
+        mockFallbackCount: _uploadedMock.length,
+        publishedState: publishedPagerState,
+      );
+    }
 
     final followersStatLabel = RemoteBackendConfig.useRemoteDrafts &&
             session is AuthSessionAuthenticated
@@ -1614,12 +1685,34 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                               extraBottomPadding,
                           trailingAction: _OneShortCardAction.edit,
                           isSavedSection: false,
-                          onLooseListNearEnd:
+                          onLooseListNearEnd: RemoteBackendConfig
+                                  .useRemoteDrafts
+                              ? () {
+                                  if (kDebugMode) {
+                                    debugPrint(
+                                      '[Profile Published] onLooseListNearEnd → loadMore()',
+                                    );
+                                  }
+                                  unawaited(
+                                    ref
+                                        .read(profilePublishedMonoPagerProvider
+                                            .notifier)
+                                        .loadMore(),
+                                  );
+                                }
+                              : null,
+                          publishedMonoPagerHasMore:
+                              RemoteBackendConfig.useRemoteDrafts &&
+                                  (publishedPager?.hasMore ?? false),
+                          publishedMonoPagerLoadingMore:
+                              RemoteBackendConfig.useRemoteDrafts &&
+                                  (publishedPager?.isLoadingMore ?? false),
+                          onLooseListRefresh:
                               RemoteBackendConfig.useRemoteDrafts
                                   ? () => ref
                                       .read(profilePublishedMonoPagerProvider
                                           .notifier)
-                                      .loadMore()
+                                      .refresh()
                                   : null,
                           onStoryTap: (list, idx) {
                             unawaited(_openPublishedTabReader(list, idx));
@@ -1668,7 +1761,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                         ),
                       ),
                       RemoteBackendConfig.useRemoteDrafts
-                          ? _ProfileSavedRemoteTab(
+                          ? ProfileSavedRemoteTab(
                               bottomPadding: bottomNavHeight +
                                   bottomPadding +
                                   extraBottomPadding,
@@ -1869,6 +1962,15 @@ class _FolderGroupList extends StatefulWidget {
   /// Published-tab infinite scroll hook (monos filter only); safe no-op when null.
   final VoidCallback? onLooseListNearEnd;
 
+  /// Owner Published Monos: pager [PaginatedState.hasMore] (rebuild when pager changes).
+  final bool publishedMonoPagerHasMore;
+
+  /// Owner Published Monos: pager [PaginatedState.isLoadingMore].
+  final bool publishedMonoPagerLoadingMore;
+
+  /// Remote Published Monos: pull-to-refresh (matches [ProfileSavedRemoteTab] pattern).
+  final Future<void> Function()? onLooseListRefresh;
+
   const _FolderGroupList({
     required this.title,
     required this.folders,
@@ -1884,228 +1986,13 @@ class _FolderGroupList extends StatefulWidget {
     this.onBulkUnsaveLoose,
     this.onPublishedAddToCollection,
     this.onLooseListNearEnd,
+    this.publishedMonoPagerHasMore = false,
+    this.publishedMonoPagerLoadingMore = false,
+    this.onLooseListRefresh,
   });
 
   @override
   State<_FolderGroupList> createState() => _FolderGroupListState();
-}
-
-class _ProfileSavedRemoteTab extends ConsumerStatefulWidget {
-  const _ProfileSavedRemoteTab({required this.bottomPadding});
-
-  final double bottomPadding;
-
-  @override
-  ConsumerState<_ProfileSavedRemoteTab> createState() =>
-      _ProfileSavedRemoteTabState();
-}
-
-class _ProfileSavedRemoteTabState
-    extends ConsumerState<_ProfileSavedRemoteTab> {
-  bool _booted = false;
-
-  void _ensureLoaded() {
-    if (_booted) return;
-    _booted = true;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      unawaited(
-          ref.read(profileSavedMonoPagerProvider.notifier).loadFirstPage());
-    });
-  }
-
-  Future<void> _openReader(List<MonoFeedItem> list, int idx) async {
-    final safe = idx.clamp(0, list.length - 1);
-    if (!context.mounted) return;
-    context.push(
-      '/mono-reader',
-      extra: <String, Object?>{
-        'items': list,
-        'initialIndex': safe,
-        'readerMenuOrigin': MonoReaderMenuOrigin.profileSaved,
-        'onUnsavedMonoFeedItemId': (String monoId) {
-          ref
-              .read(profileSavedMonoPagerProvider.notifier)
-              .removeItemsByIds({monoId});
-        },
-      },
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final session = ref.watch(authSessionProvider);
-
-    if (session is! AuthSessionAuthenticated) {
-      return ColoredBox(
-        color: const Color(0xFFF5F5F5),
-        child: Center(
-          child: Padding(
-            padding: EdgeInsets.only(bottom: widget.bottomPadding),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  SavedLibraryCopy.guestTitle,
-                  style: theme.textTheme.titleMedium
-                      ?.copyWith(fontWeight: FontWeight.w800),
-                ),
-                const SizedBox(height: 10),
-                Text(
-                  SavedLibraryCopy.guestBody,
-                  style: theme.textTheme.bodyMedium,
-                  textAlign: TextAlign.center,
-                ),
-              ],
-            ),
-          ),
-        ),
-      );
-    }
-
-    _ensureLoaded();
-
-    final ps = ref.watch(profileSavedMonoPagerProvider);
-    final items = ps.items;
-
-    if (items.isEmpty && ps.isInitialLoading && ps.error == null) {
-      return ColoredBox(
-        color: const Color(0xFFF5F5F5),
-        child: Center(
-          child: Padding(
-            padding: EdgeInsets.only(bottom: widget.bottomPadding),
-            child: const CircularProgressIndicator(),
-          ),
-        ),
-      );
-    }
-
-    if (items.isEmpty && ps.error != null && !ps.isInitialLoading) {
-      return ColoredBox(
-        color: const Color(0xFFF5F5F5),
-        child: Center(
-          child: Padding(
-            padding: EdgeInsets.only(bottom: widget.bottomPadding),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  'Could not load saved stories.',
-                  style: theme.textTheme.titleMedium
-                      ?.copyWith(fontWeight: FontWeight.w800),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  '${ps.error}',
-                  style: theme.textTheme.bodySmall,
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 14),
-                FilledButton(
-                  onPressed: () => unawaited(
-                    ref
-                        .read(profileSavedMonoPagerProvider.notifier)
-                        .loadFirstPage(),
-                  ),
-                  child: const Text('Retry'),
-                ),
-              ],
-            ),
-          ),
-        ),
-      );
-    }
-
-    if (items.isEmpty && ps.error == null && !ps.isInitialLoading) {
-      return ColoredBox(
-        color: const Color(0xFFF5F5F5),
-        child: Center(
-          child: Padding(
-            padding: EdgeInsets.only(bottom: widget.bottomPadding),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  SavedLibraryCopy.emptyTitle,
-                  style: theme.textTheme.titleMedium
-                      ?.copyWith(fontWeight: FontWeight.w800),
-                ),
-                const SizedBox(height: 10),
-                Text(
-                  SavedLibraryCopy.emptyBody,
-                  style: theme.textTheme.bodyMedium,
-                  textAlign: TextAlign.center,
-                ),
-              ],
-            ),
-          ),
-        ),
-      );
-    }
-
-    return ColoredBox(
-      color: const Color(0xFFF5F5F5),
-      child: RefreshIndicator(
-        onRefresh: () =>
-            ref.read(profileSavedMonoPagerProvider.notifier).refresh(),
-        child: ListView.builder(
-          padding: EdgeInsets.fromLTRB(16, 14, 16, widget.bottomPadding),
-          itemCount: items.length + (ps.canLoadMore ? 1 : 0),
-          itemBuilder: (ctx, i) {
-            if (i >= items.length) {
-              unawaited(
-                  ref.read(profileSavedMonoPagerProvider.notifier).loadMore());
-              return const Padding(
-                padding: EdgeInsets.symmetric(vertical: 16),
-                child: Center(child: CircularProgressIndicator()),
-              );
-            }
-            final it = items[i];
-            final title =
-                (it.title ?? '').trim().isNotEmpty ? it.title! : 'Mono';
-            final subtitle = it.storyDescription.trim();
-            return Card(
-              child: ListTile(
-                onTap: () => unawaited(_openReader(items, i)),
-                title: Text(title),
-                subtitle: subtitle.isEmpty
-                    ? null
-                    : Text(
-                        subtitle,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                trailing: IconButton(
-                  tooltip: SavedLibraryCopy.removeFromSavedTooltip,
-                  icon: const Icon(Icons.bookmark_remove_outlined),
-                  onPressed: () async {
-                    try {
-                      await ref
-                          .read(remoteMonoSocialRepositoryProvider)
-                          .unbookmarkMono(it.monoIdForLearnRoutes);
-                      ref
-                          .read(profileSavedMonoPagerProvider.notifier)
-                          .removeItemsByIds({it.id});
-                      bumpProfileSavedListRefresh(
-                        ProviderScope.containerOf(context, listen: false),
-                      );
-                    } catch (e) {
-                      if (!context.mounted) return;
-                      final msg = e is StateError ? e.message : '$e';
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text(msg)),
-                      );
-                    }
-                  },
-                ),
-              ),
-            );
-          },
-        ),
-      ),
-    );
-  }
 }
 
 class _FolderGroupListState extends State<_FolderGroupList> {
@@ -2113,6 +2000,164 @@ class _FolderGroupListState extends State<_FolderGroupList> {
   bool _selecting = false;
   final Set<String> _selectedIds = <String>{};
   bool _bootedRemoteCreatorCollections = false;
+
+  /// Published Monos loose list: read extent for M17C-2 underscroll prefetch.
+  ScrollController? _publishedLooseScrollController;
+
+  /// Retries prefetch until [ScrollController] has clients (first paint race).
+  int _publishedPrefetchAttachAttempts = 0;
+
+  static const int _publishedPrefetchMaxAttachAttempts = 28;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.onLooseListNearEnd != null) {
+      _publishedLooseScrollController = ScrollController();
+    }
+    _schedulePublishedUnderscrollPrefetch();
+  }
+
+  @override
+  void dispose() {
+    _publishedLooseScrollController?.dispose();
+    super.dispose();
+  }
+
+  @override
+  void didUpdateWidget(covariant _FolderGroupList oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.onLooseListNearEnd == null) return;
+    final lenChanged = widget.looseItems.length != oldWidget.looseItems.length;
+    final hasMoreChanged =
+        widget.publishedMonoPagerHasMore != oldWidget.publishedMonoPagerHasMore;
+    final loadingMoreChanged = widget.publishedMonoPagerLoadingMore !=
+        oldWidget.publishedMonoPagerLoadingMore;
+    if (lenChanged || hasMoreChanged || loadingMoreChanged) {
+      _schedulePublishedUnderscrollPrefetch();
+    }
+  }
+
+  void _debugLogPublishedScrollPrefetch({
+    required String source,
+    ScrollMetrics? metrics,
+    required bool hasMore,
+    required bool isLoadingMore,
+    required bool predicate,
+    bool? controllerHasClients,
+  }) {
+    if (!kDebugMode) return;
+    final m = metrics;
+    final px = m?.pixels;
+    final max = m?.maxScrollExtent;
+    final vd = m?.viewportDimension;
+    debugPrint(
+      '[Profile Published scroll-prefetch] $source '
+      'controllerHasClients=$controllerHasClients '
+      'pixels=$px maxScrollExtent=$max viewportDimension=$vd '
+      'hasMore=$hasMore isLoadingMore=$isLoadingMore '
+      'profilePublishedMonosShouldPrefetchNextPage=$predicate',
+    );
+  }
+
+  void _schedulePublishedUnderscrollPrefetch() {
+    if (widget.onLooseListNearEnd == null) return;
+    _publishedPrefetchAttachAttempts = 0;
+    _publishedPrefetchTryNextFrame();
+  }
+
+  void _publishedPrefetchTryNextFrame() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || widget.onLooseListNearEnd == null) return;
+      final c = _publishedLooseScrollController;
+      if (c == null) return;
+      if (!c.hasClients) {
+        if (kDebugMode &&
+            _publishedPrefetchAttachAttempts <
+                _publishedPrefetchMaxAttachAttempts) {
+          debugPrint(
+            '[Profile Published scroll-prefetch] postFrame: no scroll clients yet '
+            'attempt=${_publishedPrefetchAttachAttempts + 1}',
+          );
+        }
+        if (_publishedPrefetchAttachAttempts <
+            _publishedPrefetchMaxAttachAttempts) {
+          _publishedPrefetchAttachAttempts++;
+          _publishedPrefetchTryNextFrame();
+        }
+        return;
+      }
+      _maybePrefetchPublishedWhenScrollSurfaceShort(
+        source: 'postFrame+attached',
+      );
+    });
+  }
+
+  void _maybePrefetchPublishedWhenScrollSurfaceShort({required String source}) {
+    if (!mounted || widget.onLooseListNearEnd == null) return;
+    if (widget.looseItems.isEmpty) {
+      // Avoid calling loadMore while the first remote page has not become rows yet
+      // (isInitialLoading: scroll extent 0 would otherwise match prefetch rules).
+      if (kDebugMode) {
+        debugPrint(
+          '[Profile Published scroll-prefetch] $source skip: looseItems empty',
+        );
+      }
+      return;
+    }
+    if (widget.publishedMonoPagerLoadingMore) {
+      if (kDebugMode) {
+        debugPrint(
+          '[Profile Published scroll-prefetch] $source skip: isLoadingMore',
+        );
+      }
+      return;
+    }
+    final c = _publishedLooseScrollController;
+    if (c == null || !c.hasClients) {
+      _debugLogPublishedScrollPrefetch(
+        source: source,
+        metrics: null,
+        hasMore: widget.publishedMonoPagerHasMore,
+        isLoadingMore: widget.publishedMonoPagerLoadingMore,
+        predicate: false,
+        controllerHasClients: c?.hasClients,
+      );
+      return;
+    }
+    final hasMore = widget.publishedMonoPagerHasMore;
+    final isLoadingMore = widget.publishedMonoPagerLoadingMore;
+    final metrics = c.position;
+    final want = profilePublishedMonosShouldPrefetchNextPage(
+      metrics,
+      hasMoreFromApi: hasMore,
+    );
+    _debugLogPublishedScrollPrefetch(
+      source: source,
+      metrics: metrics,
+      hasMore: hasMore,
+      isLoadingMore: isLoadingMore,
+      predicate: want,
+      controllerHasClients: true,
+    );
+    if (want) {
+      if (kDebugMode) {
+        debugPrint(
+          '[Profile Published scroll-prefetch] invoking onLooseListNearEnd',
+        );
+      }
+      widget.onLooseListNearEnd!();
+    }
+  }
+
+  /// Bottom inset inside scrollable lists: at least the floating dock zone, and
+  /// at least [widget.bottomPadding] from the profile shell (legacy clearance).
+  double _listBottomScrollClearance() {
+    return math.max(
+      _profileFloatingDockScrollClearance(context),
+      widget.bottomPadding,
+    );
+  }
 
   void _ensureRemoteCreatorCollectionsLoaded() {
     if (_bootedRemoteCreatorCollections) return;
@@ -2153,7 +2198,7 @@ class _FolderGroupListState extends State<_FolderGroupList> {
       context: context,
       useRootNavigator: true,
       showDragHandle: true,
-      backgroundColor: Colors.white,
+      backgroundColor: Theme.of(context).colors.surface,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -2233,14 +2278,15 @@ class _FolderGroupListState extends State<_FolderGroupList> {
       final count = _selectedIds.length;
       final bulkLabel = widget.isSavedSection ? 'Unsave' : 'Add to collection';
       final canBulk = count > 0;
+      final scheme = Theme.of(context).colorScheme;
       return Padding(
         padding: const EdgeInsets.only(bottom: 10),
         child: DecoratedBox(
           decoration: BoxDecoration(
-            color: Colors.grey.shade100,
+            color: scheme.surfaceContainerHighest.withValues(alpha: 0.72),
             borderRadius: BorderRadius.circular(14),
             border: Border.all(
-              color: Colors.black.withValues(alpha: 0.06),
+              color: scheme.outlineVariant.withValues(alpha: 0.45),
             ),
           ),
           child: Padding(
@@ -2252,10 +2298,14 @@ class _FolderGroupListState extends State<_FolderGroupList> {
                     '$count selected',
                     style: Theme.of(context).textTheme.labelLarge?.copyWith(
                           fontWeight: FontWeight.w900,
+                          color: scheme.onSurfaceVariant,
                         ),
                   ),
                 ),
                 TextButton(
+                  style: TextButton.styleFrom(
+                    foregroundColor: scheme.onSurface,
+                  ),
                   onPressed: () => setState(() {
                     _selecting = false;
                     _selectedIds.clear();
@@ -2324,6 +2374,30 @@ class _FolderGroupListState extends State<_FolderGroupList> {
     );
   }
 
+  Widget _publishedSubTabKeyIfNeeded(Widget child) {
+    if (widget.title != 'Published') return child;
+    return KeyedSubtree(
+      key: const ValueKey('profilePublishedSubTabRow'),
+      child: child,
+    );
+  }
+
+  Widget _publishedCollectionsListKeyIfNeeded(Widget child) {
+    if (widget.title != 'Published') return child;
+    return KeyedSubtree(
+      key: const ValueKey('profilePublishedCollectionsList'),
+      child: child,
+    );
+  }
+
+  Widget _publishedMonosListKeyIfNeeded(Widget child) {
+    if (widget.title != 'Published') return child;
+    return KeyedSubtree(
+      key: const ValueKey('profilePublishedMonosList'),
+      child: child,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_filter == _ProfileFolderFilter.collections &&
@@ -2334,282 +2408,346 @@ class _FolderGroupListState extends State<_FolderGroupList> {
     if (_filter == _ProfileFolderFilter.collections) {
       if (!widget.isSavedSection && RemoteBackendConfig.useRemoteDrafts) {
         return Padding(
-          padding: EdgeInsets.fromLTRB(16, 12, 16, widget.bottomPadding),
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
           child: Consumer(
             builder: (context, ref, _) {
               final state = ref.watch(myCreatorCollectionsNotifierProvider);
+              final listClearance = _listBottomScrollClearance();
               Widget body() {
                 if (state.isLoading && state.collections.isEmpty) {
-                  return const Expanded(
-                    child: Center(child: CircularProgressIndicator()),
+                  return Expanded(
+                    child: Padding(
+                      padding: EdgeInsets.only(bottom: listClearance),
+                      child: const Center(child: CircularProgressIndicator()),
+                    ),
                   );
                 }
                 if (state.error != null && state.collections.isEmpty) {
                   return Expanded(
-                    child: Center(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            '${state.error}',
-                            textAlign: TextAlign.center,
-                          ),
-                          const SizedBox(height: 12),
-                          FilledButton(
-                            onPressed: () => unawaited(
-                              ref
-                                  .read(myCreatorCollectionsNotifierProvider
-                                      .notifier)
-                                  .load(),
+                    child: Padding(
+                      padding: EdgeInsets.only(bottom: listClearance),
+                      child: Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              '${state.error}',
+                              textAlign: TextAlign.center,
                             ),
-                            child: const Text('Retry'),
-                          ),
-                        ],
+                            const SizedBox(height: 12),
+                            FilledButton(
+                              onPressed: () => unawaited(
+                                ref
+                                    .read(myCreatorCollectionsNotifierProvider
+                                        .notifier)
+                                    .load(),
+                              ),
+                              child: const Text('Retry'),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   );
                 }
                 if (state.collections.isEmpty) {
-                  return const Expanded(
-                    child: Center(child: Text('No collections yet.')),
+                  return Expanded(
+                    child: Padding(
+                      padding: EdgeInsets.only(bottom: listClearance),
+                      child: const Center(child: Text('No collections yet.')),
+                    ),
                   );
                 }
                 return Expanded(
-                  child: ListView.separated(
-                    itemCount: state.collections.length,
-                    separatorBuilder: (_, __) => const Divider(height: 1),
-                    itemBuilder: (context, i) {
-                      final c = state.collections[i];
-                      final countLabel =
-                          '${c.itemCount} stor${c.itemCount == 1 ? 'y' : 'ies'}';
-                      return Material(
-                        color: Colors.transparent,
-                        child: InkWell(
-                          borderRadius: BorderRadius.circular(12),
-                          onTap: () {
-                            context.push(
-                              '/profile/creator-collections/detail',
-                              extra: OwnerCreatorCollectionDetailArgs(
-                                collection: c,
-                              ),
-                            );
-                          },
-                          child: CollectionListRow(
-                            title: c.title.trim().isEmpty
-                                ? 'Untitled'
-                                : c.title.trim(),
-                            countLabel: countLabel,
-                            description: (c.description ?? '').trim().isEmpty
-                                ? null
-                                : c.description!.trim(),
-                            coverImageUrl: c.coverImageUrl,
-                            trailing: IconButton(
-                              icon:
-                                  const Icon(Icons.more_vert_rounded, size: 22),
-                              onPressed: () {
-                                unawaited(
-                                  showModalBottomSheet<void>(
-                                    context: context,
-                                    showDragHandle: true,
-                                    builder: (ctx) {
-                                      return SafeArea(
-                                        child: Column(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            ListTile(
-                                              leading: const Icon(
-                                                  Icons.edit_outlined),
-                                              title: const Text('Rename'),
-                                              onTap: () async {
-                                                Navigator.of(ctx).pop();
-                                                final controller =
-                                                    TextEditingController(
-                                                  text: c.title,
-                                                );
-                                                final newTitle =
-                                                    await showDialog<String>(
-                                                  context: context,
-                                                  builder: (dctx) =>
-                                                      AlertDialog(
-                                                    title: const Text(
-                                                        'Rename collection'),
-                                                    content: TextField(
-                                                      controller: controller,
-                                                      autofocus: true,
-                                                      decoration:
-                                                          const InputDecoration(
-                                                        labelText: 'Title',
-                                                        border:
-                                                            OutlineInputBorder(),
+                  child: _publishedCollectionsListKeyIfNeeded(
+                    ListView.separated(
+                      padding: EdgeInsets.only(bottom: listClearance),
+                      itemCount: state.collections.length,
+                      separatorBuilder: (_, __) => const Divider(height: 1),
+                      itemBuilder: (context, i) {
+                        final c = state.collections[i];
+                        final countLabel =
+                            '${c.itemCount} stor${c.itemCount == 1 ? 'y' : 'ies'}';
+                        return Material(
+                          color: Colors.transparent,
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(12),
+                            onTap: () {
+                              context.push(
+                                '/profile/creator-collections/detail',
+                                extra: OwnerCreatorCollectionDetailArgs(
+                                  collection: c,
+                                ),
+                              );
+                            },
+                            child: CollectionListRow(
+                              title: c.title.trim().isEmpty
+                                  ? 'Untitled'
+                                  : c.title.trim(),
+                              countLabel: countLabel,
+                              description: (c.description ?? '').trim().isEmpty
+                                  ? null
+                                  : c.description!.trim(),
+                              coverImageUrl: c.coverImageUrl,
+                              trailing: IconButton(
+                                icon: const Icon(Icons.more_vert_rounded,
+                                    size: 22),
+                                onPressed: () {
+                                  unawaited(
+                                    showModalBottomSheet<void>(
+                                      context: context,
+                                      showDragHandle: true,
+                                      builder: (ctx) {
+                                        return SafeArea(
+                                          child: Column(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              ListTile(
+                                                leading: const Icon(
+                                                    Icons.edit_outlined),
+                                                title: const Text('Rename'),
+                                                onTap: () async {
+                                                  Navigator.of(ctx).pop();
+                                                  final controller =
+                                                      TextEditingController(
+                                                    text: c.title,
+                                                  );
+                                                  final newTitle =
+                                                      await showDialog<String>(
+                                                    context: context,
+                                                    builder: (dctx) =>
+                                                        AlertDialog(
+                                                      title: const Text(
+                                                          'Rename collection'),
+                                                      content: TextField(
+                                                        controller: controller,
+                                                        autofocus: true,
+                                                        decoration:
+                                                            const InputDecoration(
+                                                          labelText: 'Title',
+                                                          border:
+                                                              OutlineInputBorder(),
+                                                        ),
                                                       ),
-                                                    ),
-                                                    actions: [
-                                                      TextButton(
-                                                        onPressed: () =>
-                                                            Navigator.of(dctx)
-                                                                .pop(),
-                                                        child: const Text(
-                                                            'Cancel'),
-                                                      ),
-                                                      FilledButton(
-                                                        onPressed: () =>
-                                                            Navigator.of(dctx)
-                                                                .pop(controller
-                                                                    .text),
-                                                        child:
-                                                            const Text('Save'),
-                                                      ),
-                                                    ],
-                                                  ),
-                                                );
-                                                final t =
-                                                    (newTitle ?? '').trim();
-                                                if (t.isEmpty) {
-                                                  if (!context.mounted) return;
-                                                  ScaffoldMessenger.of(context)
-                                                      .showSnackBar(
-                                                    const SnackBar(
-                                                      content: Text(
-                                                          'Title is required.'),
-                                                      behavior: SnackBarBehavior
-                                                          .floating,
+                                                      actions: [
+                                                        TextButton(
+                                                          onPressed: () =>
+                                                              Navigator.of(dctx)
+                                                                  .pop(),
+                                                          child: const Text(
+                                                              'Cancel'),
+                                                        ),
+                                                        FilledButton(
+                                                          onPressed: () =>
+                                                              Navigator.of(dctx)
+                                                                  .pop(controller
+                                                                      .text),
+                                                          child: const Text(
+                                                              'Save'),
+                                                        ),
+                                                      ],
                                                     ),
                                                   );
-                                                  return;
-                                                }
-                                                try {
-                                                  await ref
-                                                      .read(
-                                                        myCreatorCollectionsNotifierProvider
-                                                            .notifier,
-                                                      )
-                                                      .renameCollection(
-                                                        collectionId: c.id,
-                                                        title: t,
-                                                      );
-                                                } catch (e) {
-                                                  if (!context.mounted) return;
-                                                  ScaffoldMessenger.of(context)
-                                                      .showSnackBar(
-                                                    SnackBar(
-                                                      content: Text('$e'),
-                                                      behavior: SnackBarBehavior
-                                                          .floating,
-                                                    ),
+                                                  final t =
+                                                      (newTitle ?? '').trim();
+                                                  final vr =
+                                                      validateCollectionName(t);
+                                                  final verr =
+                                                      firstBlockingMessageForField(
+                                                    vr,
+                                                    'collection.title',
                                                   );
-                                                }
-                                              },
-                                            ),
-                                            ListTile(
-                                              enabled: c.itemCount == 0,
-                                              leading: Icon(
-                                                Icons.delete_outline,
-                                                color: c.itemCount == 0
-                                                    ? Theme.of(context)
-                                                        .colorScheme
-                                                        .error
-                                                    : null,
+                                                  if (verr != null) {
+                                                    if (!context.mounted)
+                                                      return;
+                                                    ScaffoldMessenger.of(
+                                                            context)
+                                                        .showSnackBar(
+                                                      SnackBar(
+                                                        content: Text(verr),
+                                                        behavior:
+                                                            SnackBarBehavior
+                                                                .floating,
+                                                      ),
+                                                    );
+                                                    return;
+                                                  }
+                                                  try {
+                                                    await ref
+                                                        .read(
+                                                          myCreatorCollectionsNotifierProvider
+                                                              .notifier,
+                                                        )
+                                                        .renameCollection(
+                                                          collectionId: c.id,
+                                                          title: t,
+                                                        );
+                                                  } on HttpValidationFailedException catch (e) {
+                                                    if (!context.mounted)
+                                                      return;
+                                                    final byField =
+                                                        blockingIssuesByField(
+                                                      e.issues,
+                                                    );
+                                                    final issue = byField[
+                                                            'collection.title'] ??
+                                                        byField[
+                                                            'collection.name'] ??
+                                                        firstUnhandledBlockingIssue(
+                                                          e.issues,
+                                                          byField.keys.toSet(),
+                                                        ) ??
+                                                        (e.issues.isNotEmpty
+                                                            ? e.issues.first
+                                                            : null);
+                                                    final msg = issue == null
+                                                        ? null
+                                                        : validationIssueDisplayMessageLocalized(
+                                                            context,
+                                                            issue,
+                                                          );
+                                                    ScaffoldMessenger.of(
+                                                            context)
+                                                        .showSnackBar(
+                                                      SnackBar(
+                                                        content: Text(
+                                                          msg ??
+                                                              'Could not rename collection.',
+                                                        ),
+                                                        behavior:
+                                                            SnackBarBehavior
+                                                                .floating,
+                                                      ),
+                                                    );
+                                                  } catch (e) {
+                                                    if (!context.mounted)
+                                                      return;
+                                                    ScaffoldMessenger.of(
+                                                            context)
+                                                        .showSnackBar(
+                                                      SnackBar(
+                                                        content: Text('$e'),
+                                                        behavior:
+                                                            SnackBarBehavior
+                                                                .floating,
+                                                      ),
+                                                    );
+                                                  }
+                                                },
                                               ),
-                                              title: Text(
-                                                'Delete',
-                                                style: TextStyle(
+                                              ListTile(
+                                                enabled: c.itemCount == 0,
+                                                leading: Icon(
+                                                  Icons.delete_outline,
                                                   color: c.itemCount == 0
                                                       ? Theme.of(context)
                                                           .colorScheme
                                                           .error
                                                       : null,
                                                 ),
-                                              ),
-                                              subtitle: c.itemCount == 0
-                                                  ? null
-                                                  : const Text(
-                                                      'Remove all stories before deleting.',
-                                                    ),
-                                              onTap: c.itemCount == 0
-                                                  ? () async {
-                                                      Navigator.of(ctx).pop();
-                                                      final ok =
-                                                          await showDialog<
-                                                              bool>(
-                                                        context: context,
-                                                        builder: (dctx) =>
-                                                            AlertDialog(
-                                                          title: const Text(
-                                                              'Delete collection?'),
-                                                          content: const Text(
-                                                            'This deletes the collection only. Stories are not deleted.',
-                                                          ),
-                                                          actions: [
-                                                            TextButton(
-                                                              onPressed: () =>
-                                                                  Navigator.of(
-                                                                          dctx)
-                                                                      .pop(
-                                                                          false),
-                                                              child: const Text(
-                                                                  'Cancel'),
+                                                title: Text(
+                                                  'Delete',
+                                                  style: TextStyle(
+                                                    color: c.itemCount == 0
+                                                        ? Theme.of(context)
+                                                            .colorScheme
+                                                            .error
+                                                        : null,
+                                                  ),
+                                                ),
+                                                subtitle: c.itemCount == 0
+                                                    ? null
+                                                    : const Text(
+                                                        'Remove all stories before deleting.',
+                                                      ),
+                                                onTap: c.itemCount == 0
+                                                    ? () async {
+                                                        Navigator.of(ctx).pop();
+                                                        final ok =
+                                                            await showDialog<
+                                                                bool>(
+                                                          context: context,
+                                                          builder: (dctx) =>
+                                                              AlertDialog(
+                                                            title: const Text(
+                                                                'Delete collection?'),
+                                                            content: const Text(
+                                                              'This deletes the collection only. Stories are not deleted.',
                                                             ),
-                                                            FilledButton(
-                                                              onPressed: () =>
-                                                                  Navigator.of(
-                                                                          dctx)
-                                                                      .pop(
-                                                                          true),
-                                                              child: const Text(
-                                                                  'Delete'),
-                                                            ),
-                                                          ],
-                                                        ),
-                                                      );
-                                                      if (ok != true) return;
-                                                      try {
-                                                        await ref
-                                                            .read(
-                                                              myCreatorCollectionsNotifierProvider
-                                                                  .notifier,
-                                                            )
-                                                            .deleteCollection(
-                                                                c.id);
-                                                      } catch (e) {
-                                                        if (!context.mounted)
-                                                          return;
-                                                        ScaffoldMessenger.of(
-                                                                context)
-                                                            .showSnackBar(
-                                                          SnackBar(
-                                                            content: Text('$e'),
-                                                            behavior:
-                                                                SnackBarBehavior
-                                                                    .floating,
+                                                            actions: [
+                                                              TextButton(
+                                                                onPressed: () =>
+                                                                    Navigator.of(
+                                                                            dctx)
+                                                                        .pop(
+                                                                            false),
+                                                                child: const Text(
+                                                                    'Cancel'),
+                                                              ),
+                                                              FilledButton(
+                                                                onPressed: () =>
+                                                                    Navigator.of(
+                                                                            dctx)
+                                                                        .pop(
+                                                                            true),
+                                                                child: const Text(
+                                                                    'Delete'),
+                                                              ),
+                                                            ],
                                                           ),
                                                         );
+                                                        if (ok != true) return;
+                                                        try {
+                                                          await ref
+                                                              .read(
+                                                                myCreatorCollectionsNotifierProvider
+                                                                    .notifier,
+                                                              )
+                                                              .deleteCollection(
+                                                                  c.id);
+                                                        } catch (e) {
+                                                          if (!context.mounted)
+                                                            return;
+                                                          ScaffoldMessenger.of(
+                                                                  context)
+                                                              .showSnackBar(
+                                                            SnackBar(
+                                                              content:
+                                                                  Text('$e'),
+                                                              behavior:
+                                                                  SnackBarBehavior
+                                                                      .floating,
+                                                            ),
+                                                          );
+                                                        }
                                                       }
-                                                    }
-                                                  : null,
-                                            ),
-                                            const SizedBox(height: 8),
-                                          ],
-                                        ),
-                                      );
-                                    },
-                                  ),
-                                );
-                              },
-                              tooltip: 'Collection actions',
-                              padding: EdgeInsets.zero,
-                              constraints: const BoxConstraints(
-                                minWidth: 36,
-                                minHeight: 36,
-                              ),
-                              visualDensity: VisualDensity.compact,
-                              style: IconButton.styleFrom(
-                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                                    : null,
+                                              ),
+                                              const SizedBox(height: 8),
+                                            ],
+                                          ),
+                                        );
+                                      },
+                                    ),
+                                  );
+                                },
+                                tooltip: 'Collection actions',
+                                padding: EdgeInsets.zero,
+                                constraints: const BoxConstraints(
+                                  minWidth: 36,
+                                  minHeight: 36,
+                                ),
+                                visualDensity: VisualDensity.compact,
+                                style: IconButton.styleFrom(
+                                  tapTargetSize:
+                                      MaterialTapTargetSize.shrinkWrap,
+                                ),
                               ),
                             ),
                           ),
-                        ),
-                      );
-                    },
+                        );
+                      },
+                    ),
                   ),
                 );
               }
@@ -2618,7 +2756,7 @@ class _FolderGroupListState extends State<_FolderGroupList> {
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  _buildFilterOrSelectionBar(),
+                  _publishedSubTabKeyIfNeeded(_buildFilterOrSelectionBar()),
                   body(),
                 ],
               );
@@ -2627,28 +2765,20 @@ class _FolderGroupListState extends State<_FolderGroupList> {
         );
       }
       final folderCount = widget.folders.length;
-      final total = 1 + folderCount;
       final dividerColor =
           Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.28);
 
-      final list = ListView.separated(
-        padding: EdgeInsets.fromLTRB(16, 12, 16, widget.bottomPadding),
-        itemCount: total,
+      final folderList = ListView.separated(
+        padding: EdgeInsets.only(bottom: _listBottomScrollClearance()),
+        itemCount: folderCount,
         separatorBuilder: (context, index) {
-          if (index == 0) {
-            return const SizedBox(height: 4);
-          }
           return Divider(
             height: 1,
             thickness: 0.5,
             color: dividerColor,
           );
         },
-        itemBuilder: (context, i) {
-          if (i == 0) {
-            return _buildFilterOrSelectionBar();
-          }
-          final idx = i - 1;
+        itemBuilder: (context, idx) {
           final f = widget.folders[idx];
           final n = f.items.length;
           final countLabel = '$n stor${n == 1 ? 'y' : 'ies'}';
@@ -2705,35 +2835,76 @@ class _FolderGroupListState extends State<_FolderGroupList> {
         },
       );
       return ColoredBox(
-        color: const Color(0xFFF5F5F5),
-        child: list,
+        color: Theme.of(context).colors.appBackground,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _publishedSubTabKeyIfNeeded(_buildFilterOrSelectionBar()),
+              const SizedBox(height: 4),
+              Expanded(
+                child: _publishedCollectionsListKeyIfNeeded(folderList),
+              ),
+            ],
+          ),
+        ),
       );
     }
 
     // Monos: loose mono story rows only (content-first feed rows; not card chrome).
     final looseCount = widget.looseItems.length;
-    final total = 1 + looseCount;
+    final showLoadSentinel =
+        widget.onLooseListNearEnd != null && widget.publishedMonoPagerHasMore;
+    final itemCountWithSentinel = looseCount + (showLoadSentinel ? 1 : 0);
     final dividerColor =
         Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.28);
 
     final list = ListView.separated(
-      padding: EdgeInsets.fromLTRB(16, 12, 16, widget.bottomPadding),
-      itemCount: total,
+      controller: _publishedLooseScrollController,
+      padding: EdgeInsets.only(bottom: _listBottomScrollClearance()),
+      physics: widget.onLooseListRefresh != null
+          ? const AlwaysScrollableScrollPhysics()
+          : null,
+      cacheExtent:
+          widget.title == 'Published' && widget.onLooseListNearEnd != null
+              ? 4000
+              : null,
+      itemCount: itemCountWithSentinel,
       separatorBuilder: (context, index) {
-        if (index == 0) {
-          return const SizedBox(height: 4);
-        }
         return Divider(
           height: 1,
           thickness: 0.5,
           color: dividerColor,
         );
       },
-      itemBuilder: (context, i) {
-        if (i == 0) {
-          return _buildFilterOrSelectionBar();
+      itemBuilder: (context, looseIdx) {
+        if (showLoadSentinel && looseIdx == looseCount) {
+          return Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _ProfilePublishedMonosLoadSentinel(
+                key: ValueKey('profilePublishedMonosSentinel_$looseCount'),
+                hasMore: widget.publishedMonoPagerHasMore,
+                isLoadingMore: widget.publishedMonoPagerLoadingMore,
+                onRequestLoadMore: widget.onLooseListNearEnd!,
+              ),
+              if (widget.publishedMonoPagerLoadingMore)
+                const Padding(
+                  padding: EdgeInsets.only(bottom: 12, top: 4),
+                  child: Center(
+                    child: SizedBox(
+                      width: 24,
+                      height: 24,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                  ),
+                ),
+            ],
+          );
         }
-        final looseIdx = i - 1;
+        final tc = Theme.of(context).colors;
         final it = widget.looseItems[looseIdx];
         final selected = _selectedIds.contains(it.id);
         return Material(
@@ -2772,10 +2943,9 @@ class _FolderGroupListState extends State<_FolderGroupList> {
                     left: 4,
                     child: DecoratedBox(
                       decoration: BoxDecoration(
-                        color: selected ? Colors.black : Colors.white,
+                        color: selected ? tc.actionPrimary : tc.surface,
                         borderRadius: BorderRadius.circular(999),
-                        border:
-                            Border.all(color: Colors.black.withOpacity(0.20)),
+                        border: Border.all(color: tc.border),
                       ),
                       child: SizedBox(
                         width: 22,
@@ -2785,7 +2955,9 @@ class _FolderGroupListState extends State<_FolderGroupList> {
                               ? Icons.check_rounded
                               : Icons.circle_outlined,
                           size: 16,
-                          color: selected ? Colors.white : Colors.black,
+                          color: selected
+                              ? Theme.of(context).colorScheme.onPrimary
+                              : tc.textSecondary,
                         ),
                       ),
                     ),
@@ -2798,23 +2970,144 @@ class _FolderGroupListState extends State<_FolderGroupList> {
     );
     Widget scrolled = list;
     if (widget.onLooseListNearEnd != null) {
-      scrolled = NotificationListener<ScrollNotification>(
-        onNotification: (ScrollNotification n) {
-          if (n.metrics.axis != Axis.vertical) return false;
-          if (n is! ScrollUpdateNotification) return false;
-          final m = n.metrics;
-          if (m.maxScrollExtent <= 0) return false;
-          if (m.pixels >= m.maxScrollExtent - 220) {
-            widget.onLooseListNearEnd!();
+      scrolled = NotificationListener<Notification>(
+        onNotification: (Notification n) {
+          ScrollMetrics? metrics;
+          String source = 'notification';
+          if (n is ScrollUpdateNotification) {
+            metrics = n.metrics;
+            source = 'ScrollUpdateNotification';
+          } else if (n is ScrollMetricsNotification) {
+            metrics = n.metrics;
+            source = 'ScrollMetricsNotification';
+          }
+          if (metrics != null) {
+            if (widget.looseItems.isEmpty ||
+                widget.publishedMonoPagerLoadingMore) {
+              if (kDebugMode) {
+                debugPrint(
+                  '[Profile Published scroll-prefetch] $source skip: '
+                  'looseEmpty=${widget.looseItems.isEmpty} isLoadingMore=${widget.publishedMonoPagerLoadingMore}',
+                );
+              }
+              return false;
+            }
+            final hasMore = widget.publishedMonoPagerHasMore;
+            final isLoadingMore = widget.publishedMonoPagerLoadingMore;
+            final want = profilePublishedMonosShouldPrefetchNextPage(
+              metrics,
+              hasMoreFromApi: hasMore,
+            );
+            if (kDebugMode) {
+              debugPrint(
+                '[Profile Published scroll-prefetch] $source '
+                'pixels=${metrics.pixels} maxScrollExtent=${metrics.maxScrollExtent} '
+                'viewportDimension=${metrics.viewportDimension} '
+                'hasMore=$hasMore isLoadingMore=$isLoadingMore '
+                'profilePublishedMonosShouldPrefetchNextPage=$want',
+              );
+            }
+            if (want) {
+              if (kDebugMode) {
+                debugPrint(
+                  '[Profile Published scroll-prefetch] $source → onLooseListNearEnd',
+                );
+              }
+              widget.onLooseListNearEnd!();
+            }
           }
           return false;
         },
         child: list,
       );
     }
+    if (widget.onLooseListRefresh != null) {
+      scrolled = RefreshIndicator(
+        key: widget.title == 'Published'
+            ? const ValueKey('profilePublishedMonosRefreshIndicator')
+            : null,
+        onRefresh: widget.onLooseListRefresh!,
+        child: scrolled,
+      );
+    }
     return ColoredBox(
-      color: const Color(0xFFF5F5F5),
-      child: scrolled,
+      color: Theme.of(context).colors.appBackground,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _publishedSubTabKeyIfNeeded(_buildFilterOrSelectionBar()),
+            const SizedBox(height: 4),
+            Expanded(
+              child: _publishedMonosListKeyIfNeeded(scrolled),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Bottom-of-list trigger so [ProfilePublishedMonoPager.loadMore] runs without
+/// relying only on scroll notifications (owner Published > Monos).
+class _ProfilePublishedMonosLoadSentinel extends StatefulWidget {
+  const _ProfilePublishedMonosLoadSentinel({
+    super.key,
+    required this.hasMore,
+    required this.isLoadingMore,
+    required this.onRequestLoadMore,
+  });
+
+  final bool hasMore;
+  final bool isLoadingMore;
+  final VoidCallback onRequestLoadMore;
+
+  @override
+  State<_ProfilePublishedMonosLoadSentinel> createState() =>
+      _ProfilePublishedMonosLoadSentinelState();
+}
+
+class _ProfilePublishedMonosLoadSentinelState
+    extends State<_ProfilePublishedMonosLoadSentinel> {
+  @override
+  void initState() {
+    super.initState();
+    _schedule();
+  }
+
+  @override
+  void didUpdateWidget(covariant _ProfilePublishedMonosLoadSentinel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.hasMore != oldWidget.hasMore ||
+        widget.isLoadingMore != oldWidget.isLoadingMore) {
+      _schedule();
+    }
+  }
+
+  void _schedule() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      // Second frame: ensures pager left isInitialLoading=false before loadMore's canLoadMore.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        if (!widget.hasMore) return;
+        if (widget.isLoadingMore) return;
+        if (kDebugMode) {
+          debugPrint(
+            '[Profile Published sentinel] post-frame → onRequestLoadMore',
+          );
+        }
+        widget.onRequestLoadMore();
+      });
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return const SizedBox(
+      height: 1,
+      width: double.infinity,
     );
   }
 }
@@ -2833,6 +3126,7 @@ class _FilterRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final tc = theme.colors;
 
     Widget chip({
       required String label,
@@ -2847,13 +3141,13 @@ class _FilterRow extends StatelessWidget {
           curve: Curves.easeOut,
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           decoration: BoxDecoration(
-            color: active ? Colors.black : Colors.white,
+            color: active ? tc.actionPrimary : tc.surface,
             borderRadius: BorderRadius.circular(999),
-            border: Border.all(color: Colors.black.withOpacity(0.08)),
+            border: Border.all(color: tc.border),
             boxShadow: active
                 ? [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.10),
+                      color: tc.textPrimary.withValues(alpha: 0.12),
                       blurRadius: 14,
                       offset: const Offset(0, 8),
                     ),
@@ -2863,7 +3157,7 @@ class _FilterRow extends StatelessWidget {
           child: Text(
             label,
             style: theme.textTheme.labelMedium?.copyWith(
-              color: active ? Colors.white : Colors.black.withOpacity(0.80),
+              color: active ? theme.colorScheme.onPrimary : tc.textPrimary,
               fontWeight: active ? FontWeight.w900 : FontWeight.w700,
               height: 1.0,
             ),
@@ -2880,15 +3174,15 @@ class _FilterRow extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: tc.surface,
             borderRadius: BorderRadius.circular(999),
-            border: Border.all(color: Colors.black.withOpacity(0.10)),
+            border: Border.all(color: tc.border),
           ),
           child: Text(
             'Add',
             style: theme.textTheme.labelMedium?.copyWith(
               fontWeight: FontWeight.w900,
-              color: Colors.black.withOpacity(0.82),
+              color: tc.textPrimary,
               height: 1.0,
             ),
           ),
@@ -3053,7 +3347,7 @@ class _FolderDetailScreenStatefulState
       context: context,
       useRootNavigator: true,
       showDragHandle: true,
-      backgroundColor: Colors.white,
+      backgroundColor: Theme.of(context).colors.surface,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -3129,12 +3423,13 @@ class _FolderDetailScreenStatefulState
     final theme = Theme.of(context);
     final items = widget.folder.items;
 
+    final tc = theme.colors;
     return Scaffold(
       appBar: AppBar(
         title: const Text('Collection'),
         leading: NimonBackButton(onPressed: () => Navigator.pop(context)),
       ),
-      backgroundColor: const Color(0xFFF5F5F5),
+      backgroundColor: tc.appBackground,
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 18),
         children: [
@@ -3158,7 +3453,7 @@ class _FolderDetailScreenStatefulState
                     Text(
                       '${widget.folder.items.length} ${widget.folder.items.length == 1 ? 'story' : 'stories'} · ${widget.isSavedSection ? 'Saved' : 'Published'}',
                       style: theme.textTheme.bodySmall?.copyWith(
-                        color: Colors.black.withOpacity(0.60),
+                        color: tc.textSecondary,
                         fontWeight: FontWeight.w700,
                       ),
                     ),
@@ -3171,9 +3466,9 @@ class _FolderDetailScreenStatefulState
           if (_selecting) ...[
             DecoratedBox(
               decoration: BoxDecoration(
-                color: Colors.grey.shade100,
+                color: tc.surface,
                 borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: Colors.black.withOpacity(0.06)),
+                border: Border.all(color: tc.border),
               ),
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
@@ -3184,10 +3479,13 @@ class _FolderDetailScreenStatefulState
                         '${_selectedIds.length} selected',
                         style: theme.textTheme.labelLarge?.copyWith(
                           fontWeight: FontWeight.w900,
+                          color: tc.textPrimary,
                         ),
                       ),
                     ),
                     TextButton(
+                      style:
+                          TextButton.styleFrom(foregroundColor: tc.textPrimary),
                       onPressed: () => setState(() {
                         _selecting = false;
                         _selectedIds.clear();
@@ -3207,6 +3505,13 @@ class _FolderDetailScreenStatefulState
                                 ),
                               );
                             },
+                      style: FilledButton.styleFrom(
+                        backgroundColor: tc.actionPrimary,
+                        foregroundColor: theme.colorScheme.onPrimary,
+                        disabledBackgroundColor:
+                            tc.disabled.withValues(alpha: 0.35),
+                        disabledForegroundColor: tc.textSecondary,
+                      ),
                       child: const Text('Organize'),
                     ),
                   ],
@@ -3221,7 +3526,7 @@ class _FolderDetailScreenStatefulState
               child: Text(
                 'No stories in this collection yet.',
                 style: theme.textTheme.bodyMedium?.copyWith(
-                  color: Colors.black.withOpacity(0.65),
+                  color: tc.textSecondary,
                 ),
               ),
             )
@@ -3231,6 +3536,7 @@ class _FolderDetailScreenStatefulState
               physics: const NeverScrollableScrollPhysics(),
               itemCount: items.length,
               itemBuilder: (ctx, i) {
+                final tcRow = Theme.of(ctx).colors;
                 final it = items[i];
                 final selected = _selectedIds.contains(it.id);
                 return Padding(
@@ -3267,11 +3573,11 @@ class _FolderDetailScreenStatefulState
                               left: 4,
                               child: DecoratedBox(
                                 decoration: BoxDecoration(
-                                  color: selected ? Colors.black : Colors.white,
+                                  color: selected
+                                      ? tcRow.actionPrimary
+                                      : tcRow.surface,
                                   borderRadius: BorderRadius.circular(999),
-                                  border: Border.all(
-                                    color: Colors.black.withOpacity(0.20),
-                                  ),
+                                  border: Border.all(color: tcRow.border),
                                 ),
                                 child: SizedBox(
                                   width: 22,
@@ -3281,8 +3587,9 @@ class _FolderDetailScreenStatefulState
                                         ? Icons.check_rounded
                                         : Icons.circle_outlined,
                                     size: 16,
-                                    color:
-                                        selected ? Colors.white : Colors.black,
+                                    color: selected
+                                        ? Theme.of(ctx).colorScheme.onPrimary
+                                        : tcRow.textSecondary,
                                   ),
                                 ),
                               ),
@@ -3704,8 +4011,9 @@ class _ProfileIconTabs extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final ink = theme.colorScheme.onSurface;
-    final muted = Colors.black.withOpacity(0.45);
+    final scheme = theme.colorScheme;
+    final ink = scheme.onSurface;
+    final muted = scheme.onSurfaceVariant;
 
     Widget tab(
         {required int idx, required IconData icon, required String label}) {
@@ -3735,7 +4043,7 @@ class _ProfileIconTabs extends StatelessWidget {
                   height: 2,
                   width: 26,
                   decoration: BoxDecoration(
-                    color: selected ? ink : Colors.transparent,
+                    color: selected ? scheme.primary : Colors.transparent,
                     borderRadius: BorderRadius.circular(999),
                   ),
                 ),
@@ -3753,7 +4061,11 @@ class _ProfileIconTabs extends StatelessWidget {
         builder: (context, _) {
           return Column(
             children: [
-              Divider(height: 1, color: Colors.black.withOpacity(0.06)),
+              Divider(
+                height: 1,
+                thickness: 1,
+                color: scheme.outlineVariant.withValues(alpha: 0.45),
+              ),
               Row(
                 children: [
                   tab(
@@ -3769,7 +4081,11 @@ class _ProfileIconTabs extends StatelessWidget {
                   ),
                 ],
               ),
-              Divider(height: 1, color: Colors.black.withOpacity(0.06)),
+              Divider(
+                height: 1,
+                thickness: 1,
+                color: scheme.outlineVariant.withValues(alpha: 0.45),
+              ),
             ],
           );
         },
@@ -4050,7 +4366,7 @@ class _ProcessingDraftManagerTabState
       if (widget.pagerState.isInitialLoading &&
           widget.pagerState.error == null) {
         return ColoredBox(
-          color: const Color(0xFFF5F5F5),
+          color: Theme.of(context).colors.appBackground,
           child: Center(
             child: Padding(
               padding: EdgeInsets.only(bottom: widget.bottomPadding),
@@ -4060,7 +4376,7 @@ class _ProcessingDraftManagerTabState
         );
       }
       return ColoredBox(
-        color: const Color(0xFFF5F5F5),
+        color: Theme.of(context).colors.appBackground,
         child: ListView(
           padding: EdgeInsets.fromLTRB(16, 14, 16, widget.bottomPadding),
           children: [
@@ -4141,7 +4457,7 @@ class _ProcessingDraftManagerTabState
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _ProcessingSectionHeader(title: title),
+          ProfileWorkspaceSectionHeader(title: title),
           const SizedBox(height: 6),
           for (var i = 0; i < items.length; i++) ...[
             if (i > 0)
@@ -4166,7 +4482,7 @@ class _ProcessingDraftManagerTabState
     }
 
     return ColoredBox(
-      color: const Color(0xFFF5F5F5),
+      color: Theme.of(context).colors.appBackground,
       child: NotificationListener<ScrollNotification>(
         onNotification: (ScrollNotification n) {
           final m = n.metrics;
@@ -4267,28 +4583,76 @@ class _WorkspaceSummaryBar extends StatelessWidget {
   }
 }
 
-class _ProcessingSectionHeader extends StatelessWidget {
-  const _ProcessingSectionHeader({required this.title});
+Future<void> _discardPublishedEditStagingForProcessingCard({
+  required BuildContext context,
+  required WidgetRef ref,
+  required DraftListSummaryDto summary,
+  required VoidCallback onChanged,
+}) async {
+  final confirmed = await showDialog<bool>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: const Text('Cancel editing?'),
+      content: const Text(
+        'Your unpublished edits will be discarded. The published story will stay live.',
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(ctx).pop(false),
+          child: const Text('Keep editing'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.of(ctx).pop(true),
+          style: FilledButton.styleFrom(
+            backgroundColor: const Color(0xFFDF3B3B),
+            foregroundColor: Colors.white,
+          ),
+          child: const Text('Discard changes'),
+        ),
+      ],
+    ),
+  );
+  if (!context.mounted) return;
+  if (confirmed != true) return;
 
-  final String title;
+  final id = summary.draftId.trim();
+  if (id.isEmpty) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Could not cancel editing for this story.')),
+    );
+    return;
+  }
 
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(2, 6, 2, 0),
-      child: Text(
-        title.toUpperCase(),
-        style: theme.textTheme.labelSmall?.copyWith(
-          fontSize: 11,
-          fontWeight: FontWeight.w800,
-          letterSpacing: 0.8,
-          color: Colors.black.withOpacity(0.55),
-          height: 1.0,
+  final container = ProviderScope.containerOf(context, listen: false);
+  final repo = ref.read(storyDraftRepositoryProvider);
+  final outcome = await discardPublishedEditStagingWithBlockingOverlay(
+    context: context,
+    discardStaging: () => repo.discardPublishedEditStaging(id),
+  );
+  if (!context.mounted) return;
+  if (outcome.quota != null) {
+    await showQuotaExceededDialog(context, outcome.quota!);
+    return;
+  }
+  if (!outcome.success) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text(
+          'Could not discard edits. Try again, or resume editing from the card.',
         ),
       ),
     );
+    return;
   }
+
+  ref
+      .read(storyCreatorDraftProvider.notifier)
+      .syncIfDraftWasRemovedExternally(id);
+  await ref.read(profileWorkspaceDraftPagerProvider.notifier).refresh();
+  bumpProfileCatalogSurfacesRefresh(container);
+  await ref.read(profilePublishedMonoPagerProvider.notifier).refresh();
+  if (!context.mounted) return;
+  onChanged();
 }
 
 /// Lightweight list row for Profile > Processing (not a boxed card): soft tap
@@ -4521,19 +4885,48 @@ class _ProcessingDraftCard extends ConsumerWidget {
                     child: PopupMenuButton<String>(
                       tooltip: 'Story actions',
                       onSelected: (v) {
-                        if (v == 'rename') unawaited(_rename(context, ref));
-                        if (v == 'delete') unawaited(_delete(context, ref));
+                        switch (v) {
+                          case 'rename':
+                            unawaited(_rename(context, ref));
+                            break;
+                          case 'delete':
+                            unawaited(_delete(context, ref));
+                            break;
+                          case 'discardStaging':
+                            unawaited(
+                              _discardPublishedEditStagingForProcessingCard(
+                                context: context,
+                                ref: ref,
+                                summary: item.summary,
+                                onChanged: onChanged,
+                              ),
+                            );
+                            break;
+                        }
                       },
-                      itemBuilder: (ctx) => const [
-                        PopupMenuItem(
-                          value: 'rename',
-                          child: Text('Rename'),
-                        ),
-                        PopupMenuItem(
-                          value: 'delete',
-                          child: Text('Delete from this device'),
-                        ),
-                      ],
+                      itemBuilder: (ctx) {
+                        return [
+                          for (final a in workspaceDraftOverflowMenuActions(
+                              item.summary))
+                            if (a == WorkspaceDraftOverflowMenuAction.rename)
+                              const PopupMenuItem(
+                                value: 'rename',
+                                child: Text('Rename'),
+                              )
+                            else if (a ==
+                                WorkspaceDraftOverflowMenuAction
+                                    .deleteFromDevice)
+                              const PopupMenuItem(
+                                value: 'delete',
+                                child: Text('Delete from this device'),
+                              )
+                            else
+                              const PopupMenuItem(
+                                value: 'discardStaging',
+                                child: Text('Cancel editing'),
+                              ),
+                        ];
+                      },
                       icon: Icon(
                         Icons.more_horiz_rounded,
                         size: 18,
@@ -4732,7 +5125,7 @@ class _ProcessingSelectableListState extends State<_ProcessingSelectableList> {
       context: context,
       useRootNavigator: true,
       showDragHandle: true,
-      backgroundColor: Colors.white,
+      backgroundColor: Theme.of(context).colors.surface,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -4780,8 +5173,9 @@ class _ProcessingSelectableListState extends State<_ProcessingSelectableList> {
 
   @override
   Widget build(BuildContext context) {
+    final tcRoot = Theme.of(context).colors;
     return ColoredBox(
-      color: const Color(0xFFF5F5F5),
+      color: tcRoot.appBackground,
       child: ListView.builder(
         padding: EdgeInsets.fromLTRB(16, 12, 16, widget.bottomPadding),
         itemCount: widget.items.length + 1,
@@ -4792,9 +5186,9 @@ class _ProcessingSelectableListState extends State<_ProcessingSelectableList> {
               padding: const EdgeInsets.only(bottom: 10),
               child: DecoratedBox(
                 decoration: BoxDecoration(
-                  color: Colors.grey.shade100,
+                  color: tcRoot.surface,
                   borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: Colors.black.withOpacity(0.06)),
+                  border: Border.all(color: tcRoot.border),
                 ),
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
@@ -4806,10 +5200,14 @@ class _ProcessingSelectableListState extends State<_ProcessingSelectableList> {
                           style:
                               Theme.of(context).textTheme.labelLarge?.copyWith(
                                     fontWeight: FontWeight.w900,
+                                    color: tcRoot.textPrimary,
                                   ),
                         ),
                       ),
                       TextButton(
+                        style: TextButton.styleFrom(
+                          foregroundColor: tcRoot.textPrimary,
+                        ),
                         onPressed: () => setState(() {
                           _selecting = false;
                           _selectedIds.clear();
@@ -4829,6 +5227,14 @@ class _ProcessingSelectableListState extends State<_ProcessingSelectableList> {
                                   _selectedIds.clear();
                                 });
                               },
+                        style: FilledButton.styleFrom(
+                          backgroundColor: tcRoot.actionPrimary,
+                          foregroundColor:
+                              Theme.of(context).colorScheme.onPrimary,
+                          disabledBackgroundColor:
+                              tcRoot.disabled.withValues(alpha: 0.35),
+                          disabledForegroundColor: tcRoot.textSecondary,
+                        ),
                         child: const Text('Delete'),
                       ),
                     ],
@@ -4842,6 +5248,7 @@ class _ProcessingSelectableListState extends State<_ProcessingSelectableList> {
           if (i < 0) return const SizedBox.shrink();
           final it = widget.items[i];
           final selected = _selectedIds.contains(it.id);
+          final tc = Theme.of(context).colors;
 
           return Padding(
             padding: const EdgeInsets.only(bottom: 12),
@@ -4874,10 +5281,9 @@ class _ProcessingSelectableListState extends State<_ProcessingSelectableList> {
                         left: 4,
                         child: DecoratedBox(
                           decoration: BoxDecoration(
-                            color: selected ? Colors.black : Colors.white,
+                            color: selected ? tc.actionPrimary : tc.surface,
                             borderRadius: BorderRadius.circular(999),
-                            border: Border.all(
-                                color: Colors.black.withOpacity(0.20)),
+                            border: Border.all(color: tc.border),
                           ),
                           child: SizedBox(
                             width: 22,
@@ -4887,7 +5293,9 @@ class _ProcessingSelectableListState extends State<_ProcessingSelectableList> {
                                   ? Icons.check_rounded
                                   : Icons.circle_outlined,
                               size: 16,
-                              color: selected ? Colors.white : Colors.black,
+                              color: selected
+                                  ? Theme.of(context).colorScheme.onPrimary
+                                  : tc.textSecondary,
                             ),
                           ),
                         ),

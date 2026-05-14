@@ -1,0 +1,315 @@
+{
+  "@@locale": "ja",
+  "settingsTitle": "設定",
+  "settingsLanguageSection": "言語",
+  "settingsAppearanceSection": "外観",
+  "settingsAccountSection": "アカウント",
+  "settingsNotificationsSection": "通知",
+  "settingsAboutSection": "情報",
+  "settingsAppLanguage": "アプリの言語",
+  "settingsContentCommunity": "コミュニティ",
+  "settingsLearningLanguage": "学習言語",
+  "settingsTheme": "テーマ",
+  "settingsComingSoon": "近日公開",
+  "settingsEditProfile": "プロフィールを編集",
+  "settingsSignOut": "サインアウト",
+  "settingsSignOutSubtitle": "この端末からサインアウトします",
+  "settingsSignInRequiredTitle": "サインインが必要です",
+  "settingsSignInRequiredBody": "設定はサインイン後に利用できます。",
+  "settingsSignInCta": "サインイン",
+  "settingsAppVersion": "アプリのバージョン",
+  "settingsAppVersionPlaceholder": "V1 シェル（バージョン表示は後で対応）",
+  "settingsSystem": "システム",
+  "settingsEnglish": "英語",
+  "settingsJapanese": "日本語",
+  "settingsMyanmar": "ミャンマー語",
+  "settingsInternationalEnglish": "国際 / 英語",
+  "settingsSignOutDialogTitle": "サインアウトしますか？",
+  "settingsSignOutDialogBody": "この端末からサインアウトしてログイン画面に戻ります。",
+  "settingsCancel": "キャンセル",
+  "settingsReadingSection": "読書",
+  "settingsReadingTextSize": "文字サイズ",
+  "settingsReadingTextSizeSmall": "小",
+  "settingsReadingTextSizeStandard": "標準",
+  "settingsReadingTextSizeLarge": "大",
+  "settingsShowExplanationSentence": "解説文",
+  "settingsShowExplanationSentenceSubtitle": "Monoリーダーで文ごとの解説を表示",
+  "validationPublishSheetTitle": "公開前の確認",
+  "validationPublishSectionBlocking": "必須の修正",
+  "validationPublishSectionRecommended": "推奨",
+  "validationPublishFixIssuesCta": "修正する",
+  "validationPublishAnywayCta": "このまま公開",
+  "validationCtaSignIn": "ログイン",
+  "validationCtaNotNow": "今はしない",
+  "validationCtaOk": "OK",
+  "validationMediaUploadGenericImage": "画像をアップロードできませんでした。もう一度お試しください。",
+  "validationMediaUploadGenericAudio": "音声をアップロードできませんでした。もう一度お試しください。",
+  "validationFieldStoryTitle": "ストーリーのタイトル",
+  "validationFieldStoryDescription": "説明",
+  "validationFieldStorySentences": "本文の文",
+  "validationFieldStoryBody": "ストーリー本文",
+  "validationFieldStoryLevel": "JLPTレベル",
+  "validationFieldStoryDuration": "長さ",
+  "validationFieldLearnVocabCount": "語彙",
+  "validationFieldLearnGrammarCount": "文法",
+  "validationFieldLearnQuizCount": "クイズ",
+  "validationFieldLearnVocabulary": "語彙",
+  "validationFieldLearnGrammar": "文法",
+  "validationFieldLearnQuiz": "クイズ",
+  "validationFieldModuleVocabularyKanji": "語彙・漢字モジュール",
+  "validationFieldModuleGrammar": "文法モジュール",
+  "validationFieldModuleQuiz": "クイズモジュール",
+  "validationFieldModuleAudio": "リスニングモジュール",
+  "validationFieldLearnModule": "学習モジュール",
+  "validationLearnModuleNotCompletedWithLabel": "公開する前に{moduleLabel}モジュールを完了してください。",
+  "@validationLearnModuleNotCompletedWithLabel": {
+    "placeholders": {
+      "moduleLabel": {
+        "type": "String"
+      }
+    }
+  },
+  "validationLearnModuleLabelLearn": "学習",
+  "validationLearnModuleLabelVocabularyKanji": "語彙・漢字",
+  "validationLearnModuleLabelGrammar": "文法",
+  "validationLearnModuleLabelQuiz": "クイズ",
+  "validationLearnModuleLabelAudio": "リスニング",
+  "validationLearnFuriganaInvalid": "ふりがなの内容が正しくありません。",
+  "validationLearnFuriganaOverlap": "ふりがなの範囲が重なっています。",
+  "validationProfileDisplayNameRequired": "表示名を入力してください。",
+  "validationProfileDisplayNameLength": "表示名は1〜30文字にしてください。",
+  "validationProfileDisplayNameUnsafe": "表示名に使用できない内容が含まれています。",
+  "validationProfileHandleNoEmoji": "ユーザー名に絵文字は使えません。",
+  "validationProfileHandleLength": "ユーザー名は3〜24文字にしてください。",
+  "validationProfileHandleInvalidChars": "ユーザー名は英小文字・数字・アンダースコア・ピリオドのみ使用できます。",
+  "validationProfileHandlePeriodEdge": "ユーザー名の先頭・末尾にピリオドは使えません。",
+  "validationProfileHandlePeriodRepeat": "ユーザー名に連続したピリオドは使えません。",
+  "validationProfileHandleReserved": "このユーザー名は予約されています。",
+  "validationProfileBioTooLong": "自己紹介は150文字以内にしてください。",
+  "validationProfileBioUnsafe": "自己紹介に使用できない内容が含まれています。",
+  "validationProfileBioTooManyLines": "自己紹介は3行以内にしてください。",
+  "validationStoryTitleRequired": "公開にはタイトルが必要です。",
+  "validationStoryTitleRecommended": "ストーリーにタイトルを追加してください。",
+  "validationStoryTitleTooShort": "タイトルは5文字以上にしてください。",
+  "validationStoryTitleTooLong": "タイトルは80文字以内にしてください。",
+  "validationStoryTitleUnsafe": "タイトルに使用できない内容が含まれています。",
+  "validationStoryTitleLineBreak": "タイトルに改行は使えません。",
+  "validationStoryTitleTooManyEmoji": "タイトルの絵文字は1つまでです。",
+  "validationStoryTitleOnlyNumbers": "タイトルを数字だけにすることはできません。",
+  "validationStoryTitleOnlySymbols": "タイトルを記号だけにすることはできません。",
+  "validationStoryTitleExcessiveRepeat": "タイトルに同じ文字の繰り返しが多すぎます。",
+  "validationStoryDescriptionRecommended": "公開前に短い説明を追加してください。",
+  "validationStoryDescriptionTooLong": "説明は160文字以内にしてください。",
+  "validationStoryDescriptionUnsafe": "説明に使用できない内容が含まれています。",
+  "validationStoryDescriptionLineBreak": "説明に改行は使えません。",
+  "validationStoryDescriptionTooManyUrls": "説明に含められるリンクは1つまでです。",
+  "validationStoryDescriptionHashtagStuffing": "ハッシュタグが多すぎます。",
+  "validationStoryDescriptionTooManyEmoji": "説明の絵文字は2つまでです。",
+  "validationStoryDescriptionExcessiveRepeat": "説明に同じ文字の繰り返しが多すぎます。",
+  "validationCollectionTitleRequired": "コレクション名を入力してください。",
+  "validationCollectionTitleLength": "コレクション名は1〜40文字にしてください。",
+  "validationCollectionTitleUnsafe": "コレクション名に使用できない内容が含まれています。",
+  "validationCollectionTitleLineBreak": "コレクション名に改行は使えません。",
+  "validationCollectionTitleNoUrl": "コレクション名にリンクは含められません。",
+  "validationCollectionTitleTooManyEmoji": "コレクション名の絵文字は1つまでです。",
+  "validationCollectionTitleOnlyNumbers": "コレクション名を数字だけにすることはできません。",
+  "validationCollectionTitleOnlySymbols": "コレクション名を記号だけにすることはできません。",
+  "validationCollectionTitleOnlySpaces": "コレクション名には文字または数字を含めてください。",
+  "validationCollectionTitleExcessiveRepeat": "コレクション名に同じ文字の繰り返しが多すぎます。",
+  "validationCollectionNameRequired": "コレクション名を入力してください。",
+  "validationCollectionNameLength": "コレクション名は1〜40文字にしてください。",
+  "validationCollectionNameUnsafe": "コレクション名に使用できない内容が含まれています。",
+  "validationCollectionNameLineBreak": "コレクション名に改行は使えません。",
+  "validationCollectionNameNoUrl": "コレクション名にリンクは含められません。",
+  "validationCollectionNameTooManyEmoji": "コレクション名の絵文字は1つまでです。",
+  "validationCollectionNameOnlyNumbers": "コレクション名を数字だけにすることはできません。",
+  "validationCollectionNameOnlySymbols": "コレクション名を記号だけにすることはできません。",
+  "validationCollectionNameOnlySpaces": "コレクション名には文字または数字を含めてください。",
+  "validationCollectionNameExcessiveRepeat": "コレクション名に同じ文字の繰り返しが多すぎます。",
+  "validationAuthEmailRequired": "メールアドレスを入力してください。",
+  "validationAuthEmailLength": "メールアドレスは5〜254文字にしてください。",
+  "validationAuthEmailInvalid": "正しいメールアドレス形式で入力してください。",
+  "validationAuthEmailUnsafe": "メールアドレスに使用できない内容が含まれています。",
+  "validationAuthPasswordLength": "パスワードは8〜64文字にしてください。",
+  "validationAuthPasswordWeak": "このパスワードは一般的すぎます。より強いパスワードを設定してください。",
+  "validationAuthPasswordLineBreak": "パスワードに改行は含められません。",
+  "validationAuthPasswordRequiredLogin": "パスワードを入力してください。",
+  "validationAuthConfirmPasswordMismatch": "パスワードが一致しません。",
+  "validationAuthLoginFailed": "メールアドレスまたはパスワードが正しくありません。",
+  "validationLearnVocabMeaningRequired": "この公開モードでは意味の入力が必要です。",
+  "validationLearnVocabMeaningLength": "意味は1〜80文字にしてください。",
+  "validationLearnVocabMeaningNoEmoji": "意味に絵文字は含められません。",
+  "validationLearnVocabMeaningLineBreak": "意味に改行は含められません。",
+  "validationLearnVocabMeaningUnsafe": "意味に使用できない内容が含まれています。",
+  "validationLearnVocabMeaningNoUrl": "意味にリンクは含められません。",
+  "validationLearnVocabMeaningNoHashtag": "意味にハッシュタグは含められません。",
+  "validationLearnVocabReadingRequired": "読みを入力してください。",
+  "validationLearnVocabReadingTooLong": "読みは40文字以内にしてください。",
+  "validationLearnVocabReadingTooManyAlternatives": "読みの候補が多すぎます。",
+  "validationLearnVocabReadingInvalidChars": "読みはひらがな・カタカナ・「・」「/」のみ使用できます。",
+  "validationLearnVocabReadingUnsafe": "読みに使用できない内容が含まれています。",
+  "validationLearnGrammarTitleRequired": "文法タイトルを入力してください。",
+  "validationLearnGrammarTitleLength": "文法タイトルは2〜40文字にしてください。",
+  "validationLearnGrammarTitleNoEmoji": "文法タイトルに絵文字は含められません。",
+  "validationLearnGrammarTitleLineBreak": "文法タイトルに改行は含められません。",
+  "validationLearnGrammarTitleUnsafe": "文法タイトルに使用できない内容が含まれています。",
+  "validationLearnGrammarTitleNoUrl": "文法タイトルにリンクは含められません。",
+  "validationLearnQuizCategoryInvalid": "クイズのカテゴリを選んでください。",
+  "validationLearnQuizQuestionRequired": "問題文を入力してください。",
+  "validationLearnQuizQuestionLength": "問題文は5〜120文字にしてください。",
+  "validationLearnQuizQuestionUnsafe": "問題文に使用できない内容が含まれています。",
+  "validationLearnQuizQuestionDuplicate": "同じ問題がすでにこのストーリーにあります。",
+  "validationLearnQuizOptionsCount": "選択肢は2〜4個にしてください。",
+  "validationLearnQuizOptionsDuplicate": "選択肢が重複しています。",
+  "validationLearnQuizAnswerRequired": "正解を選んでください。",
+  "validationLearnQuizAnswerNotInOptions": "正解は選択肢のいずれかと一致させてください。",
+  "validationLearnQuizAnswerSingleCorrect": "正解は1つだけ指定してください。",
+  "validationStorySentencesRequired": "日本語の文を1つ以上追加してください。",
+  "validationStorySentencesTooFew": "レベルと長さに対して文が足りません（最低{min}文・現在{actual}文）。",
+  "@validationStorySentencesTooFew": {
+    "placeholders": {
+      "min": {
+        "type": "int"
+      },
+      "actual": {
+        "type": "int"
+      }
+    }
+  },
+  "validationStorySentencesTooMany": "レベルと長さに対して文が多すぎます（最大{max}文・現在{actual}文）。",
+  "@validationStorySentencesTooMany": {
+    "placeholders": {
+      "max": {
+        "type": "int"
+      },
+      "actual": {
+        "type": "int"
+      }
+    }
+  },
+  "validationStoryBodyTooLong": "本文が長すぎます（最大{max}文字・現在{actual}文字）。",
+  "@validationStoryBodyTooLong": {
+    "placeholders": {
+      "max": {
+        "type": "int"
+      },
+      "actual": {
+        "type": "int"
+      }
+    }
+  },
+  "validationStoryLimitsSkippedNoJlpt": "JLPTレベルが未設定のため、文の長さ制限は適用されませんでした。",
+  "validationStoryLimitsSkippedNoBand": "長さの区分が未設定のため、文の長さ制限は適用されませんでした。",
+  "validationLearnCountVocabRange": "語彙の数は{min}〜{max}個にしてください（現在{actual}個）。",
+  "@validationLearnCountVocabRange": {
+    "placeholders": {
+      "min": {
+        "type": "int"
+      },
+      "max": {
+        "type": "int"
+      },
+      "actual": {
+        "type": "int"
+      }
+    }
+  },
+  "validationLearnCountGrammarRange": "文法の数は{min}〜{max}個にしてください（現在{actual}個）。",
+  "@validationLearnCountGrammarRange": {
+    "placeholders": {
+      "min": {
+        "type": "int"
+      },
+      "max": {
+        "type": "int"
+      },
+      "actual": {
+        "type": "int"
+      }
+    }
+  },
+  "validationLearnCountQuizRange": "クイズの数は{min}〜{max}個にしてください（現在{actual}個）。",
+  "@validationLearnCountQuizRange": {
+    "placeholders": {
+      "min": {
+        "type": "int"
+      },
+      "max": {
+        "type": "int"
+      },
+      "actual": {
+        "type": "int"
+      }
+    }
+  },
+  "validationProtectedReactLogin": "ストーリーにリアクションするにはログインしてください。",
+  "validationProtectedFollowLogin": "クリエイターをフォローするにはログインしてください。",
+  "validationProtectedSaveLogin": "ストーリーを保存するにはログインしてください。",
+  "validationProtectedCreateStoryLogin": "ストーリーを作成するにはログインしてください。",
+  "validationProtectedPublishStoryLogin": "ストーリーを公開するにはログインしてください。",
+  "validationProtectedCreateCollectionLogin": "コレクションを作成するにはログインしてください。",
+  "validationProtectedUploadMediaLogin": "メディアをアップロードするにはログインしてください。",
+  "validationProtectedEditProfileLogin": "プロフィールを編集するにはログインしてください。",
+  "validationProtectedGenericForbidden": "この操作は利用できません。",
+  "validationProtectedGenericDisabled": "このアカウントではこの操作は無効です。",
+  "validationMediaFileRequired": "アップロードするファイルを選んでください。",
+  "validationMediaFileEmpty": "このファイルは空です。別のファイルを選んでください。",
+  "validationMediaFileTooLarge": "ファイルが大きすぎます。",
+  "validationMediaFileInvalidType": "このファイル形式には対応していません。",
+  "validationMediaFileInvalidExtension": "この拡張子には対応していません。",
+  "validationMediaFileInvalidField": "アップロードに必要な項目がありません。",
+  "validationMediaImageInvalidType": "JPG・PNG・WebPの画像を選んでください。",
+  "validationMediaImageTooLarge": "画像が大きすぎます。",
+  "validationMediaAudioInvalidType": "対応している音声ファイルを選んでください。",
+  "validationMediaAudioTooLarge": "音声ファイルが大きすぎます。",
+  "validationNetworkOffline": "インターネットに接続されていません。接続を確認してから再度お試しください。",
+  "quotaDialogOk": "OK",
+  "quotaPremiumComingLaterCta": "プレミアムは近日対応",
+  "quotaUnknownLimitTitle": "無料プランの上限に達しました",
+  "quotaUnknownLimitMessage": "無料プランの上限に達しました。古い項目を削除してからもう一度お試しください。",
+  "publishedMonoLimitReachedTitle": "無料プランの上限に達しました",
+  "publishedMonoLimitReachedMessage": "無料プランではMonoを最大{limit}件まで公開できます。古いMonoを削除するか、プレミアムが利用可能になったらアップグレードしてください。",
+  "@publishedMonoLimitReachedMessage": {
+    "placeholders": {
+      "limit": {
+        "type": "int"
+      }
+    }
+  },
+  "savedMonoLimitReachedTitle": "保存の上限に達しました",
+  "savedMonoLimitReachedMessage": "無料プランではMonoを最大{limit}件まで保存できます。新しく保存する前に保存済みのMonoを削除してください。",
+  "@savedMonoLimitReachedMessage": {
+    "placeholders": {
+      "limit": {
+        "type": "int"
+      }
+    }
+  },
+  "collectionLimitReachedTitle": "コレクション数の上限に達しました",
+  "collectionLimitReachedMessage": "無料プランではコレクションを最大{limit}個まで作成できます。プレミアム向けコレクションはV2で予定しています。",
+  "@collectionLimitReachedMessage": {
+    "placeholders": {
+      "limit": {
+        "type": "int"
+      }
+    }
+  },
+  "collectionItemLimitReachedTitle": "コレクションが満杯です",
+  "collectionItemLimitReachedMessage": "無料プランでは1つのコレクションにMonoを最大{limit}件まで入れられます。追加する前に項目を削除してください。",
+  "@collectionItemLimitReachedMessage": {
+    "placeholders": {
+      "limit": {
+        "type": "int"
+      }
+    }
+  },
+  "draftStoryLimitReachedTitle": "下書きの上限に達しました",
+  "draftStoryLimitReachedMessage": "無料プランでは下書きを最大{limit}件まで保持できます。新しく作成する前に古い下書きを削除してください。",
+  "@draftStoryLimitReachedMessage": {
+    "placeholders": {
+      "limit": {
+        "type": "int"
+      }
+    }
+  }
+}

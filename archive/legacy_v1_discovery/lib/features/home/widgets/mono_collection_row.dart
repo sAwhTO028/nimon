@@ -94,7 +94,8 @@ class _EpisodeCard extends StatelessWidget {
 
     // Placeholder metadata since Episode doesn't link Story details directly.
     const defaultCategory = 'Love';
-    final cover = kCategoryCover[defaultCategory] ?? kCategoryCover.values.first;
+    final cover =
+        kCategoryCover[defaultCategory] ?? kCategoryCover.values.first;
     const jlpt = 'N5';
     const writer = 'WRITER NAME';
 
@@ -133,27 +134,27 @@ class _EpisodeCard extends StatelessWidget {
                             _buildPlaceholder(context),
                       ),
                     ),
-                    
+
                     // Top-left badge
                     Positioned(
                       top: 8,
                       left: 8,
                       child: _buildTypeBadge(context, 'Episode'),
                     ),
-                    
+
                     // Top-right JLPT chip
                     Positioned(
                       top: 8,
                       right: 8,
                       child: _buildJLPTChip(context, jlpt),
                     ),
-                    
+
                     // Blur title band overlay
                     _buildTitleBandWithBlur(context, ep),
                   ],
                 ),
               ),
-              
+
               // Footer/Base Card
               Expanded(
                 flex: 25,
@@ -182,7 +183,7 @@ class _EpisodeCard extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(width: 8),
-                      
+
                       // Writer info
                       Expanded(
                         child: Column(
@@ -222,7 +223,7 @@ class _EpisodeCard extends StatelessWidget {
 
   Widget _buildTypeBadge(BuildContext context, String label) {
     final colorScheme = Theme.of(context).colorScheme;
-    
+
     return Container(
       height: 28,
       padding: const EdgeInsets.symmetric(horizontal: 10),
@@ -254,7 +255,7 @@ class _EpisodeCard extends StatelessWidget {
 
   Widget _buildJLPTChip(BuildContext context, String jlpt) {
     final colorScheme = Theme.of(context).colorScheme;
-    
+
     return Container(
       height: 28,
       padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -277,7 +278,7 @@ class _EpisodeCard extends StatelessWidget {
 
   Widget _buildPlaceholder(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    
+
     return Container(
       color: colorScheme.surfaceVariant,
       child: Center(
@@ -293,7 +294,7 @@ class _EpisodeCard extends StatelessWidget {
   Widget _buildTitleBandWithBlur(BuildContext context, Episode ep) {
     final theme = Theme.of(context);
     final isDarkMode = theme.brightness == Brightness.dark;
-    
+
     return Positioned(
       bottom: 0,
       left: 0,
@@ -309,7 +310,7 @@ class _EpisodeCard extends StatelessWidget {
             width: double.infinity,
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             decoration: BoxDecoration(
-              color: isDarkMode 
+              color: isDarkMode
                   ? Colors.black.withOpacity(0.4)
                   : Colors.black.withOpacity(0.3),
             ),
@@ -346,8 +347,10 @@ String _kFormat(int n) {
 // Simple mapping (move to a constants file if needed)
 const kCategoryCover = {
   'Love': 'https://images.unsplash.com/photo-1519638399535-1b036603ac77?w=800',
-  'Comedy': 'https://images.unsplash.com/photo-1525547719571-a2d4ac8945e2?w=800',
-  'Horror': 'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?w=800',
+  'Comedy':
+      'https://images.unsplash.com/photo-1525547719571-a2d4ac8945e2?w=800',
+  'Horror':
+      'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?w=800',
   'Drama': 'https://images.unsplash.com/photo-1500534314209-a25ddb2bd429?w=800',
 };
 
@@ -363,16 +366,13 @@ void _showEpisodeBottomSheet(BuildContext context, Episode episode) {
     likes: 4200,
     readTime: '5 min',
     category: 'Love',
-    preview: episode.preview.isNotEmpty 
-        ? episode.preview 
+    preview: episode.preview.isNotEmpty
+        ? episode.preview
         : getMockEpisodePreview(episode.index), // Use canonical mock preview
   );
-  
+
   showEpisodeBottomSheetFromMeta(
     context,
     episodeMeta,
   );
 }
-
-
-

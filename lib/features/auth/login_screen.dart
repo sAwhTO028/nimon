@@ -1,6 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:nimon/core/validation/auth_validators.dart';
+import 'package:nimon/core/validation/form_validation_adapter.dart';
+import 'package:nimon/core/validation/http_validation_failed_exception.dart';
+import 'package:nimon/core/validation/localized_validation_messages.dart';
+import 'package:nimon/core/validation/validation_issue.dart';
 import 'package:nimon/features/auth/auth_providers.dart';
 import 'package:nimon/features/auth/auth_repository.dart';
 
@@ -18,6 +23,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _password = TextEditingController();
   var _submitting = false;
   String? _error;
+  ValidationIssue? _emailIssue;
+  ValidationIssue? _passwordIssue;
+  ValidationIssue? _bannerIssue;
 
   @override
   void dispose() {
@@ -27,15 +35,22 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   }
 
   Future<void> _onLogin() async {
-    final email = _email.text.trim();
+    final loginRes = validateLoginFields(
+      email: _email.text,
+      password: _password.text,
+    );
+    setState(() {
+      _error = null;
+      _bannerIssue = null;
+      _emailIssue = firstBlockingIssueForField(loginRes, 'email');
+      _passwordIssue = firstBlockingIssueForField(loginRes, 'password');
+    });
+    if (!loginRes.ok) return;
+
+    final email = normalizeEmailInput(_email.text);
     final password = _password.text;
-    if (email.isEmpty || password.isEmpty) {
-      setState(() => _error = 'Enter email and password.');
-      return;
-    }
     setState(() {
       _submitting = true;
-      _error = null;
     });
     try {
       await ref.read(authSessionProvider.notifier).login(
@@ -44,10 +59,25 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           );
       if (!mounted) return;
       context.go('/mono');
-    } on AuthRepositoryException catch (e) {
-      setState(() => _error = e.message);
+    } on HttpValidationFailedException catch (e) {
+      final byField = blockingIssuesByField(e.issues);
+      setState(() {
+        _emailIssue = byField['email'];
+        _passwordIssue = byField['password'];
+        _bannerIssue =
+            firstUnhandledBlockingIssue(e.issues, byField.keys.toSet());
+        _error = null;
+      });
+    } on AuthRepositoryException catch (_) {
+      setState(() {
+        _bannerIssue = null;
+        _error = validationMessageKeyLocalized(context, 'auth.login.failed');
+      });
     } catch (e) {
-      setState(() => _error = e.toString());
+      setState(() {
+        _bannerIssue = null;
+        _error = e.toString();
+      });
     } finally {
       if (mounted) setState(() => _submitting = false);
     }
@@ -55,84 +85,144 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
+    const horizontal = 24.0;
+    const topPad = 24.0;
+    const bottomPad = 24.0;
+
     return Scaffold(
+      resizeToAvoidBottomInset: true,
       body: SafeArea(
-        minimum: const EdgeInsets.all(24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const SizedBox(height: 24),
-            Text('Great!', style: Theme.of(context).textTheme.headlineSmall),
-            const Text("Let's get started"),
-            const Spacer(),
-            Card(
-              elevation: 0,
-              surfaceTintColor: Colors.white,
-              child: Padding(
-                padding: const EdgeInsets.all(16),
+        minimum: const EdgeInsets.symmetric(horizontal: horizontal),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            return SingleChildScrollView(
+              keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+              padding: EdgeInsets.fromLTRB(
+                0,
+                topPad,
+                0,
+                bottomInset + bottomPad,
+              ),
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  minHeight: constraints.maxHeight - topPad,
+                ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    TextField(
-                      controller: _email,
-                      keyboardType: TextInputType.emailAddress,
-                      autofillHints: const [AutofillHints.email],
-                      decoration: const InputDecoration(labelText: 'Email'),
+                    Text(
+                      'Great!',
+                      style: Theme.of(context).textTheme.headlineSmall,
                     ),
-                    TextField(
-                      controller: _password,
-                      decoration: const InputDecoration(labelText: 'Password'),
-                      obscureText: true,
-                      autofillHints: const [AutofillHints.password],
-                    ),
-                    if (_error != null) ...[
-                      const SizedBox(height: 8),
-                      Text(
-                        _error!,
-                        style: TextStyle(
-                          color: Theme.of(context).colorScheme.error,
-                          fontSize: 13,
+                    const Text("Let's get started"),
+                    const SizedBox(height: 16),
+                    Card(
+                      elevation: 0,
+                      surfaceTintColor: Colors.white,
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            TextField(
+                              controller: _email,
+                              keyboardType: TextInputType.emailAddress,
+                              autofillHints: const [AutofillHints.email],
+                              onChanged: (_) {
+                                if (_emailIssue != null) {
+                                  setState(() => _emailIssue = null);
+                                }
+                              },
+                              decoration: InputDecoration(
+                                labelText: 'Email',
+                                errorText: _emailIssue != null
+                                    ? validationIssueDisplayMessageLocalized(
+                                        context,
+                                        _emailIssue!,
+                                      )
+                                    : null,
+                              ),
+                            ),
+                            TextField(
+                              controller: _password,
+                              decoration: InputDecoration(
+                                labelText: 'Password',
+                                errorText: _passwordIssue != null
+                                    ? validationIssueDisplayMessageLocalized(
+                                        context,
+                                        _passwordIssue!,
+                                      )
+                                    : null,
+                              ),
+                              obscureText: true,
+                              autofillHints: const [AutofillHints.password],
+                              onChanged: (_) {
+                                if (_passwordIssue != null) {
+                                  setState(() => _passwordIssue = null);
+                                }
+                              },
+                            ),
+                            if (_error != null || _bannerIssue != null) ...[
+                              const SizedBox(height: 8),
+                              Text(
+                                _error ??
+                                    validationIssueDisplayMessageLocalized(
+                                      context,
+                                      _bannerIssue!,
+                                    ),
+                                style: TextStyle(
+                                  color: Theme.of(context).colorScheme.error,
+                                  fontSize: 13,
+                                ),
+                              ),
+                            ],
+                            const SizedBox(height: 12),
+                            FilledButton(
+                              onPressed: _submitting ? null : _onLogin,
+                              child: _submitting
+                                  ? const SizedBox(
+                                      height: 20,
+                                      width: 20,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                      ),
+                                    )
+                                  : const Text('LOGIN'),
+                            ),
+                            TextButton(
+                              onPressed: _submitting
+                                  ? null
+                                  : () => context.go('/mono'),
+                              child: const Text('Guest >>'),
+                            ),
+                            TextButton(
+                              onPressed: _submitting
+                                  ? null
+                                  : () => context.push('/register'),
+                              child: const Text('Create account'),
+                            ),
+                            const SizedBox(height: 12),
+                            OutlinedButton.icon(
+                              onPressed: () {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('Google sign-in coming soon'),
+                                  ),
+                                );
+                              },
+                              icon: const Icon(Icons.g_mobiledata),
+                              label: const Text('Sign up with Google'),
+                            ),
+                          ],
                         ),
                       ),
-                    ],
-                    const SizedBox(height: 12),
-                    FilledButton(
-                      onPressed: _submitting ? null : _onLogin,
-                      child: _submitting
-                          ? const SizedBox(
-                              height: 20,
-                              width: 20,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : const Text('LOGIN'),
-                    ),
-                    TextButton(
-                      onPressed: _submitting ? null : () => context.go('/mono'),
-                      child: const Text('Guest >>'),
-                    ),
-                    TextButton(
-                      onPressed:
-                          _submitting ? null : () => context.push('/register'),
-                      child: const Text('Create account'),
-                    ),
-                    const SizedBox(height: 12),
-                    OutlinedButton.icon(
-                      onPressed: () {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Google sign-in coming soon'),
-                          ),
-                        );
-                      },
-                      icon: const Icon(Icons.g_mobiledata),
-                      label: const Text('Sign up with Google'),
                     ),
                   ],
                 ),
               ),
-            ),
-            const Spacer(),
-          ],
+            );
+          },
         ),
       ),
     );

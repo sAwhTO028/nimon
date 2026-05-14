@@ -15,6 +15,7 @@ class _MutableMonoFeedRepo implements MonoFeedRepository {
   set page(PageResult<MonoFeedSummaryDto> v) => _page = v;
 
   int feedCalls = 0;
+  PageRequest? lastRequest;
 
   @override
   Future<PageResult<MonoFeedSummaryDto>> fetchFeedPage(
@@ -23,6 +24,7 @@ class _MutableMonoFeedRepo implements MonoFeedRepository {
     String? category,
   }) async {
     feedCalls++;
+    lastRequest = request;
     return _page;
   }
 
@@ -42,6 +44,7 @@ class _PagedMonoFeedRepo implements MonoFeedRepository {
   final PageResult<MonoFeedSummaryDto> second;
 
   int feedCalls = 0;
+  final List<PageRequest> requests = [];
 
   @override
   Future<PageResult<MonoFeedSummaryDto>> fetchFeedPage(
@@ -50,6 +53,7 @@ class _PagedMonoFeedRepo implements MonoFeedRepository {
     String? category,
   }) async {
     feedCalls++;
+    requests.add(request);
     if (request.cursor != null) {
       return second;
     }
@@ -107,6 +111,7 @@ void main() {
     expect(s.items.single.monoId, 'a');
     expect(s.isInitialLoading, false);
     expect(fake.feedCalls, 1);
+    expect(fake.lastRequest?.limit, 7);
   });
 
   test('refresh replaces items', () async {
@@ -167,6 +172,8 @@ void main() {
     final s = container.read(monoFeedPagerProvider);
     expect(s.items.map((e) => e.monoId).toList(), ['a', 'b']);
     expect(fake.feedCalls, 2);
+    expect(fake.requests.first.limit, 7);
+    expect(fake.requests.last.limit, 10);
   });
 
   test('loadMore is skipped when canLoadMore is false', () async {
@@ -188,5 +195,127 @@ void main() {
     await container.read(monoFeedPagerProvider.notifier).loadMore();
 
     expect(fake.feedCalls, 1);
+  });
+
+  test('loadMore dedupes by monoId (preserves order)', () async {
+    final fake = _PagedMonoFeedRepo(
+      first: PageResult(
+        items: [_row('a'), _row('b')],
+        hasMore: true,
+        nextCursor: 'c1',
+      ),
+      second: PageResult(
+        items: [_row('b'), _row('c')],
+        hasMore: false,
+        nextCursor: null,
+      ),
+    );
+    final container = ProviderContainer(
+      overrides: [
+        remoteMonoFeedRepositoryProvider.overrideWithValue(fake),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    await container.read(monoFeedPagerProvider.notifier).loadFirstPage();
+    await container.read(monoFeedPagerProvider.notifier).loadMore();
+
+    final s = container.read(monoFeedPagerProvider);
+    expect(s.items.map((e) => e.monoId).toList(), ['a', 'b', 'c']);
+  });
+
+  test('maybePrefetch triggers loadMore when remaining <= 3', () async {
+    final fake = _PagedMonoFeedRepo(
+      first: PageResult(
+        items: [
+          _row('a'),
+          _row('b'),
+          _row('c'),
+          _row('d'),
+          _row('e'),
+          _row('f'),
+          _row('g'),
+        ],
+        hasMore: true,
+        nextCursor: 'c1',
+      ),
+      second: PageResult(
+        items: [_row('h')],
+        hasMore: false,
+        nextCursor: null,
+      ),
+    );
+    final container = ProviderContainer(
+      overrides: [
+        remoteMonoFeedRepositoryProvider.overrideWithValue(fake),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    final notifier = container.read(monoFeedPagerProvider.notifier);
+    await notifier.loadFirstPage();
+
+    // index=3 => remaining=7-3-1=3 => should prefetch
+    notifier.maybePrefetch(3);
+    await Future<void>.delayed(Duration.zero);
+
+    expect(fake.feedCalls, 2);
+    expect(fake.requests.last.cursor, 'c1');
+  });
+
+  test('maybePrefetch does not loadMore when remaining > 3', () async {
+    final fake = _MutableMonoFeedRepo(
+      PageResult(
+        items: List.generate(7, (i) => _row('id_$i')),
+        hasMore: true,
+        nextCursor: 'c1',
+      ),
+    );
+    final container = ProviderContainer(
+      overrides: [
+        remoteMonoFeedRepositoryProvider.overrideWithValue(fake),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    final notifier = container.read(monoFeedPagerProvider.notifier);
+    await notifier.loadFirstPage();
+
+    // index=0 => remaining=6 (>3) => no prefetch
+    notifier.maybePrefetch(0);
+    await Future<void>.delayed(Duration.zero);
+
+    expect(fake.feedCalls, 1);
+  });
+
+  test('maybePrefetch does not re-request same cursor repeatedly', () async {
+    final fake = _PagedMonoFeedRepo(
+      first: PageResult(
+        items: List.generate(7, (i) => _row('id_$i')),
+        hasMore: true,
+        nextCursor: 'c1',
+      ),
+      second: PageResult(
+        items: [_row('x')],
+        hasMore: true,
+        nextCursor: 'c1',
+      ),
+    );
+    final container = ProviderContainer(
+      overrides: [
+        remoteMonoFeedRepositoryProvider.overrideWithValue(fake),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    final notifier = container.read(monoFeedPagerProvider.notifier);
+    await notifier.loadFirstPage();
+
+    notifier.maybePrefetch(3);
+    notifier.maybePrefetch(3);
+    notifier.maybePrefetch(3);
+    await Future<void>.delayed(Duration.zero);
+
+    expect(fake.feedCalls, 2);
   });
 }

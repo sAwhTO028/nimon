@@ -82,9 +82,6 @@ CreatorQuizCategory defaultCategoryForQuizEditorTab(int tabIndex) {
 class StoryCreatorQuizEditorScreen extends ConsumerWidget {
   const StoryCreatorQuizEditorScreen({super.key});
 
-  static const _ink = Color(0xFF1A1917);
-  static const _muted = Color(0xFF5C5A55);
-
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     void handleCreatorBack() =>
@@ -239,6 +236,7 @@ class StoryCreatorQuizEditorScreen extends ConsumerWidget {
   }) async {
     final n = ref.read(storyCreatorDraftProvider.notifier);
     final theme = Theme.of(context);
+    final cs = theme.colorScheme;
 
     final defaultCat = defaultCategory ?? CreatorQuizCategory.vocabulary;
     var category = existing?.category ?? defaultCat;
@@ -265,7 +263,7 @@ class StoryCreatorQuizEditorScreen extends ConsumerWidget {
       isScrollControlled: true,
       useSafeArea: true,
       showDragHandle: true,
-      backgroundColor: const Color(0xFFF6F3EA),
+      backgroundColor: cs.surface,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -348,7 +346,7 @@ class StoryCreatorQuizEditorScreen extends ConsumerWidget {
                     Text(
                       existing == null ? 'Add quiz item' : 'Edit quiz item',
                       style: theme.textTheme.titleLarge?.copyWith(
-                        color: _ink,
+                        color: cs.onSurface,
                         fontWeight: FontWeight.w800,
                       ),
                     ),
@@ -356,7 +354,7 @@ class StoryCreatorQuizEditorScreen extends ConsumerWidget {
                     Text(
                       'V1 MCQ: category + prompt + 4 options + 1 correct answer.',
                       style: theme.textTheme.bodySmall?.copyWith(
-                        color: _muted,
+                        color: cs.onSurfaceVariant,
                         height: 1.35,
                       ),
                     ),
@@ -389,7 +387,7 @@ class StoryCreatorQuizEditorScreen extends ConsumerWidget {
                           Text(
                             'Category',
                             style: theme.textTheme.labelLarge?.copyWith(
-                              color: _ink,
+                              color: cs.onSurface,
                               fontWeight: FontWeight.w800,
                             ),
                           ),
@@ -400,13 +398,14 @@ class StoryCreatorQuizEditorScreen extends ConsumerWidget {
                               vertical: 6,
                             ),
                             decoration: BoxDecoration(
-                              color: const Color(0x0A000000),
+                              color: cs.surfaceContainerHighest
+                                  .withValues(alpha: 0.45),
                               borderRadius: BorderRadius.circular(999),
                             ),
                             child: Text(
                               defaultCat.displayLabel,
                               style: theme.textTheme.labelMedium?.copyWith(
-                                color: _muted,
+                                color: cs.onSurfaceVariant,
                                 fontWeight: FontWeight.w800,
                               ),
                             ),
@@ -448,7 +447,7 @@ class StoryCreatorQuizEditorScreen extends ConsumerWidget {
                     Text(
                       'Answer options',
                       style: theme.textTheme.labelLarge?.copyWith(
-                        color: _ink,
+                        color: cs.onSurface,
                         fontWeight: FontWeight.w800,
                       ),
                     ),
@@ -464,7 +463,7 @@ class StoryCreatorQuizEditorScreen extends ConsumerWidget {
                     Text(
                       'Correct answer',
                       style: theme.textTheme.labelLarge?.copyWith(
-                        color: _ink,
+                        color: cs.onSurface,
                         fontWeight: FontWeight.w800,
                       ),
                     ),
@@ -487,7 +486,7 @@ class StoryCreatorQuizEditorScreen extends ConsumerWidget {
                     Text(
                       'Explanation (optional)',
                       style: theme.textTheme.labelLarge?.copyWith(
-                        color: _ink,
+                        color: cs.onSurface,
                         fontWeight: FontWeight.w800,
                       ),
                     ),
@@ -711,7 +710,7 @@ class _QuizModuleBodyInnerState extends ConsumerState<_QuizModuleBodyInner>
                   ? 'Quiz'
                   : 'Manual quiz items (MCQ)',
               style: theme.textTheme.titleLarge?.copyWith(
-                color: StoryCreatorQuizEditorScreen._ink,
+                color: cs.onSurface,
                 fontWeight: FontWeight.w800,
                 height: 1.2,
               ),
@@ -722,7 +721,7 @@ class _QuizModuleBodyInnerState extends ConsumerState<_QuizModuleBodyInner>
             'Add practice questions for readers of this story. Each item has one category, 4 options, and one correct answer. '
             'Explanations (English/Myanmar) are optional.',
             style: theme.textTheme.bodyMedium?.copyWith(
-              color: StoryCreatorQuizEditorScreen._muted,
+              color: cs.onSurfaceVariant,
               height: 1.45,
             ),
           ),
@@ -733,7 +732,7 @@ class _QuizModuleBodyInnerState extends ConsumerState<_QuizModuleBodyInner>
                 child: Text(
                   '${items.length} ${items.length == 1 ? 'item' : 'items'}',
                   style: theme.textTheme.titleSmall?.copyWith(
-                    color: StoryCreatorQuizEditorScreen._ink,
+                    color: cs.onSurface,
                     fontWeight: FontWeight.w800,
                   ),
                 ),
@@ -896,11 +895,14 @@ class _EmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = theme.colorScheme;
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.8),
+        color: cs.surfaceContainerHigh,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.black.withValues(alpha: 0.06)),
+        border: Border.all(
+          color: cs.outlineVariant.withValues(alpha: 0.45),
+        ),
       ),
       child: Padding(
         padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
@@ -909,7 +911,7 @@ class _EmptyState extends StatelessWidget {
           'Tip: you can add an optional explanation in English and/or Myanmar.',
           style: theme.textTheme.bodyMedium?.copyWith(
             height: 1.45,
-            color: const Color(0xFF5C5A55),
+            color: cs.onSurfaceVariant,
           ),
         ),
       ),
@@ -930,9 +932,6 @@ class _QuizCard extends StatelessWidget {
   final VoidCallback onEdit;
   final VoidCallback onDelete;
 
-  static const _ink = Color(0xFF1A1917);
-  static const _muted = Color(0xFF5C5A55);
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -941,9 +940,11 @@ class _QuizCard extends StatelessWidget {
     final correctLabel = String.fromCharCode(65 + entry.correctIndex);
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.86),
+        color: cs.surfaceContainerHigh,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0x14000000)),
+        border: Border.all(
+          color: cs.outlineVariant.withValues(alpha: 0.45),
+        ),
       ),
       child: Stack(
         children: [
@@ -961,13 +962,14 @@ class _QuizCard extends StatelessWidget {
                         vertical: 4,
                       ),
                       decoration: BoxDecoration(
-                        color: const Color(0x0A000000),
+                        color:
+                            cs.surfaceContainerHighest.withValues(alpha: 0.45),
                         borderRadius: BorderRadius.circular(999),
                       ),
                       child: Text(
                         entry.category.displayLabel,
                         style: theme.textTheme.labelSmall?.copyWith(
-                          color: _muted,
+                          color: cs.onSurfaceVariant,
                           fontWeight: FontWeight.w800,
                         ),
                       ),
@@ -976,7 +978,7 @@ class _QuizCard extends StatelessWidget {
                     Text(
                       'Correct: $correctLabel',
                       style: theme.textTheme.labelSmall?.copyWith(
-                        color: _muted,
+                        color: cs.onSurfaceVariant,
                         fontWeight: FontWeight.w800,
                       ),
                     ),
@@ -1015,7 +1017,7 @@ class _QuizCard extends StatelessWidget {
                   maxLines: 3,
                   overflow: TextOverflow.ellipsis,
                   style: theme.textTheme.bodyMedium?.copyWith(
-                    color: _ink,
+                    color: cs.onSurface,
                     fontWeight: FontWeight.w700,
                     height: 1.35,
                   ),

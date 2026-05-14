@@ -26,14 +26,15 @@ class NimonMetadataRow extends StatelessWidget {
     final type = theme.type;
 
     final metaStyle = type.metadata(theme, wc).copyWith(
-      color: theme.colorScheme.onSurface.withValues(alpha: 0.72),
-    );
+          color: theme.colorScheme.onSurface.withValues(alpha: 0.72),
+        );
 
     Widget pill(String text) {
       return Container(
         padding: EdgeInsets.symmetric(horizontal: s.x2, vertical: s.x1),
         decoration: BoxDecoration(
-          color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.72),
+          color:
+              theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.72),
           borderRadius: r.radiusSm,
         ),
         child: Text(
@@ -49,7 +50,8 @@ class NimonMetadataRow extends StatelessWidget {
     }
 
     final parts = <Widget>[];
-    if ((levelLabel ?? '').trim().isNotEmpty) parts.add(pill(levelLabel!.trim()));
+    if ((levelLabel ?? '').trim().isNotEmpty)
+      parts.add(pill(levelLabel!.trim()));
     if ((readingTimeLabel ?? '').trim().isNotEmpty) {
       parts.add(Text(readingTimeLabel!.trim(), style: metaStyle));
     }
@@ -75,4 +77,3 @@ class NimonMetadataRow extends StatelessWidget {
     );
   }
 }
-

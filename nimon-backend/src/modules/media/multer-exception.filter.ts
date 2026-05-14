@@ -1,9 +1,13 @@
+import { type ArgumentsHost, Catch, type ExceptionFilter } from '@nestjs/common';
+import { validationFailedException } from '../../common/validation/validation-exception';
 import {
-  type ArgumentsHost,
-  Catch,
-  type ExceptionFilter,
-  PayloadTooLargeException,
-} from '@nestjs/common';
+  issueMediaAudioTooLarge,
+  issueMediaImageTooLarge,
+} from '../../common/validation/media-validation';
+import {
+  readAudioMaxBytesFromEnv,
+  readCoverMaxBytesFromEnv,
+} from './media-file-limits';
 
 function getMulterCode(exception: unknown): string | undefined {
   if (typeof exception !== 'object' || exception === null) {
@@ -22,12 +26,19 @@ export class MulterExceptionFilter implements ExceptionFilter {
     const code = getMulterCode(exception);
     if (code === 'LIMIT_FILE_SIZE') {
       const ctx = host.switchToHttp();
+      const req = ctx.getRequest<{ originalUrl?: string; url?: string }>();
+      const path = `${req.originalUrl ?? ''}${req.url ?? ''}`;
+      const isAudio = path.includes('/upload/audio');
+      const maxBytes = isAudio
+        ? readAudioMaxBytesFromEnv()
+        : readCoverMaxBytesFromEnv();
+      const issues = isAudio
+        ? [issueMediaAudioTooLarge(maxBytes)]
+        : [issueMediaImageTooLarge(maxBytes)];
+      const ex = validationFailedException(issues);
       const res = ctx.getResponse<{
         status: (c: number) => { json: (b: unknown) => void };
       }>();
-      const ex = new PayloadTooLargeException(
-        'File exceeds maximum allowed size for this upload.',
-      );
       res.status(ex.getStatus()).json(ex.getResponse());
       return;
     }

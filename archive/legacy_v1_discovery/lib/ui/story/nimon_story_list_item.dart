@@ -37,11 +37,11 @@ class NimonStoryListItem extends StatelessWidget {
     final type = theme.type;
 
     final titleStyle = type.storyCardTitle(theme, wc).copyWith(
-      color: theme.colorScheme.onSurface,
-    );
+          color: theme.colorScheme.onSurface,
+        );
     final summaryStyle = type.storyCardSummary(theme, wc).copyWith(
-      color: theme.colorScheme.onSurface.withValues(alpha: 0.74),
-    );
+          color: theme.colorScheme.onSurface.withValues(alpha: 0.74),
+        );
 
     final thumbW = wc == NimonWidthClass.compact ? 108.0 : 124.0;
     final thumbH = wc == NimonWidthClass.compact ? 72.0 : 82.0;
@@ -64,7 +64,8 @@ class NimonStoryListItem extends StatelessWidget {
                     )
                   : Icon(
                       Icons.menu_book_outlined,
-                      color: theme.colorScheme.onSurface.withValues(alpha: 0.45),
+                      color:
+                          theme.colorScheme.onSurface.withValues(alpha: 0.45),
                       size: 28,
                     ),
             ),
@@ -116,7 +117,8 @@ class NimonStoryListItem extends StatelessWidget {
                     child: LinearProgressIndicator(
                       value: progress!.clamp(0.0, 1.0),
                       minHeight: 4,
-                      backgroundColor: theme.colorScheme.surfaceContainerHighest,
+                      backgroundColor:
+                          theme.colorScheme.surfaceContainerHighest,
                     ),
                   ),
                 ],
@@ -137,4 +139,3 @@ class NimonStoryListItem extends StatelessWidget {
     );
   }
 }
-

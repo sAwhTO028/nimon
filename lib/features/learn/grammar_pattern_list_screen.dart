@@ -5,6 +5,7 @@ import 'package:nimon/features/learn/grammar_pattern.dart';
 import 'package:nimon/features/learn/learn_catalog_content_gate.dart';
 import 'package:nimon/features/learn/learn_explanation_language_provider.dart';
 import 'package:nimon/features/learn/learn_published_snapshot_mappers.dart';
+import 'package:nimon/features/learn/learn_module_surface_tokens.dart';
 import 'package:nimon/features/learn/learn_published_snapshot_providers.dart';
 import 'package:nimon/features/profile/data/published_mono_catalog_visibility_exception.dart';
 import 'package:nimon/features/learn/learn_support_text.dart';
@@ -18,9 +19,6 @@ class GrammarPatternListScreen extends ConsumerWidget {
   });
 
   final String contentId;
-
-  static const _bg = Color(0xFFF6F3EA);
-  static const _ink = Color(0xFF1A1917);
 
   /// Dev-only demo patterns when [contentId] is not a catalog UUID.
   static const List<GrammarPattern> mockPatterns = [
@@ -230,17 +228,19 @@ class GrammarPatternListScreen extends ConsumerWidget {
     ThemeData theme, {
     required Widget body,
   }) {
+    final pageBg = learnModuleListPageBackground(context);
+    final cs = theme.colorScheme;
     return Scaffold(
-      backgroundColor: _bg,
+      backgroundColor: pageBg,
       appBar: AppBar(
-        backgroundColor: _bg,
+        backgroundColor: pageBg,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
         leading: NimonBackButton(onPressed: () => context.pop()),
         title: Text(
           'Grammar Learn',
           style: theme.textTheme.titleLarge?.copyWith(
-            color: _ink,
+            color: cs.onSurface,
             fontWeight: FontWeight.w800,
           ),
         ),
@@ -275,12 +275,10 @@ class _GrammarEmptyBody extends StatelessWidget {
 
   final String message;
 
-  static const _ink = Color(0xFF1A1917);
-  static const _inkMuted = Color(0xFF5C5A55);
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final cs = theme.colorScheme;
     final bottomInset = MediaQuery.paddingOf(context).bottom;
     return Padding(
       padding: EdgeInsets.fromLTRB(24, 24, 24, bottomInset + 24),
@@ -290,7 +288,7 @@ class _GrammarEmptyBody extends StatelessWidget {
           Text(
             message,
             style: theme.textTheme.bodyLarge?.copyWith(
-              color: _ink,
+              color: cs.onSurface,
               height: 1.45,
             ),
           ),
@@ -298,7 +296,7 @@ class _GrammarEmptyBody extends StatelessWidget {
           Text(
             'Publish Full Learn from the creator workspace to sync grammar to readers.',
             style: theme.textTheme.bodyMedium?.copyWith(
-              color: _inkMuted,
+              color: cs.onSurfaceVariant,
               height: 1.4,
             ),
           ),
@@ -319,11 +317,10 @@ class _GrammarErrorBody extends StatelessWidget {
   final String detail;
   final VoidCallback onRetry;
 
-  static const _ink = Color(0xFF1A1917);
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final cs = theme.colorScheme;
     final bottomInset = MediaQuery.paddingOf(context).bottom;
     return Padding(
       padding: EdgeInsets.fromLTRB(24, 24, 24, bottomInset + 24),
@@ -333,14 +330,15 @@ class _GrammarErrorBody extends StatelessWidget {
           Text(
             message,
             style: theme.textTheme.titleMedium?.copyWith(
-              color: _ink,
+              color: cs.onSurface,
               fontWeight: FontWeight.w700,
             ),
           ),
           const SizedBox(height: 8),
           Text(
             detail,
-            style: theme.textTheme.bodySmall?.copyWith(color: _ink),
+            style:
+                theme.textTheme.bodySmall?.copyWith(color: cs.onSurfaceVariant),
           ),
           const SizedBox(height: 16),
           TextButton(onPressed: onRetry, child: const Text('Retry')),
@@ -360,12 +358,11 @@ class _GrammarPatternCard extends ConsumerWidget {
   final String contentId;
 
   static const _radius = 16.0;
-  static const _ink = Color(0xFF1A1917);
-  static const _inkMuted = Color(0xFF5C5A55);
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
+    final cs = theme.colorScheme;
     final hint = pattern.usageHint?.trim();
     final lang = ref.watch(learnExplanationLanguageProvider);
     final meaningLine = pickSupportText(
@@ -375,7 +372,7 @@ class _GrammarPatternCard extends ConsumerWidget {
     );
 
     return Material(
-      color: Colors.white.withValues(alpha: 0.86),
+      color: learnModuleListCardFill(context),
       elevation: 0,
       borderRadius: BorderRadius.circular(_radius),
       child: InkWell(
@@ -390,7 +387,7 @@ class _GrammarPatternCard extends ConsumerWidget {
           padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(_radius),
-            border: Border.all(color: const Color(0x14000000)),
+            border: Border.all(color: learnModuleListCardBorder(context)),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -398,7 +395,7 @@ class _GrammarPatternCard extends ConsumerWidget {
               Text(
                 pattern.title,
                 style: theme.textTheme.titleSmall?.copyWith(
-                  color: _ink,
+                  color: cs.onSurface,
                   fontWeight: FontWeight.w800,
                   height: 1.2,
                 ),
@@ -409,7 +406,7 @@ class _GrammarPatternCard extends ConsumerWidget {
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
                 style: theme.textTheme.bodySmall?.copyWith(
-                  color: _inkMuted,
+                  color: cs.onSurfaceVariant,
                   fontWeight: FontWeight.w500,
                   height: 1.35,
                 ),
@@ -418,7 +415,7 @@ class _GrammarPatternCard extends ConsumerWidget {
               Text(
                 pattern.form,
                 style: theme.textTheme.labelMedium?.copyWith(
-                  color: _ink,
+                  color: cs.onSurface,
                   fontWeight: FontWeight.w700,
                   letterSpacing: 0.1,
                 ),
@@ -430,7 +427,7 @@ class _GrammarPatternCard extends ConsumerWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: theme.textTheme.labelSmall?.copyWith(
-                    color: _inkMuted.withValues(alpha: 0.85),
+                    color: cs.onSurfaceVariant,
                     fontWeight: FontWeight.w600,
                   ),
                 ),

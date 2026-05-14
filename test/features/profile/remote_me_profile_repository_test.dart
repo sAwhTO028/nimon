@@ -3,10 +3,46 @@ import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
+import 'package:nimon/core/validation/http_validation_failed_exception.dart';
 import 'package:nimon/features/profile/data/remote_me_profile_repository.dart';
 
 void main() {
   group('RemoteMeProfileRepository.patchMyProfile', () {
+    test(
+        '400 validation_failed throws HttpValidationFailedException before legacy mapping',
+        () async {
+      final client = MockClient((_) async {
+        return http.Response(
+          jsonEncode({
+            'statusCode': 400,
+            'message': 'validation_failed',
+            'issues': [
+              {
+                'code': 'profile.handle.invalid',
+                'field': 'handle',
+                'messageKey': 'profile.handle.invalid',
+                'severity': 'blocking',
+                'source': 'profile-validation',
+              },
+            ],
+          }),
+          400,
+          headers: {'content-type': 'application/json'},
+        );
+      });
+
+      final repo = RemoteMeProfileRepository(
+        apiBaseUrl: 'http://localhost:9999',
+        client: client,
+        authHeaderBuilder: () async => {'Authorization': 'Bearer t'},
+      );
+
+      await expectLater(
+        repo.patchMyProfile(handle: 'bad'),
+        throwsA(isA<HttpValidationFailedException>()),
+      );
+    });
+
     test('validation message array: prefers mapped profile image URL message',
         () async {
       final client = MockClient((req) async {

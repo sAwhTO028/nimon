@@ -3,7 +3,10 @@ import 'dart:convert' show jsonDecode;
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
+import 'package:nimon/core/validation/http_validation_failed_exception.dart';
+import 'package:nimon/core/validation/validation_issue_from_json.dart';
 import 'package:nimon/features/auth/auth_strict_unauthorized.dart';
+import 'package:nimon/features/auth/authenticated_http.dart';
 
 typedef MediaUploadAuthHeaderBuilder = Future<Map<String, String>> Function();
 
@@ -57,13 +60,16 @@ class MediaUploadRepository {
     required String apiBaseUrl,
     http.Client? client,
     required MediaUploadAuthHeaderBuilder authHeaderBuilder,
+    NimonSendWithAuth401Recovery? sendWithAuth401Recovery,
   })  : _apiBaseUrl = apiBaseUrl.replaceAll(RegExp(r'/+$'), ''),
         _client = client ?? http.Client(),
-        _authHeaderBuilder = authHeaderBuilder;
+        _authHeaderBuilder = authHeaderBuilder,
+        _sendWithAuth401 = sendWithAuth401Recovery;
 
   final String _apiBaseUrl;
   final http.Client _client;
   final MediaUploadAuthHeaderBuilder _authHeaderBuilder;
+  final NimonSendWithAuth401Recovery? _sendWithAuth401;
 
   Uri _u(String path) => Uri.parse('$_apiBaseUrl$path');
 
@@ -78,6 +84,23 @@ class MediaUploadRepository {
     }
     return h;
   }
+
+  Future<http.Response> _nimonMultipart(
+    Uri uri,
+    Future<void> Function(http.MultipartRequest req) configure,
+  ) =>
+      nimonSendWithOptional401Recovery(
+        _sendWithAuth401,
+        requestUri: uri,
+        mergeHeaders: _authHeaders,
+        send: (h) async {
+          final req = http.MultipartRequest('POST', uri);
+          req.headers.addAll(h);
+          await configure(req);
+          final streamed = await _client.send(req);
+          return http.Response.fromStream(streamed);
+        },
+      );
 
   String _friendlyHttpError(int code, String body) {
     switch (code) {
@@ -100,7 +123,11 @@ class MediaUploadRepository {
 
   void _throwIfNotOk(http.Response r) {
     if (r.statusCode >= 200 && r.statusCode < 300) return;
-    notifyIfStrictUnauthorized401(r);
+    if (r.statusCode == 401) notifyIfStrictUnauthorized401(r);
+    final vf = tryParseValidationIssuesFromHttpBody(r.body);
+    if (vf != null && vf.isNotEmpty) {
+      throw HttpValidationFailedException(vf);
+    }
     throw MediaUploadException(
       _friendlyHttpError(r.statusCode, r.body),
       statusCode: r.statusCode,
@@ -123,13 +150,11 @@ class MediaUploadRepository {
 
   Future<MediaUploadResponse> uploadCover(XFile file) async {
     try {
-      final headers = await _authHeaders();
       final uri = _u('/v1/media/upload/cover');
-      final req = http.MultipartRequest('POST', uri);
-      req.headers.addAll(headers);
-      req.files.add(await _multipartFileFromXFile(file));
-      final streamed = await _client.send(req);
-      final resp = await http.Response.fromStream(streamed);
+      final resp = await _nimonMultipart(
+        uri,
+        (req) async => req.files.add(await _multipartFileFromXFile(file)),
+      );
       _throwIfNotOk(resp);
       final map = jsonDecode(resp.body);
       if (map is! Map<String, dynamic>) {
@@ -140,6 +165,8 @@ class MediaUploadRepository {
         throw MediaUploadException('Upload succeeded but no URL was returned.');
       }
       return out;
+    } on HttpValidationFailedException {
+      rethrow;
     } on MediaUploadException {
       rethrow;
     } on http.ClientException {
@@ -160,16 +187,14 @@ class MediaUploadRepository {
     required List<int> bytes,
   }) async {
     try {
-      final headers = await _authHeaders();
       final uri = _u('/v1/media/upload/audio');
-      final req = http.MultipartRequest('POST', uri);
-      req.headers.addAll(headers);
       final name = filename.trim().isEmpty ? 'audio.bin' : filename.trim();
-      req.files.add(
-        http.MultipartFile.fromBytes('file', bytes, filename: name),
+      final resp = await _nimonMultipart(
+        uri,
+        (req) async => req.files.add(
+          http.MultipartFile.fromBytes('file', bytes, filename: name),
+        ),
       );
-      final streamed = await _client.send(req);
-      final resp = await http.Response.fromStream(streamed);
       _throwIfNotOk(resp);
       final map = jsonDecode(resp.body);
       if (map is! Map<String, dynamic>) {
@@ -180,6 +205,8 @@ class MediaUploadRepository {
         throw MediaUploadException('Upload succeeded but no URL was returned.');
       }
       return out;
+    } on HttpValidationFailedException {
+      rethrow;
     } on MediaUploadException {
       rethrow;
     } on http.ClientException {
@@ -204,16 +231,14 @@ class MediaUploadRepository {
     final name = filename.trim().isEmpty ? 'audio.bin' : filename.trim();
     if (!kIsWeb && path != null && path.trim().isNotEmpty) {
       try {
-        final headers = await _authHeaders();
         final uri = _u('/v1/media/upload/audio');
-        final req = http.MultipartRequest('POST', uri);
-        req.headers.addAll(headers);
-        req.files.add(
-          await http.MultipartFile.fromPath('file', path.trim(),
-              filename: name),
+        final resp = await _nimonMultipart(
+          uri,
+          (req) async => req.files.add(
+            await http.MultipartFile.fromPath('file', path.trim(),
+                filename: name),
+          ),
         );
-        final streamed = await _client.send(req);
-        final resp = await http.Response.fromStream(streamed);
         _throwIfNotOk(resp);
         final map = jsonDecode(resp.body);
         if (map is! Map<String, dynamic>) {
@@ -225,6 +250,8 @@ class MediaUploadRepository {
               'Upload succeeded but no URL was returned.');
         }
         return out;
+      } on HttpValidationFailedException {
+        rethrow;
       } on MediaUploadException {
         rethrow;
       } on http.ClientException {

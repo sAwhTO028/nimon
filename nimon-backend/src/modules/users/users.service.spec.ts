@@ -1,5 +1,15 @@
 import { NotFoundException } from '@nestjs/common';
+import { canonicalizeMediaUrl } from '../media/media-url-canonicalizer';
+import type { MediaUrlCanonicalizerService } from '../media/media-url-canonicalizer.service';
 import { UsersService } from './users.service';
+
+function mkMedia(): MediaUrlCanonicalizerService {
+  const base = 'http://localhost:3000/uploads';
+  return {
+    mediaPublicBaseUrl: () => base,
+    url: (u: string | null | undefined) => canonicalizeMediaUrl(u, base),
+  } as unknown as MediaUrlCanonicalizerService;
+}
 
 describe('UsersService public profile', () => {
   const targetUserId = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb';
@@ -13,7 +23,7 @@ describe('UsersService public profile', () => {
         findUnique: jest.fn(),
       },
     } as any;
-    return { prisma, svc: new UsersService(prisma) };
+    return { prisma, svc: new UsersService(prisma, mkMedia()) };
   };
 
   it('guest profile returns counts and isFollowingByMe false', async () => {

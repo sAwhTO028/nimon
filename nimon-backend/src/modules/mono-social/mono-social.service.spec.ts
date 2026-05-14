@@ -1,6 +1,26 @@
 import { NotFoundException } from '@nestjs/common';
-import { MonoSocialService } from './mono-social.service';
+import { QuotaExceededException } from '../../common/limits/quota-exceeded.exception';
+import type { PublicWebBaseUrlService } from '../common/public-web-base-url.service';
+import { canonicalizeMediaUrl } from '../media/media-url-canonicalizer';
+import type { MediaUrlCanonicalizerService } from '../media/media-url-canonicalizer.service';
 import { PUBLISHED_MONO_CATALOG_VISIBLE } from '../published-monos/published-mono-visibility';
+import { MonoSocialService } from './mono-social.service';
+
+function mkMedia(): MediaUrlCanonicalizerService {
+  const base = 'http://localhost:3000/uploads';
+  return {
+    mediaPublicBaseUrl: () => base,
+    url: (u: string | null | undefined) => canonicalizeMediaUrl(u, base),
+  } as unknown as MediaUrlCanonicalizerService;
+}
+
+function mkPublicWeb(): PublicWebBaseUrlService {
+  const b = 'http://localhost:3000';
+  return {
+    baseUrl: () => b,
+    monoShareUrl: (id: string) => `${b}/mono/${id.trim()}`,
+  } as unknown as PublicWebBaseUrlService;
+}
 
 describe('MonoSocialService', () => {
   const userId = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
@@ -13,6 +33,8 @@ describe('MonoSocialService', () => {
         upsert: jest.fn(),
         deleteMany: jest.fn(),
         findMany: jest.fn(),
+        findUnique: jest.fn(),
+        count: jest.fn(),
       },
       monoReaction: {
         upsert: jest.fn(),
@@ -22,7 +44,7 @@ describe('MonoSocialService', () => {
         findMany: jest.fn().mockResolvedValue([]),
       },
     } as any;
-    return { prisma, svc: new MonoSocialService(prisma) };
+    return { prisma, svc: new MonoSocialService(prisma, mkMedia(), mkPublicWeb()) };
   };
 
   it('bookmark 404 when mono not catalog-visible', async () => {
@@ -41,12 +63,32 @@ describe('MonoSocialService', () => {
   it('bookmark POST is idempotent via upsert', async () => {
     const { prisma, svc } = mk();
     prisma.publishedMono.findFirst.mockResolvedValue({ id: monoId });
+    prisma.monoBookmark.findUnique.mockResolvedValue({ publishedMonoId: monoId });
     await svc.bookmark(userId, monoId);
+    expect(prisma.monoBookmark.count).not.toHaveBeenCalled();
     expect(prisma.monoBookmark.upsert).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { userId_publishedMonoId: { userId, publishedMonoId: monoId } },
       }),
     );
+  });
+
+  it('bookmark blocks new save when user already has 50 bookmarks', async () => {
+    const { prisma, svc } = mk();
+    prisma.publishedMono.findFirst.mockResolvedValue({ id: monoId });
+    prisma.monoBookmark.findUnique.mockResolvedValue(null);
+    prisma.monoBookmark.count.mockResolvedValue(50);
+    await expect(svc.bookmark(userId, monoId)).rejects.toBeInstanceOf(QuotaExceededException);
+    expect(prisma.monoBookmark.upsert).not.toHaveBeenCalled();
+  });
+
+  it('bookmark allows new save when user has 49 bookmarks', async () => {
+    const { prisma, svc } = mk();
+    prisma.publishedMono.findFirst.mockResolvedValue({ id: monoId });
+    prisma.monoBookmark.findUnique.mockResolvedValue(null);
+    prisma.monoBookmark.count.mockResolvedValue(49);
+    await svc.bookmark(userId, monoId);
+    expect(prisma.monoBookmark.upsert).toHaveBeenCalled();
   });
 
   it('bookmark DELETE is idempotent via deleteMany', async () => {

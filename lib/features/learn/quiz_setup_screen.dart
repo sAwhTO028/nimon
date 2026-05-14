@@ -2,10 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:nimon/features/learn/learn_catalog_content_gate.dart';
+import 'package:nimon/features/learn/learn_creator_module_tokens.dart';
+import 'package:nimon/features/learn/learn_module_surface_tokens.dart';
 import 'package:nimon/features/learn/learn_published_snapshot_mappers.dart';
 import 'package:nimon/features/learn/learn_published_snapshot_providers.dart';
 import 'package:nimon/features/profile/data/published_mono_catalog_visibility_exception.dart';
-import 'package:nimon/features/learn/quiz_flow_theme.dart';
 import 'package:nimon/features/learn/quiz_mcq.dart';
 import 'package:nimon/features/learn/quiz_session.dart';
 import 'package:nimon/ui/widgets/nimon_circle_nav_button.dart';
@@ -18,10 +19,6 @@ class QuizSetupScreen extends ConsumerStatefulWidget {
   });
 
   final String contentId;
-
-  static const _bg = QuizFlowTheme.pageBg;
-  static const _ink = QuizFlowTheme.ink;
-  static const _inkMuted = QuizFlowTheme.inkMuted;
 
   static const List<int> questionCountOptions = [5, 10];
 
@@ -150,18 +147,20 @@ class _QuizSetupScreenState extends ConsumerState<QuizSetupScreen> {
 
   Widget _buildScaffold(BuildContext context, Widget body) {
     final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final pageBg = learnModuleListPageBackground(context);
 
     return Scaffold(
-      backgroundColor: QuizSetupScreen._bg,
+      backgroundColor: pageBg,
       appBar: AppBar(
-        backgroundColor: QuizSetupScreen._bg,
+        backgroundColor: pageBg,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
         leading: NimonBackButton(onPressed: () => context.pop()),
         title: Text(
           'Quiz Practice',
           style: theme.textTheme.titleLarge?.copyWith(
-            color: QuizSetupScreen._ink,
+            color: cs.onSurface,
             fontWeight: FontWeight.w800,
           ),
         ),
@@ -173,6 +172,7 @@ class _QuizSetupScreenState extends ConsumerState<QuizSetupScreen> {
 
   Widget _buildInteractiveBody(BuildContext context) {
     final theme = Theme.of(context);
+    final cs = theme.colorScheme;
     final bottomInset = MediaQuery.paddingOf(context).bottom;
 
     return ListView(
@@ -181,7 +181,7 @@ class _QuizSetupScreenState extends ConsumerState<QuizSetupScreen> {
         Text(
           'Choose one quiz type',
           style: theme.textTheme.bodyMedium?.copyWith(
-            color: QuizSetupScreen._inkMuted,
+            color: cs.onSurfaceVariant,
             fontWeight: FontWeight.w600,
             height: 1.35,
           ),
@@ -190,7 +190,7 @@ class _QuizSetupScreenState extends ConsumerState<QuizSetupScreen> {
         Text(
           'Category',
           style: theme.textTheme.titleSmall?.copyWith(
-            color: QuizSetupScreen._ink,
+            color: cs.onSurface,
             fontWeight: FontWeight.w800,
           ),
         ),
@@ -210,7 +210,7 @@ class _QuizSetupScreenState extends ConsumerState<QuizSetupScreen> {
         Text(
           'Number of questions',
           style: theme.textTheme.titleSmall?.copyWith(
-            color: QuizSetupScreen._ink,
+            color: cs.onSurface,
             fontWeight: FontWeight.w800,
           ),
         ),
@@ -239,12 +239,10 @@ class _QuizSetupScreenState extends ConsumerState<QuizSetupScreen> {
           onPressed: _canStart ? _startQuiz : null,
           style: FilledButton.styleFrom(
             padding: const EdgeInsets.symmetric(vertical: 16),
-            backgroundColor: QuizFlowTheme.primary,
-            foregroundColor: QuizFlowTheme.onPrimary,
-            disabledBackgroundColor:
-                QuizFlowTheme.primary.withValues(alpha: 0.38),
-            disabledForegroundColor:
-                QuizFlowTheme.onPrimary.withValues(alpha: 0.65),
+            backgroundColor: cs.primary,
+            foregroundColor: cs.onPrimary,
+            disabledBackgroundColor: cs.primary.withValues(alpha: 0.38),
+            disabledForegroundColor: cs.onPrimary.withValues(alpha: 0.65),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(_cardRadius),
             ),
@@ -253,7 +251,7 @@ class _QuizSetupScreenState extends ConsumerState<QuizSetupScreen> {
             'Start Quiz',
             style: theme.textTheme.titleSmall?.copyWith(
               fontWeight: FontWeight.w800,
-              color: QuizFlowTheme.onPrimary,
+              color: cs.onPrimary,
             ),
           ),
         ),
@@ -267,12 +265,10 @@ class _QuizEmptyLearnBody extends StatelessWidget {
 
   final String message;
 
-  static const _ink = QuizFlowTheme.ink;
-  static const _inkMuted = QuizFlowTheme.inkMuted;
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final cs = theme.colorScheme;
     final bottomInset = MediaQuery.paddingOf(context).bottom;
     return Padding(
       padding: EdgeInsets.fromLTRB(24, 24, 24, bottomInset + 24),
@@ -282,7 +278,7 @@ class _QuizEmptyLearnBody extends StatelessWidget {
           Text(
             message,
             style: theme.textTheme.bodyLarge?.copyWith(
-              color: _ink,
+              color: cs.onSurface,
               height: 1.45,
             ),
           ),
@@ -290,7 +286,7 @@ class _QuizEmptyLearnBody extends StatelessWidget {
           Text(
             'Publish Full Learn from the creator workspace to sync quizzes to readers.',
             style: theme.textTheme.bodyMedium?.copyWith(
-              color: _inkMuted,
+              color: cs.onSurfaceVariant,
               height: 1.4,
             ),
           ),
@@ -311,11 +307,10 @@ class _QuizSetupErrorBody extends StatelessWidget {
   final String detail;
   final VoidCallback onRetry;
 
-  static const _ink = QuizFlowTheme.ink;
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final cs = theme.colorScheme;
     final bottomInset = MediaQuery.paddingOf(context).bottom;
     return Padding(
       padding: EdgeInsets.fromLTRB(24, 24, 24, bottomInset + 24),
@@ -325,14 +320,14 @@ class _QuizSetupErrorBody extends StatelessWidget {
           Text(
             message,
             style: theme.textTheme.titleMedium?.copyWith(
-              color: _ink,
+              color: cs.onSurface,
               fontWeight: FontWeight.w700,
             ),
           ),
           const SizedBox(height: 8),
           Text(
             detail,
-            style: theme.textTheme.bodySmall?.copyWith(color: _ink),
+            style: theme.textTheme.bodySmall?.copyWith(color: cs.onSurface),
           ),
           const SizedBox(height: 16),
           TextButton(onPressed: onRetry, child: const Text('Retry')),
@@ -355,13 +350,19 @@ class _CategoryOption extends StatelessWidget {
   final double radius;
   final VoidCallback onTap;
 
-  static const _ink = QuizFlowTheme.ink;
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final base = learnCreatorModuleCardSurfaceColor(context);
+    final fill = selected
+        ? Color.alphaBlend(
+            cs.primary.withValues(alpha: 0.10),
+            base,
+          )
+        : base;
     return Material(
-      color: Colors.white.withValues(alpha: selected ? 0.95 : 0.86),
+      color: fill,
       elevation: 0,
       borderRadius: BorderRadius.circular(radius),
       child: InkWell(
@@ -373,8 +374,8 @@ class _CategoryOption extends StatelessWidget {
             borderRadius: BorderRadius.circular(radius),
             border: Border.all(
               color: selected
-                  ? QuizFlowTheme.primary.withValues(alpha: 0.55)
-                  : const Color(0x14000000),
+                  ? cs.primary.withValues(alpha: 0.55)
+                  : learnCreatorModuleCardBorderColor(context),
               width: selected ? 2 : 1,
             ),
           ),
@@ -384,15 +385,15 @@ class _CategoryOption extends StatelessWidget {
                 selected ? Icons.radio_button_checked : Icons.radio_button_off,
                 size: 22,
                 color: selected
-                    ? QuizFlowTheme.primary
-                    : _ink.withValues(alpha: 0.35),
+                    ? cs.primary
+                    : cs.onSurfaceVariant.withValues(alpha: 0.55),
               ),
               const SizedBox(width: 12),
               Expanded(
                 child: Text(
                   label,
                   style: theme.textTheme.titleSmall?.copyWith(
-                    color: _ink,
+                    color: learnCreatorModulePrimaryTextColor(context),
                     fontWeight: FontWeight.w700,
                   ),
                 ),
@@ -418,13 +419,19 @@ class _CountOption extends StatelessWidget {
   final double radius;
   final VoidCallback onTap;
 
-  static const _ink = QuizFlowTheme.ink;
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final base = learnCreatorModuleCardSurfaceColor(context);
+    final fill = selected
+        ? Color.alphaBlend(
+            cs.primary.withValues(alpha: 0.10),
+            base,
+          )
+        : base;
     return Material(
-      color: Colors.white.withValues(alpha: selected ? 0.95 : 0.86),
+      color: fill,
       elevation: 0,
       borderRadius: BorderRadius.circular(radius),
       child: InkWell(
@@ -436,8 +443,8 @@ class _CountOption extends StatelessWidget {
             borderRadius: BorderRadius.circular(radius),
             border: Border.all(
               color: selected
-                  ? QuizFlowTheme.primary.withValues(alpha: 0.55)
-                  : const Color(0x14000000),
+                  ? cs.primary.withValues(alpha: 0.55)
+                  : learnCreatorModuleCardBorderColor(context),
               width: selected ? 2 : 1,
             ),
           ),
@@ -446,7 +453,7 @@ class _CountOption extends StatelessWidget {
               '$count questions',
               textAlign: TextAlign.center,
               style: theme.textTheme.titleSmall?.copyWith(
-                color: _ink,
+                color: learnCreatorModulePrimaryTextColor(context),
                 fontWeight: FontWeight.w800,
               ),
             ),

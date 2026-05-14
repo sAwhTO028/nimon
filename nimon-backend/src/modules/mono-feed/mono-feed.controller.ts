@@ -21,6 +21,8 @@ export class MonoFeedController {
     @Query('level') level?: string,
     @Query('category') category?: string,
     @Query('writerId') writerId?: string,
+    @Query('contentLocale') contentLocale?: string,
+    @Query('learningLanguage') learningLanguage?: string,
     @Query('following') following?: string,
     @Req() req?: { user?: JwtValidatedUser },
   ) {
@@ -40,6 +42,8 @@ export class MonoFeedController {
       level: level?.trim(),
       category: category?.trim(),
       writerId: writerIdOn || undefined,
+      contentLocale: contentLocale?.trim(),
+      learningLanguage: learningLanguage?.trim(),
       userId: req?.user?.userId ?? null,
       followingOnly: followingOn,
     });

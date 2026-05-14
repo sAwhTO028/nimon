@@ -73,13 +73,15 @@ class ReadingChallengesSection extends StatelessWidget {
                 title: 'Reading Challenges',
                 sectionKey: SectionKey.readingChallenges,
                 showSeeAll: false,
-                padding: EdgeInsets.zero, // No padding since container already has 16px left
+                padding: EdgeInsets
+                    .zero, // No padding since container already has 16px left
               ),
               const SizedBox(height: 12),
               SizedBox(
                 height: gridH,
                 child: PageView.builder(
-                  controller: PageController(viewportFraction: viewportFraction),
+                  controller:
+                      PageController(viewportFraction: viewportFraction),
                   padEnds: false,
                   itemCount: pages.length,
                   itemBuilder: (context, pageIndex) {

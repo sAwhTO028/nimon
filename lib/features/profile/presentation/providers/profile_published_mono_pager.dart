@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show debugPrint, kDebugMode;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:nimon/core/pagination/page_request.dart';
 import 'package:nimon/core/pagination/paginated_state.dart';
@@ -13,6 +14,7 @@ final remotePublishedMonoRepositoryForProfileProvider =
   return RemotePublishedMonoRepository(
     apiBaseUrl: RemoteBackendConfig.apiBaseUrl,
     authHeaderBuilder: ref.watch(authHeaderBuilderProvider),
+    sendWithAuth401Recovery: ref.watch(nimonSendWithAuth401RecoveryProvider),
   );
 });
 
@@ -34,6 +36,8 @@ class ProfilePublishedMonoPager
 
   final RemotePublishedMonoRepository _repo;
 
+  /// First `/v1/published-monos` page should set [PaginatedState.totalCount] when the
+  /// envelope includes `totalCount` / `total_count`; later pages may omit it.
   Future<void> loadFirstPage() async {
     final myEpoch = state.requestEpoch + 1;
     state = state.copyWith(
@@ -45,7 +49,7 @@ class ProfilePublishedMonoPager
     );
     try {
       final result = await _repo.fetchPage(
-        PageRequest(limit: PaginationDefaults.profilePageLimit),
+        PageRequest(limit: PaginationDefaults.profilePublishedMonoPageLimit),
       );
       if (state.requestEpoch != myEpoch) return;
       state = state.copyWith(
@@ -81,7 +85,7 @@ class ProfilePublishedMonoPager
     );
     try {
       final result = await _repo.fetchPage(
-        PageRequest(limit: PaginationDefaults.profilePageLimit),
+        PageRequest(limit: PaginationDefaults.profilePublishedMonoPageLimit),
       );
       if (state.requestEpoch != myEpoch) return;
       state = state.copyWith(
@@ -106,28 +110,59 @@ class ProfilePublishedMonoPager
   }
 
   Future<void> loadMore() async {
-    if (!state.canLoadMore) return;
+    if (kDebugMode) {
+      debugPrint(
+        '[ProfilePublished loadMore] enter '
+        'canLoadMore=${state.canLoadMore} hasMore=${state.hasMore} '
+        'isLoadingMore=${state.isLoadingMore} isInitialLoading=${state.isInitialLoading} '
+        'isRefreshing=${state.isRefreshing} error=${state.error != null} '
+        'nextCursorSet=${state.nextCursor != null && state.nextCursor!.isNotEmpty} '
+        'itemsLen=${state.items.length}',
+      );
+    }
+    if (!state.canLoadMore) {
+      if (kDebugMode) {
+        debugPrint('[ProfilePublished loadMore] skip: !canLoadMore');
+      }
+      return;
+    }
     final myEpoch = state.requestEpoch;
     final cursor = state.nextCursor;
+    if (kDebugMode) {
+      debugPrint('[ProfilePublished loadMore] start fetch cursorLen=${cursor?.length ?? 0}');
+    }
     state = state.copyWith(isLoadingMore: true);
     try {
       final result = await _repo.fetchPage(
         PageRequest(
           cursor: cursor,
-          limit: PaginationDefaults.profilePageLimit,
+          limit: PaginationDefaults.profilePublishedMonoPageLimit,
         ),
       );
       if (state.requestEpoch != myEpoch) return;
+      final existingIds = state.items.map((e) => e.id).toSet();
+      final appended = result.items
+          .where((e) => !existingIds.contains(e.id))
+          .toList(growable: false);
       state = state.copyWith(
-        items: [...state.items, ...result.items],
+        items: [...state.items, ...appended],
         nextCursor: result.nextCursor,
         hasMore: result.hasMore,
         error: null,
         totalCount: result.totalCount ?? state.totalCount,
       );
+      if (kDebugMode) {
+        debugPrint(
+          '[ProfilePublished loadMore] done itemsLen=${state.items.length} '
+          'appended=${appended.length} hasMore=${state.hasMore}',
+        );
+      }
     } catch (e) {
       if (state.requestEpoch != myEpoch) return;
       state = state.copyWith(error: e);
+      if (kDebugMode) {
+        debugPrint('[ProfilePublished loadMore] error: $e');
+      }
     } finally {
       if (state.requestEpoch == myEpoch) {
         state = state.copyWith(isLoadingMore: false);

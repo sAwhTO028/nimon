@@ -1,0 +1,315 @@
+{
+  "@@locale": "my",
+  "settingsTitle": "ဆက်တင်များ",
+  "settingsLanguageSection": "ဘာသာစကား",
+  "settingsAppearanceSection": "အလှအပ",
+  "settingsAccountSection": "အကောင့်",
+  "settingsNotificationsSection": "အသိပေးချက်များ",
+  "settingsAboutSection": "အကြောင်းအရာ",
+  "settingsAppLanguage": "အက်ပ်ဘာသာစကား",
+  "settingsContentCommunity": "ကွန်ယက်/အကြောင်းအရာ ခရိုင်",
+  "settingsLearningLanguage": "သင်ယူမည့် ဘာသာစကား",
+  "settingsTheme": "အပြင်အဆင်",
+  "settingsComingSoon": "မကြာမီလာမည်",
+  "settingsEditProfile": "ပရိုဖိုင် ပြင်ရန်",
+  "settingsSignOut": "ထွက်မည်",
+  "settingsSignOutSubtitle": "ဒီဖုန်းပေါ်ကနေ အကောင့်ထွက်မည်",
+  "settingsSignInRequiredTitle": "ဝင်ရောက်ရန် လိုအပ်သည်",
+  "settingsSignInRequiredBody": "ဆက်တင်များကို အသုံးပြုရန် ဝင်ရောက်ပါ။",
+  "settingsSignInCta": "ဝင်ရောက်မည်",
+  "settingsAppVersion": "အက်ပ်ဗားရှင်း",
+  "settingsAppVersionPlaceholder": "V1 shell (ဗားရှင်းပြသမှုကို နောက်မှလုပ်မည်)",
+  "settingsSystem": "စနစ်",
+  "settingsEnglish": "အင်္ဂလိပ်",
+  "settingsJapanese": "ဂျပန်",
+  "settingsMyanmar": "မြန်မာ",
+  "settingsInternationalEnglish": "အပြည်ပြည်ဆိုင်ရာ / အင်္ဂလိပ်",
+  "settingsSignOutDialogTitle": "ထွက်မလား?",
+  "settingsSignOutDialogBody": "ဒီဖုန်းပေါ်ကနေ အကောင့်ထွက်ပြီး လော့ဂ်အင်သို့ ပြန်သွားမည်။",
+  "settingsCancel": "မလုပ်တော့",
+  "settingsReadingSection": "ဖတ်ရှုရေး",
+  "settingsReadingTextSize": "စာလုံးအရွယ်အစား",
+  "settingsReadingTextSizeSmall": "ငယ်",
+  "settingsReadingTextSizeStandard": "ပုံမှန်",
+  "settingsReadingTextSizeLarge": "ကြီး",
+  "settingsShowExplanationSentence": "ရှင်းလင်းချက်",
+  "settingsShowExplanationSentenceSubtitle": "Mono reader တွင် ဝါကျချင်းစီ ရှင်းလင်းချက်များ ပြပါ",
+  "validationPublishSheetTitle": "ထုတ်ဝေမီ စစ်ဆေးရန်",
+  "validationPublishSectionBlocking": "ပြင်ရမည့် အချက်များ",
+  "validationPublishSectionRecommended": "အကြံပြုချက်",
+  "validationPublishFixIssuesCta": "ပြင်ဆင်မည်",
+  "validationPublishAnywayCta": "ဒီအတိုင်းထုတ်ဝေမည်",
+  "validationCtaSignIn": "ဝင်မည်",
+  "validationCtaNotNow": "နောက်မှ",
+  "validationCtaOk": "OK",
+  "validationMediaUploadGenericImage": "ပုံမတင်နိုင်ပါ။ ထပ်စမ်းပါ။",
+  "validationMediaUploadGenericAudio": "အသံဖိုင်မတင်နိုင်ပါ။ ထပ်စမ်းပါ။",
+  "validationFieldStoryTitle": "စတိုရီ ခေါင်းစဉ်",
+  "validationFieldStoryDescription": "အကြောင်းအရာ",
+  "validationFieldStorySentences": "စာကြောင်းများ",
+  "validationFieldStoryBody": "စတိုရီ စာသား",
+  "validationFieldStoryLevel": "JLPT အဆင့်",
+  "validationFieldStoryDuration": "ကြာချိန်",
+  "validationFieldLearnVocabCount": "စကားလုံး",
+  "validationFieldLearnGrammarCount": "သဒ္ဒါ",
+  "validationFieldLearnQuizCount": "ကွစ်ချုပ်",
+  "validationFieldLearnVocabulary": "စကားလုံး",
+  "validationFieldLearnGrammar": "သဒ္ဒါ",
+  "validationFieldLearnQuiz": "ကွစ်ချုပ်",
+  "validationFieldModuleVocabularyKanji": "စကားလုံး / ကန်ဂျီ မော်ဂျူး",
+  "validationFieldModuleGrammar": "သဒ္ဒါ မော်ဂျူး",
+  "validationFieldModuleQuiz": "ကွစ်ချုပ် မော်ဂျူး",
+  "validationFieldModuleAudio": "နားထောင် မော်ဂျူး",
+  "validationFieldLearnModule": "သင်ယူမှု မော်ဂျူး",
+  "validationLearnModuleNotCompletedWithLabel": "ထုတ်ဝေမီ {moduleLabel} မော်ဂျူး ပြီးအောင်လုပ်ပါ။",
+  "@validationLearnModuleNotCompletedWithLabel": {
+    "placeholders": {
+      "moduleLabel": {
+        "type": "String"
+      }
+    }
+  },
+  "validationLearnModuleLabelLearn": "သင်ယူမှု",
+  "validationLearnModuleLabelVocabularyKanji": "စကားလုံး / ကန်ဂျီ",
+  "validationLearnModuleLabelGrammar": "သဒ္ဒါ",
+  "validationLearnModuleLabelQuiz": "ကွစ်ချုပ်",
+  "validationLearnModuleLabelAudio": "နားထောင်",
+  "validationLearnFuriganaInvalid": "ဖူးရီဂါနာ မမှန်ပါ။",
+  "validationLearnFuriganaOverlap": "ဖူးရီဂါနာ နေရာများ ထပ်နေပါသည်။",
+  "validationProfileDisplayNameRequired": "ပြသမည့် နာမည်ထည့်ပါ။",
+  "validationProfileDisplayNameLength": "ပြသမည့် နာမည် ၁ လုံးမှ ၃၀ လုံးကြား ဖြစ်ရမည်။",
+  "validationProfileDisplayNameUnsafe": "ပြသမည့် နာမည်တွင် ခွင့်မပြုထားသော အကြောင်းအရာ ပါဝင်သည်။",
+  "validationProfileHandleNoEmoji": "သုံးစွဲသူ နာမည်တွင် အီမိုဂျီ မသုံးရပါ။",
+  "validationProfileHandleLength": "သုံးစွဲသူ နာမည်မှာ စာလုံး ၃ လုံးမှ ၂၄ လုံးကြား ဖြစ်ရမည်။",
+  "validationProfileHandleInvalidChars": "အင်္ဂလိပ် စာလုံးသေး၊ ဂဏန်း၊ အောက်မျဉ်း၊ မှတ်ပုံတင် သုံးပါ။",
+  "validationProfileHandlePeriodEdge": "သုံးစွဲသူ နာမည်၏ အစနှင့် အဆုံးတွင် မှတ်ပုံတင် မသုံးရပါ။",
+  "validationProfileHandlePeriodRepeat": "မှတ်ပုံတင် ဆက်တိုက် မသုံးရပါ။",
+  "validationProfileHandleReserved": "ဤသုံးစွဲသူ နာမည်ကို သိမ်းထားပြီးဖြစ်သည်။",
+  "validationProfileBioTooLong": "မိမိကိုယ်ကို ဖော်ပြချက် စာလုံး ၁၅၀ ထက်မပိုရပါ။",
+  "validationProfileBioUnsafe": "မိမိကိုယ်ကို ဖော်ပြချက်တွင် ခွင့်မပြုထားသော အကြောင်းအရာ ပါဝင်သည်။",
+  "validationProfileBioTooManyLines": "မိမိကိုယ်ကို ဖော်ပြချက် လိုင်း ၃ လိုင်းထက်မပိုရပါ။",
+  "validationStoryTitleRequired": "ထုတ်ဝေရန် ခေါင်းစဉ် လိုအပ်သည်။",
+  "validationStoryTitleRecommended": "စတိုရီအတွက် ခေါင်းစဉ် ထည့်ပါ။",
+  "validationStoryTitleTooShort": "ခေါင်းစဉ် စာလုံး ၅ လုံးအထက် ဖြစ်ရမည်။",
+  "validationStoryTitleTooLong": "ခေါင်းစဉ် စာလုံး ၈၀ ထက်မပိုရပါ။",
+  "validationStoryTitleUnsafe": "ခေါင်းစဉ်တွင် ခွင့်မပြုထားသော အကြောင်းအရာ ပါဝင်သည်။",
+  "validationStoryTitleLineBreak": "ခေါင်းစဉ်တွင် စာကြောင်းသစ် မသုံးရပါ။",
+  "validationStoryTitleTooManyEmoji": "ခေါင်းစဉ်တွင် အီမိုဂျီ တစ်ခုထက်မပိုရပါ။",
+  "validationStoryTitleOnlyNumbers": "ခေါင်းစဉ်ကို ဂဏန်းတည်းတည်း မဖြစ်ရပါ။",
+  "validationStoryTitleOnlySymbols": "ခေါင်းစဉ်ကို သင်္ကေတတည်းတည်း မဖြစ်ရပါ။",
+  "validationStoryTitleExcessiveRepeat": "ခေါင်းစဉ်တွင် စာလုံး ထပ်များလွန်းသည်။",
+  "validationStoryDescriptionRecommended": "ထုတ်ဝေမီ အတိုချုပ် ထည့်ပါ။",
+  "validationStoryDescriptionTooLong": "အကြောင်းအရာ စာလုံး ၁၆၀ ထက်မပိုရပါ။",
+  "validationStoryDescriptionUnsafe": "အကြောင်းအရာတွင် ခွင့်မပြုထားသော အကြောင်းအရာ ပါဝင်သည်။",
+  "validationStoryDescriptionLineBreak": "အကြောင်းအရာတွင် စာကြောင်းသစ် မသုံးရပါ။",
+  "validationStoryDescriptionTooManyUrls": "လင့်ခ် တစ်ခုထက်မပိုမရပါ။",
+  "validationStoryDescriptionHashtagStuffing": "ဟက်ရှ်တက်ဒ် များလွန်းပါသည်။",
+  "validationStoryDescriptionTooManyEmoji": "အကြောင်းအရာတွင် အီမိုဂျီ နှစ်ခုထက်မပိုရပါ။",
+  "validationStoryDescriptionExcessiveRepeat": "အကြောင်းအရာတွင် စာလုံး ထပ်များလွန်းသည်။",
+  "validationCollectionTitleRequired": "စုဆောင်းမှု နာမည်ထည့်ပါ။",
+  "validationCollectionTitleLength": "နာမည်မှာ စာလုံး ၁ လုံးမှ ၄၀ လုံးကြား ဖြစ်ရမည်။",
+  "validationCollectionTitleUnsafe": "နာမည်တွင် ခွင့်မပြုထားသော အကြောင်းအရာ ပါဝင်သည်။",
+  "validationCollectionTitleLineBreak": "နာမည်တွင် စာကြောင်းသစ် မသုံးရပါ။",
+  "validationCollectionTitleNoUrl": "နာမည်တွင် လင့်ခ် မပါဝင်ရပါ။",
+  "validationCollectionTitleTooManyEmoji": "နာမည်တွင် အီမိုဂျီ တစ်ခုထက်မပိုရပါ။",
+  "validationCollectionTitleOnlyNumbers": "နာမည်ကို ဂဏန်းတည်းတည်း မဖြစ်ရပါ။",
+  "validationCollectionTitleOnlySymbols": "နာမည်ကို သင်္ကေတတည်းတည်း မဖြစ်ရပါ။",
+  "validationCollectionTitleOnlySpaces": "နာမည်တွင် စာလုံး သို့မဟုတ် ဂဏန်း ပါဝင်ရမည်။",
+  "validationCollectionTitleExcessiveRepeat": "နာမည်တွင် စာလုံး ထပ်များလွန်းသည်။",
+  "validationCollectionNameRequired": "စုဆောင်းမှု နာမည်ထည့်ပါ။",
+  "validationCollectionNameLength": "နာမည်မှာ စာလုံး ၁ လုံးမှ ၄၀ လုံးကြား ဖြစ်ရမည်။",
+  "validationCollectionNameUnsafe": "နာမည်တွင် ခွင့်မပြုထားသော အကြောင်းအရာ ပါဝင်သည်။",
+  "validationCollectionNameLineBreak": "နာမည်တွင် စာကြောင်းသစ် မသုံးရပါ။",
+  "validationCollectionNameNoUrl": "နာမည်တွင် လင့်ခ် မပါဝင်ရပါ။",
+  "validationCollectionNameTooManyEmoji": "နာမည်တွင် အီမိုဂျီ တစ်ခုထက်မပိုရပါ။",
+  "validationCollectionNameOnlyNumbers": "နာမည်ကို ဂဏန်းတည်းတည်း မဖြစ်ရပါ။",
+  "validationCollectionNameOnlySymbols": "နာမည်ကို သင်္ကေတတည်းတည်း မဖြစ်ရပါ။",
+  "validationCollectionNameOnlySpaces": "နာမည်တွင် စာလုံး သို့မဟုတ် ဂဏန်း ပါဝင်ရမည်။",
+  "validationCollectionNameExcessiveRepeat": "နာမည်တွင် စာလုံး ထပ်များလွန်းသည်။",
+  "validationAuthEmailRequired": "အီးမေးလ် ထည့်ပါ။",
+  "validationAuthEmailLength": "အီးမေးလ်မှာ စာလုံး ၅ လုံးမှ ၂၅၄ လုံးကြား ဖြစ်ရမည်။",
+  "validationAuthEmailInvalid": "မှန်ကန်သော အီးမေးလ် ထည့်ပါ။",
+  "validationAuthEmailUnsafe": "အီးမေးလ်တွင် ခွင့်မပြုထားသော အကြောင်းအရာ ပါဝင်သည်။",
+  "validationAuthPasswordLength": "စကားဝှက် စာလုံး ၈ လုံးမှ ၆၄ လုံးကြား ဖြစ်ရမည်။",
+  "validationAuthPasswordWeak": "စကားဝှက် အားနည်းပါသည်။ ပိုမိုခိုင်မာသော စကားဝှက် ရွေးပါ။",
+  "validationAuthPasswordLineBreak": "စကားဝှက်တွင် စာကြောင်းသစ် မပါဝင်ရပါ။",
+  "validationAuthPasswordRequiredLogin": "စကားဝှက် ထည့်ပါ။",
+  "validationAuthConfirmPasswordMismatch": "စကားဝှက်များ မတူညီပါ။",
+  "validationAuthLoginFailed": "အီးမေးလ် သို့မဟုတ် စကားဝှက် မမှန်ပါ။",
+  "validationLearnVocabMeaningRequired": "ဤထုတ်ဝေမှုပုံစံ အတွက် အဓိပ္ပါယ် လိုအပ်သည်။",
+  "validationLearnVocabMeaningLength": "အဓိပ္ပါယ် စာလုံး ၁ လုံးမှ ၈၀ လုံးကြား ဖြစ်ရမည်။",
+  "validationLearnVocabMeaningNoEmoji": "အဓိပ္ပါယ်တွင် အီမိုဂျီ မသုံးရပါ။",
+  "validationLearnVocabMeaningLineBreak": "အဓိပ္ပါယ်တွင် စာကြောင်းသစ် မသုံးရပါ။",
+  "validationLearnVocabMeaningUnsafe": "အဓိပ္ပါယ်တွင် ခွင့်မပြုထားသော အကြောင်းအရာ ပါဝင်သည်။",
+  "validationLearnVocabMeaningNoUrl": "အဓိပ္ပါယ်တွင် လင့်ခ် မပါဝင်ရပါ။",
+  "validationLearnVocabMeaningNoHashtag": "အဓိပ္ပါယ်တွင် ဟက်ရှ်တက်ဒ် မပါဝင်ရပါ။",
+  "validationLearnVocabReadingRequired": "ဖတ်ပုံ ထည့်ပါ။",
+  "validationLearnVocabReadingTooLong": "ဖတ်ပုံ စာလုံး ၄၀ ထက်မပိုရပါ။",
+  "validationLearnVocabReadingTooManyAlternatives": "အစားထိုး ဖတ်ပုံ များလွန်းပါသည်။",
+  "validationLearnVocabReadingInvalidChars": "ဟိရဂါနာ၊ ကတ္တကနာ၊ ၊၊ / သာ သုံးပါ။",
+  "validationLearnVocabReadingUnsafe": "ဖတ်ပုံတွင် ခွင့်မပြုထားသော အကြောင်းအရာ ပါဝင်သည်။",
+  "validationLearnGrammarTitleRequired": "သဒ္ဒါ ခေါင်းစဉ် ထည့်ပါ။",
+  "validationLearnGrammarTitleLength": "သဒ္ဒါ ခေါင်းစဉ် စာလုံး ၂ လုံးမှ ၄၀ လုံးကြား ဖြစ်ရမည်။",
+  "validationLearnGrammarTitleNoEmoji": "သဒ္ဒါ ခေါင်းစဉ်တွင် အီမိုဂျီ မသုံးရပါ။",
+  "validationLearnGrammarTitleLineBreak": "သဒ္ဒါ ခေါင်းစဉ်တွင် စာကြောင်းသစ် မသုံးရပါ။",
+  "validationLearnGrammarTitleUnsafe": "သဒ္ဒါ ခေါင်းစဉ်တွင် ခွင့်မပြုထားသော အကြောင်းအရာ ပါဝင်သည်။",
+  "validationLearnGrammarTitleNoUrl": "သဒ္ဒါ ခေါင်းစဉ်တွင် လင့်ခ် မပါဝင်ရပါ။",
+  "validationLearnQuizCategoryInvalid": "ကွစ်ချုပ် အမျိုးအစား ရွေးပါ။",
+  "validationLearnQuizQuestionRequired": "မေးခွန်း ထည့်ပါ။",
+  "validationLearnQuizQuestionLength": "မေးခွန်း စာလုံး ၅ လုံးမှ ၁၂၀ လုံးကြား ဖြစ်ရမည်။",
+  "validationLearnQuizQuestionUnsafe": "မေးခွန်းတွင် ခွင့်မပြုထားသော အကြောင်းအရာ ပါဝင်သည်။",
+  "validationLearnQuizQuestionDuplicate": "မေးခွန်း ဒီစတိုရီမှာ ရှိပြီးသားဖြစ်သည်။",
+  "validationLearnQuizOptionsCount": "အဖြေ ရွေးချက် ၂ ခုမှ ၄ ခုကြား ထည့်ပါ။",
+  "validationLearnQuizOptionsDuplicate": "အဖြေများ ထပ်နေပါသည်။",
+  "validationLearnQuizAnswerRequired": "အဖြေမှန် ရွေးပါ။",
+  "validationLearnQuizAnswerNotInOptions": "အဖြေမှန်ကို ရွေးချက်တွင်းမှ ရွေးပါ။",
+  "validationLearnQuizAnswerSingleCorrect": "အဖြေမှန် တစ်ခုပဲ သတ်မှတ်ပါ။",
+  "validationStorySentencesRequired": "ဂျပန် စာကြောင်း တစ်ကြောင်းအနည်းဆုံး ထည့်ပါ။",
+  "validationStorySentencesTooFew": "အဆင့်နှင့် ကြာချိန်အတွက် စာကြောင်း မလုံလောက်ပါ (အနည်းဆုံး {min}၊ လက်ရှိ {actual})။",
+  "@validationStorySentencesTooFew": {
+    "placeholders": {
+      "min": {
+        "type": "int"
+      },
+      "actual": {
+        "type": "int"
+      }
+    }
+  },
+  "validationStorySentencesTooMany": "အဆင့်နှင့် ကြာချိန်အတွက် စာကြောင်း များလွန်းပါသည် (အများဆုံး {max}၊ လက်ရှိ {actual})။",
+  "@validationStorySentencesTooMany": {
+    "placeholders": {
+      "max": {
+        "type": "int"
+      },
+      "actual": {
+        "type": "int"
+      }
+    }
+  },
+  "validationStoryBodyTooLong": "စာသား ရှည်လွန်းပါသည် (အများဆုံး စာလုံး {max}၊ လက်ရှိ {actual})။",
+  "@validationStoryBodyTooLong": {
+    "placeholders": {
+      "max": {
+        "type": "int"
+      },
+      "actual": {
+        "type": "int"
+      }
+    }
+  },
+  "validationStoryLimitsSkippedNoJlpt": "JLPT အဆင့် မသတ်မှတ်သေးပါ၊ စာကြောင်း အရှည်ကန့်သတ်ချက် မသုံးပါ။",
+  "validationStoryLimitsSkippedNoBand": "ကြာချိန် အတွက် အုပ်စု မသတ်မှတ်သေးပါ၊ စာကြောင်း အရှည်ကန့်သတ်ချက် မသုံးပါ။",
+  "validationLearnCountVocabRange": "စကားလုံး အရေအတွက် {min} မှ {max} ကြား ဖြစ်ရမည် (လက်ရှိ {actual})။",
+  "@validationLearnCountVocabRange": {
+    "placeholders": {
+      "min": {
+        "type": "int"
+      },
+      "max": {
+        "type": "int"
+      },
+      "actual": {
+        "type": "int"
+      }
+    }
+  },
+  "validationLearnCountGrammarRange": "သဒ္ဒါ အရေအတွက် {min} မှ {max} ကြား ဖြစ်ရမည် (လက်ရှိ {actual})။",
+  "@validationLearnCountGrammarRange": {
+    "placeholders": {
+      "min": {
+        "type": "int"
+      },
+      "max": {
+        "type": "int"
+      },
+      "actual": {
+        "type": "int"
+      }
+    }
+  },
+  "validationLearnCountQuizRange": "ကွစ်ချုပ် အရေအတွက် {min} မှ {max} ကြား ဖြစ်ရမည် (လက်ရှိ {actual})။",
+  "@validationLearnCountQuizRange": {
+    "placeholders": {
+      "min": {
+        "type": "int"
+      },
+      "max": {
+        "type": "int"
+      },
+      "actual": {
+        "type": "int"
+      }
+    }
+  },
+  "validationProtectedReactLogin": "စတိုးကို တုံ့ပြန်ရန် ဝင်ရောက်ပါ။",
+  "validationProtectedFollowLogin": "ဖန်တီးသူကို လိုက်ရန် ဝင်ရောက်ပါ။",
+  "validationProtectedSaveLogin": "စတိုးကို သိမ်းရန် ဝင်ရောက်ပါ။",
+  "validationProtectedCreateStoryLogin": "စတိုရီ ဖန်တီးရန် ဝင်ရောက်ပါ။",
+  "validationProtectedPublishStoryLogin": "စတိုရီ ထုတ်ဝေရန် ဝင်ရောက်ပါ။",
+  "validationProtectedCreateCollectionLogin": "စုဆောင်းမှု ဖန်တီးရန် ဝင်ရောက်ပါ။",
+  "validationProtectedUploadMediaLogin": "မီဒီယာ တင်ရန် ဝင်ရောက်ပါ။",
+  "validationProtectedEditProfileLogin": "ပရိုဖိုင် ပြင်ရန် ဝင်ရောက်ပါ။",
+  "validationProtectedGenericForbidden": "ဤလုပ်ဆောင်ချက် မရနိုင်ပါ။",
+  "validationProtectedGenericDisabled": "သင်၏အကောင့်တွင် ဤလုပ်ဆောင်ချက် ပိတ်ထားသည်။",
+  "validationMediaFileRequired": "တင်မည့် ဖိုင်ရွေးပါ။",
+  "validationMediaFileEmpty": "ဖိုင်မှာ အကြောင်းအရာ မရှိပါ။ အခြားဖိုင်ရွေးပါ။",
+  "validationMediaFileTooLarge": "ဖိုင်ကြီးလွန်းပါသည်။",
+  "validationMediaFileInvalidType": "ဖိုင်အမျိုးအစား မပံ့ပိုးပါ။",
+  "validationMediaFileInvalidExtension": "ဖိုင်အင်္ဂါ ရသင့် မဟုတ်ပါ။",
+  "validationMediaFileInvalidField": "တင်သွင်းမှုတွင် လိုအပ်သော အချက် မပြည့်စုံပါ။",
+  "validationMediaImageInvalidType": "JPG၊ PNG သို့မဟုတ် WebP ပုံ ရွေးပါ။",
+  "validationMediaImageTooLarge": "ပုံကြီးလွန်းပါသည်။",
+  "validationMediaAudioInvalidType": "ပံ့ပိုးသော အသံဖိုင် ရွေးပါ။",
+  "validationMediaAudioTooLarge": "အသံဖိုင်ကြီးလွန်းပါသည်။",
+  "validationNetworkOffline": "အင်တာနက်မတွဲပါ။ ကွန်ရက်ကို စစ်ပြီး ထပ်စမ်းပါ။",
+  "quotaDialogOk": "OK",
+  "quotaPremiumComingLaterCta": "ပရီမီယံ မကြာမီ",
+  "quotaUnknownLimitTitle": "အခမဲ့ အစီအစဉ် ကန့်သတ်ချက်သို့ ရောက်ပါပြီ",
+  "quotaUnknownLimitMessage": "အခမဲ့ အစီအစဉ် ကန့်သတ်ချက်သို့ ရောက်ပါပြီ။ အဟောင်းကို ဖျက်ပြီး ထပ်စမ်းပါ။",
+  "publishedMonoLimitReachedTitle": "အခမဲ့ အစီအစဉ် ကန့်သတ်ချက်သို့ ရောက်ပါပြီ",
+  "publishedMonoLimitReachedMessage": "အခမဲ့ အစီအစဉ်ဖြင့် Mono {limit} ခုအထိ ထုတ်ဝေနိုင်ပါသည်။ အဟောင်းကို ဖျက်ပါ သို့မဟုတ် Premium ရရှိလာသည့်အခါ အဆင့်မြှင့်ပါ။",
+  "@publishedMonoLimitReachedMessage": {
+    "placeholders": {
+      "limit": {
+        "type": "int"
+      }
+    }
+  },
+  "savedMonoLimitReachedTitle": "သိမ်းဆည်းမှု ကန့်သတ်ချက်သို့ ရောက်ပါပြီ",
+  "savedMonoLimitReachedMessage": "အခမဲ့ အစီအစဉ်ဖြင့် Mono {limit} ခုအထိ သိမ်းနိုင်ပါသည်။ အသစ်သိမ်းမီ သိမ်းထားသည်ကို ဖျက်ပါ။",
+  "@savedMonoLimitReachedMessage": {
+    "placeholders": {
+      "limit": {
+        "type": "int"
+      }
+    }
+  },
+  "collectionLimitReachedTitle": "စုဆောင်းမှု ကန့်သတ်ချက်သို့ ရောက်ပါပြီ",
+  "collectionLimitReachedMessage": "အခမဲ့ အစီအစဉ်ဖြင့် စုဆောင်းမှု {limit} ခုအထိ ဖန်တီးနိုင်ပါသည်။ Premium စုဆောင်းမှုများ V2 တွင် လာမည်။",
+  "@collectionLimitReachedMessage": {
+    "placeholders": {
+      "limit": {
+        "type": "int"
+      }
+    }
+  },
+  "collectionItemLimitReachedTitle": "စုဆောင်းမှု ပြည့်ပါပြီ",
+  "collectionItemLimitReachedMessage": "အခမဲ့ အစီအစဉ်ဖြင့် စုဆောင်းမှုတစ်ခုတွင် Mono {limit} ခုအထိ ထည့်နိုင်ပါသည်။ ထပ်မထည့်မီ အချက်ကို ဖျက်ပါ။",
+  "@collectionItemLimitReachedMessage": {
+    "placeholders": {
+      "limit": {
+        "type": "int"
+      }
+    }
+  },
+  "draftStoryLimitReachedTitle": "မူကြမ်း ကန့်သတ်ချက်သို့ ရောက်ပါပြီ",
+  "draftStoryLimitReachedMessage": "အခမဲ့ အစီအစဉ်ဖြင့် မူကြမ်း {limit} ခုအထိ ထားနိုင်ပါသည်။ အသစ်ဖန်တီးမီ မူကြမ်းအဟောင်းကို ဖျက်ပါ။",
+  "@draftStoryLimitReachedMessage": {
+    "placeholders": {
+      "limit": {
+        "type": "int"
+      }
+    }
+  }
+}

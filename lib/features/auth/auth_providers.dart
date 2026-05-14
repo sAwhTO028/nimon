@@ -1,8 +1,10 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:nimon/features/auth/auth_refresh_401_coordinator.dart';
 import 'package:nimon/features/auth/auth_repository.dart';
 import 'package:nimon/features/auth/auth_session_notifier.dart';
 import 'package:nimon/features/auth/auth_session_state.dart';
 import 'package:nimon/features/auth/auth_token_store.dart';
+import 'package:nimon/features/auth/authenticated_http.dart';
 import 'package:nimon/features/create/data/remote_backend_config.dart';
 
 /// Platform secure storage for JWT pair.
@@ -33,4 +35,19 @@ final authSessionProvider =
     ref.watch(authRepositoryProvider),
     ref.watch(authTokenStoreProvider),
   );
+});
+
+final authRefresh401CoordinatorProvider =
+    Provider<AuthRefresh401Coordinator>((ref) {
+  return AuthRefresh401Coordinator(
+    authRepository: ref.watch(authRepositoryProvider),
+    tokenStore: ref.watch(authTokenStoreProvider),
+    sessionNotifier: ref.read(authSessionProvider.notifier),
+  );
+});
+
+final nimonSendWithAuth401RecoveryProvider =
+    Provider<NimonSendWithAuth401Recovery>((ref) {
+  final coordinator = ref.watch(authRefresh401CoordinatorProvider);
+  return nimonSendWithAuth401RecoveryFromCoordinator(coordinator);
 });

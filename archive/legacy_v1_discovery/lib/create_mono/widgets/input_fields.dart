@@ -132,7 +132,8 @@ class InputFields {
                 borderRadius: BorderRadius.circular(8),
                 borderSide: const BorderSide(color: Colors.blue),
               ),
-              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               suffix: suffix,
             ),
           ),
@@ -141,9 +142,3 @@ class InputFields {
     );
   }
 }
-
-
-
-
-
-

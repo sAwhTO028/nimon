@@ -73,7 +73,7 @@ class _FilterBottomSheetState extends State<FilterBottomSheet> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final bottomPadding = MediaQuery.of(context).viewInsets.bottom;
-    
+
     return Container(
       decoration: BoxDecoration(
         color: theme.colorScheme.surface,
@@ -92,7 +92,7 @@ class _FilterBottomSheetState extends State<FilterBottomSheet> {
               borderRadius: BorderRadius.circular(2),
             ),
           ),
-          
+
           // Header
           Padding(
             padding: const EdgeInsets.all(20),
@@ -112,7 +112,7 @@ class _FilterBottomSheetState extends State<FilterBottomSheet> {
               ],
             ),
           ),
-          
+
           // Content
           Flexible(
             child: SingleChildScrollView(
@@ -124,23 +124,23 @@ class _FilterBottomSheetState extends State<FilterBottomSheet> {
                   _buildSectionTitle('JLPT Level'),
                   const SizedBox(height: 12),
                   _buildLevelChips(),
-                  
+
                   const SizedBox(height: 24),
-                  
+
                   // Category Section
                   _buildSectionTitle('Category'),
                   const SizedBox(height: 12),
                   _buildCategoryChips(),
-                  
+
                   const SizedBox(height: 24),
-                  
+
                   // Sort By Section
                   _buildSectionTitle('Sort By'),
                   const SizedBox(height: 12),
                   _buildSortOptions(),
-                  
+
                   const SizedBox(height: 32),
-                  
+
                   // Apply Button
                   SizedBox(
                     width: double.infinity,
@@ -172,8 +172,8 @@ class _FilterBottomSheetState extends State<FilterBottomSheet> {
     return Text(
       title,
       style: Theme.of(context).textTheme.titleMedium?.copyWith(
-        fontWeight: FontWeight.w600,
-      ),
+            fontWeight: FontWeight.w600,
+          ),
     );
   }
 
@@ -192,12 +192,12 @@ class _FilterBottomSheetState extends State<FilterBottomSheet> {
         ),
         // Individual levels
         ..._levels.map((level) => FilterChip(
-          label: Text(level),
-          selected: _tempFilter.selectedLevel == level,
-          onSelected: (selected) {
-            _updateLevel(selected ? level : null);
-          },
-        )),
+              label: Text(level),
+              selected: _tempFilter.selectedLevel == level,
+              onSelected: (selected) {
+                _updateLevel(selected ? level : null);
+              },
+            )),
       ],
     );
   }
@@ -217,12 +217,12 @@ class _FilterBottomSheetState extends State<FilterBottomSheet> {
         ),
         // Individual categories
         ..._categories.map((category) => FilterChip(
-          label: Text(category),
-          selected: _tempFilter.selectedCategory == category,
-          onSelected: (selected) {
-            _updateCategory(selected ? category : null);
-          },
-        )),
+              label: Text(category),
+              selected: _tempFilter.selectedCategory == category,
+              onSelected: (selected) {
+                _updateCategory(selected ? category : null);
+              },
+            )),
       ],
     );
   }
@@ -244,4 +244,3 @@ class _FilterBottomSheetState extends State<FilterBottomSheet> {
     );
   }
 }
-

@@ -15,6 +15,7 @@ import 'package:nimon/features/create/creator_drawer_session.dart';
 import 'package:nimon/features/create/story_creator_models.dart';
 import 'package:nimon/features/create/story_creator_provider.dart';
 import 'package:nimon/features/create/story_creator_quiz_editor_screen.dart';
+import 'package:nimon/features/create/widgets/creator_fit_info_bottom_sheet.dart';
 import 'package:nimon/main.dart';
 
 class _FakeHttpOverrides extends HttpOverrides {
@@ -262,7 +263,11 @@ Future<void> _openDrawer(WidgetTester tester) async {
   expect(progressBtn, findsOneWidget);
   await tester.ensureVisible(progressBtn);
   await tester.tap(progressBtn);
-  await tester.pumpAndSettle();
+  // Drawer mounts only while open; avoid open-ended [pumpAndSettle] here.
+  for (var i = 0; i < 50; i++) {
+    await tester.pump(const Duration(milliseconds: 40));
+    if (find.byKey(drawerKey).evaluate().isNotEmpty) break;
+  }
   expect(find.byKey(drawerKey), findsOneWidget);
 }
 
@@ -936,9 +941,17 @@ void main() {
       expect(find.textContaining('Test-play: Sentence'), findsOneWidget);
       expect(find.textContaining('No quiz items in this tab yet.'),
           findsOneWidget);
-      // Dismiss sheet via scrim (no Close control).
-      await tester.tapAt(const Offset(500, 80));
-      await tester.pumpAndSettle(const Duration(milliseconds: 400));
+      // Close the modal route (scrim taps can miss; use root navigator + clocks).
+      final sentenceTitle = find.textContaining('Test-play: Sentence');
+      Navigator.of(
+        tester.element(sentenceTitle),
+        rootNavigator: true,
+      ).pop();
+      for (var i = 0; i < 50; i++) {
+        await tester.pump(const Duration(milliseconds: 40));
+        if (sentenceTitle.evaluate().isEmpty) break;
+      }
+      expect(sentenceTitle, findsNothing);
 
       // Preview Grammar should show only Grammar item.
       await _selectQuizTab(tester, 'Grammar');
@@ -949,8 +962,16 @@ void main() {
       await tester.pump(const Duration(milliseconds: 700));
       expect(find.textContaining('Test-play: Grammar'), findsOneWidget);
       expect(find.text('Grammar Only'), findsWidgets);
-      await tester.tapAt(const Offset(500, 80));
-      await tester.pumpAndSettle(const Duration(milliseconds: 400));
+      final grammarTitle = find.textContaining('Test-play: Grammar');
+      Navigator.of(
+        tester.element(grammarTitle),
+        rootNavigator: true,
+      ).pop();
+      for (var i = 0; i < 50; i++) {
+        await tester.pump(const Duration(milliseconds: 40));
+        if (grammarTitle.evaluate().isEmpty) break;
+      }
+      expect(grammarTitle, findsNothing);
 
       // 10 Help icon.
       await tester.tap(find.byTooltip('How to create quiz items'),
@@ -959,9 +980,26 @@ void main() {
       await tester.pump(const Duration(milliseconds: 700));
       expect(find.text('How to create quiz items'), findsOneWidget);
       expect(find.textContaining('Quiz types:'), findsOneWidget);
-      await tester.tap(find.widgetWithText(FilledButton, 'Got it'),
-          warnIfMissed: false);
-      await tester.pump(const Duration(milliseconds: 400));
+      final gotIt = find.byKey(creatorFitInfoGotItButtonKey);
+      expect(gotIt, findsOneWidget);
+      await tester.ensureVisible(gotIt);
+      await tester.tap(gotIt);
+      await tester.pump(const Duration(milliseconds: 80));
+      final fitSheet = find.byKey(creatorFitInfoBottomSheetKey);
+      for (var i = 0; i < 50; i++) {
+        await tester.pump(const Duration(milliseconds: 40));
+        if (fitSheet.evaluate().isEmpty) break;
+      }
+      if (fitSheet.evaluate().isNotEmpty) {
+        // Do not use [rootNavigator: true] here — it can pop the host route, not
+        // only this modal, in the GoRouter shell.
+        Navigator.of(tester.element(fitSheet.first)).pop();
+        for (var i = 0; i < 50; i++) {
+          await tester.pump(const Duration(milliseconds: 40));
+          if (fitSheet.evaluate().isEmpty) break;
+        }
+      }
+      expect(fitSheet, findsNothing);
 
       // 11 Save draft: preserves items and filtering.
       await _openDrawer(tester);
