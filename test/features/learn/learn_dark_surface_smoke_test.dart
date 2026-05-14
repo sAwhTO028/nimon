@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:nimon/features/create/story_creator_grammar_overlays.dart';
 import 'package:nimon/features/learn/learn_hub_screen.dart';
 import 'package:nimon/features/learn/vocab_kanji_list_screen.dart';
+import 'package:nimon/l10n/app_localizations.dart';
 
 ThemeData _dark() {
   return ThemeData(
@@ -23,6 +24,9 @@ void main() {
       ProviderScope(
         child: MaterialApp(
           theme: _dark(),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          locale: const Locale('en'),
           home: const LearnHubScreen(
             contentId: 'cid',
             storyTitle: 'T',

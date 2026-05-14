@@ -16,6 +16,7 @@ import 'package:nimon/features/mono/mono_content_model.dart';
 import 'package:nimon/features/mono/mono_reading_layout.dart';
 import 'package:nimon/features/mono/mono_reader_dock.dart';
 import 'package:nimon/features/mono/mono_reader_menu_origin.dart';
+import 'package:nimon/l10n/app_localizations.dart';
 import 'package:nimon/ui/reading/nimon_ruby_text.dart';
 import 'package:nimon/ui/reading/nimon_sentence_block.dart';
 import 'package:nimon/ui/bottom_sheets/mono_story_options_sheet.dart';
@@ -23,6 +24,7 @@ import 'package:nimon/ui/quota_exceeded_dialog.dart';
 import 'package:nimon/widgets/floating_dock_nav_bar.dart';
 import 'package:nimon/core/design_system/nimon_typography.dart';
 import 'package:nimon/core/format_social_count.dart';
+import 'package:nimon/ui/shell/floating_dock_tab_handler.dart';
 import 'package:nimon/ui/widgets/nimon_circle_nav_button.dart';
 import 'package:nimon/features/create/data/remote_backend_config.dart';
 import 'package:nimon/features/mono/data/mono_feed_item_mapper.dart';
@@ -40,6 +42,7 @@ import 'package:nimon/core/networking/network_error_mapping.dart';
 import 'package:nimon/core/validation/app_quota_exceeded_exception.dart';
 import 'package:nimon/core/validation/protected_action.dart';
 import 'package:nimon/core/validation/protected_action_guard.dart';
+import 'package:nimon/features/mono/mono_following_guest_auth_panel.dart';
 import 'package:nimon/features/mono/mono_line_explanation_display.dart';
 import 'package:nimon/features/settings/presentation/providers/user_preferences_notifier.dart';
 import 'package:nimon/features/mono/bookmark_ownership_policy.dart';
@@ -2514,7 +2517,7 @@ class _MonoScreenState extends ConsumerState<MonoScreen> {
     if (segmentKind == _MonoMainFeedKind.following &&
         RemoteBackendConfig.useRemoteMonoFeed) {
       if (!_isAuthed) {
-        return const _FollowingFeedAuthGateState();
+        return const MonoFollowingGuestAuthPanel();
       }
       final ps = ref.watch(followingMonoFeedPagerProvider);
       if (ps.isInitialLoading && ps.items.isEmpty) {
@@ -3110,6 +3113,7 @@ class _MonoScreenState extends ConsumerState<MonoScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
     if (_useRemoteForYouFeed) {
       ref.watch(monoFeedPagerProvider);
       final ps = ref.read(monoFeedPagerProvider);
@@ -3158,21 +3162,20 @@ class _MonoScreenState extends ConsumerState<MonoScreen> {
     const monoAboveDockExtraGap = 10.0;
 
     void onDockItem(int i) {
-      switch (i) {
-        case 0:
-          context.go('/mono');
-          break;
-        case 1:
-          final loc = GoRouterState.of(context).uri.toString();
-          if (loc == '/create' || loc.startsWith('/create?')) return;
-          ref.read(creatorEntryChannelProvider.notifier).state =
-              CreatorEntryChannel.add;
-          context.push('/create');
-          break;
-        case 2:
-          context.go('/more');
-          break;
-      }
+      unawaited(
+        handleFloatingDockTabSelection(
+          context,
+          navigationShell: null,
+          index: i,
+          openCreate: (ctx) {
+            final loc = GoRouterState.of(ctx).uri.toString();
+            if (loc == '/create' || loc.startsWith('/create?')) return;
+            ref.read(creatorEntryChannelProvider.notifier).state =
+                CreatorEntryChannel.add;
+            ctx.push('/create');
+          },
+        ),
+      );
     }
 
     final scaffold = Scaffold(
@@ -3191,8 +3194,8 @@ class _MonoScreenState extends ConsumerState<MonoScreen> {
                   children: [
                     if (widget.showTopControls && showGuestRemoteWarn)
                       Material(
-                        color: theme.colorScheme.errorContainer
-                            .withValues(alpha: 0.45),
+                        color: theme.colorScheme.surfaceContainerHighest
+                            .withValues(alpha: 0.92),
                         child: Padding(
                           padding: const EdgeInsets.symmetric(
                             horizontal: 16,
@@ -3203,14 +3206,15 @@ class _MonoScreenState extends ConsumerState<MonoScreen> {
                               Icon(
                                 Icons.info_outline,
                                 size: 18,
-                                color: theme.colorScheme.onErrorContainer,
+                                color: theme.colorScheme.onSurfaceVariant,
                               ),
                               const SizedBox(width: 8),
                               Expanded(
                                 child: Text(
-                                  'Remote drafts require sign-in.',
+                                  l10n?.monoGuestRemoteDraftsBanner ??
+                                      'Remote drafts require sign-in.',
                                   style: theme.textTheme.bodySmall?.copyWith(
-                                    color: theme.colorScheme.onErrorContainer,
+                                    color: theme.colorScheme.onSurface,
                                     fontWeight: FontWeight.w600,
                                   ),
                                 ),
@@ -4756,12 +4760,10 @@ class _MonoFeedTextTab extends StatelessWidget {
 class _FollowingFeedEmptyState extends StatelessWidget {
   const _FollowingFeedEmptyState();
 
-  static const _titleInk = Color(0xFF1A1917);
-  static const _bodyInk = Color(0xFF5C5A55);
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
 
     return Center(
       child: Padding(
@@ -4772,7 +4774,7 @@ class _FollowingFeedEmptyState extends StatelessWidget {
             Text(
               'Nothing here yet',
               style: theme.textTheme.titleMedium?.copyWith(
-                color: _titleInk,
+                color: scheme.onSurface,
                 fontWeight: FontWeight.w800,
                 letterSpacing: -0.2,
               ),
@@ -4782,47 +4784,7 @@ class _FollowingFeedEmptyState extends StatelessWidget {
             Text(
               'Follow creators to see their Mono in this feed.',
               style: theme.textTheme.bodyLarge?.copyWith(
-                color: _bodyInk,
-                height: 1.45,
-              ),
-              textAlign: TextAlign.center,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _FollowingFeedAuthGateState extends StatelessWidget {
-  const _FollowingFeedAuthGateState();
-
-  static const _titleInk = Color(0xFF1A1917);
-  static const _bodyInk = Color(0xFF5C5A55);
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 36),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              'Sign in to see Following',
-              style: theme.textTheme.titleMedium?.copyWith(
-                color: _titleInk,
-                fontWeight: FontWeight.w800,
-                letterSpacing: -0.2,
-              ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 12),
-            Text(
-              'Sign in to see stories from people you follow.',
-              style: theme.textTheme.bodyLarge?.copyWith(
-                color: _bodyInk,
+                color: scheme.onSurfaceVariant,
                 height: 1.45,
               ),
               textAlign: TextAlign.center,

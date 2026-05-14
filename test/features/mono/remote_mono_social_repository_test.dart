@@ -118,4 +118,102 @@ void main() {
     expect(page.nextCursor, 'next');
     expect(page.hasMore, true);
   });
+
+  test('fetchBookmarkedPage merges data envelope + totalCount (M17I)',
+      () async {
+    http.BaseRequest? captured;
+    final client = MockClient((req) async {
+      captured = req;
+      return http.Response(
+        jsonEncode({
+          'data': {
+            'items': [
+              {
+                'publishedMonoId': 'mid',
+                'title': 'T',
+                'coverUrl': null,
+                'level': 'N5',
+                'category': '',
+                'categories': <String>[],
+                'description': 'D',
+                'writerId': 'u1',
+                'writerHandle': '@h',
+                'writerDisplayName': 'Name',
+                'publishedAt': '2026-01-01T00:00:00.000Z',
+                'updatedAt': '2026-01-02T00:00:00.000Z',
+                'likesCount': 2,
+                'hasAudio': false,
+                'isBookmarkedByMe': true,
+                'myReaction': 'heart',
+                'shareUrl': 'http://localhost:3000/mono/mid',
+                'publishKind': 'read_only_v1',
+                'accessType': 'public',
+              }
+            ],
+            'has_more': 1,
+            'next_cursor': 'c2',
+            'total_count': 35,
+          },
+        }),
+        200,
+      );
+    });
+    final repo = RemoteMonoSocialRepository(
+      apiBaseUrl: 'http://127.0.0.1:9',
+      client: client,
+      authHeaderBuilder: () async => {'Authorization': 'Bearer tok'},
+    );
+    final page = await repo.fetchBookmarkedPage(PageRequest(limit: 20));
+    expect(captured!.url.path, '/v1/me/bookmarks');
+    expect(page.items.single.id, 'mid');
+    expect(page.hasMore, true);
+    expect(page.nextCursor, 'c2');
+    expect(page.totalCount, 35);
+  });
+
+  test('fetchBookmarkedPage maps category and targetDurationLabel (M17J)',
+      () async {
+    final client = MockClient((req) async {
+      return http.Response(
+        jsonEncode({
+          'items': [
+            {
+              'monoId': 'mid',
+              'title': 'T',
+              'coverUrl': null,
+              'level': 'N5',
+              'category': 'Culture',
+              'categories': ['Culture'],
+              'description': 'D',
+              'writerId': 'u1',
+              'writerHandle': '@h',
+              'writerDisplayName': 'Name',
+              'publishedAt': '2026-01-01T00:00:00.000Z',
+              'updatedAt': '2026-01-02T00:00:00.000Z',
+              'likesCount': 3,
+              'hasAudio': false,
+              'isBookmarkedByMe': true,
+              'myReaction': null,
+              'shareUrl': 'http://localhost:3000/mono/mid',
+              'publishKind': 'read_only_v1',
+              'accessType': 'public',
+              'targetDurationLabel': '5-7 min',
+            }
+          ],
+          'hasMore': false,
+          'nextCursor': null,
+        }),
+        200,
+      );
+    });
+    final repo = RemoteMonoSocialRepository(
+      apiBaseUrl: 'http://127.0.0.1:9',
+      client: client,
+      authHeaderBuilder: () async => {'Authorization': 'Bearer tok'},
+    );
+    final page = await repo.fetchBookmarkedPage(PageRequest(limit: 20));
+    expect(page.items.single.catalogCategory, 'Culture');
+    expect(page.items.single.readDurationLabel, '5-7 min');
+    expect(page.items.single.likesCount, 3);
+  });
 }

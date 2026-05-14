@@ -25,9 +25,26 @@ function mkPublicWeb(web = 'http://localhost:3000'): PublicWebBaseUrlService {
 }
 
 /** `publishedMono.count` matching {@link countPublishedTabVisibleMonos} (owner Published tab). */
-function mockPublishedMonoCountPublishedTabVisible(total: number) {
+function mockPublishedMonoCountPublishedTabVisible(
+  total: number,
+  opts?: { totalAllRows?: number; activeNonTrashed?: number },
+) {
   return jest.fn((call: { where: Record<string, unknown> }) => {
     const w = call.where as Record<string, unknown> & { id?: string };
+    const keysExOwner = Object.keys(w).filter((k) => k !== 'ownerId');
+    if (w.ownerId != null && keysExOwner.length === 0) {
+      return Promise.resolve(opts?.totalAllRows ?? total);
+    }
+    if (
+      w.ownerId != null &&
+      w.trashedAt === null &&
+      !w.NOT &&
+      w.id === undefined &&
+      keysExOwner.length === 1 &&
+      keysExOwner[0] === 'trashedAt'
+    ) {
+      return Promise.resolve(opts?.activeNonTrashed ?? total);
+    }
     if (w.NOT != null && typeof w.id === 'string') {
       return Promise.resolve(0);
     }
@@ -200,7 +217,15 @@ describe('PublishedMonosService owner scoping', () => {
       handle: 'me_h',
       avatarUrl: 'https://avatars.test/me.png',
     });
-    const prisma = { publishedMono: { findFirst }, userProfile: { findUnique } } as any;
+    const prisma = {
+      publishedMono: { findFirst },
+      userProfile: { findUnique },
+      monoReaction: {
+        count: jest.fn().mockResolvedValue(7),
+        findFirst: jest.fn().mockResolvedValue({ kind: 'heart' }),
+      },
+      monoBookmark: { count: jest.fn().mockResolvedValue(1) },
+    } as any;
 
     const d = await new PublishedMonosService(prisma, mkMedia(), mkPublicWeb()).getPublishedMonoById(ownerId, monoId);
 
@@ -208,6 +233,9 @@ describe('PublishedMonosService owner scoping', () => {
     expect(d.writerHandle).toBe('me_h');
     expect(d.writerAvatarUrl).toBe('https://avatars.test/me.png');
     expect(d.shareUrl).toBe(`http://localhost:3000/mono/${monoId}`);
+    expect(d.likesCount).toBe(7);
+    expect(d.isBookmarkedByMe).toBe(true);
+    expect(d.myReaction).toBe('heart');
   });
 
   it('listPublishedMonos with trashed=true queries trashedAt not null only', async () => {
@@ -617,7 +645,10 @@ describe('PublishedMonosService M17E-6 restore quota (Published tab visible coun
       id: monoId,
       trashedAt: new Date(),
     });
-    const count = mockPublishedMonoCountPublishedTabVisible(30);
+    const count = mockPublishedMonoCountPublishedTabVisible(30, {
+      totalAllRows: 30,
+      activeNonTrashed: 30,
+    });
     const updateMany = jest.fn();
     const prisma = {
       publishedMono: { findFirst, count, updateMany },

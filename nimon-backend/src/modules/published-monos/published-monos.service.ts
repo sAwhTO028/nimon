@@ -254,9 +254,26 @@ export class PublishedMonosService {
 
     const writer = await this.writerProfile(ownerId);
     const base = this.media.mediaPublicBaseUrl();
+    const rid = m.id;
+    const [likesCount, bookmarked, myReactionRow] = await Promise.all([
+      this.prisma.monoReaction.count({
+        where: { publishedMonoId: rid, kind: 'heart' },
+      }),
+      this.prisma.monoBookmark.count({
+        where: { userId: ownerId, publishedMonoId: rid },
+      }),
+      this.prisma.monoReaction.findFirst({
+        where: { userId: ownerId, publishedMonoId: rid, kind: 'heart' },
+        select: { kind: true },
+      }),
+    ]);
+
     return {
       ...attachWriterProfileToDetail(publishedMonoDetailFromRow(m, base), writer, base),
       shareUrl: this.publicWeb.monoShareUrl(m.id),
+      likesCount,
+      isBookmarkedByMe: bookmarked > 0,
+      myReaction: myReactionRow?.kind === 'heart' ? 'heart' : null,
     };
   }
 
@@ -312,7 +329,11 @@ export class PublishedMonosService {
     await assertCanRevealOnePublishedTabMono(
       this.prisma,
       ownerId,
-      { tag: 'restore-quota', publishedMonoId: rid },
+      {
+        tag: 'restore-quota',
+        publishedMonoId: rid,
+        actionName: 'restorePublishedMono',
+      },
       (line) => this.logger.log(line),
     );
     await this.prisma.publishedMono.updateMany({

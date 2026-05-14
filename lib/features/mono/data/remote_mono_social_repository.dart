@@ -101,6 +101,75 @@ class RemoteMonoSocialRepository {
     throw StateError(msg);
   }
 
+  /// Same envelope merge strategy as the published-monos list client (M17I).
+  Map<String, Object?> _normalizedBookmarksListJson(Map<String, Object?> root) {
+    var m = Map<String, Object?>.from(root);
+
+    void mergeSecondaryObject(Object? section) {
+      if (section is! Map) return;
+      final sm = Map<String, Object?>.from(
+        section.map((k, v) => MapEntry(k.toString(), v)),
+      );
+      for (final e in sm.entries) {
+        final k = e.key;
+        if (!m.containsKey(k) || m[k] == null) {
+          m[k] = e.value;
+        }
+      }
+    }
+
+    var topItems = m['items'];
+    if (topItems is! List) {
+      final data = m['data'];
+      if (data is List) {
+        m = {...m, 'items': data};
+      } else if (data is Map) {
+        final dm = Map<String, Object?>.from(
+          data.map((k, v) => MapEntry(k.toString(), v)),
+        );
+        if (dm['items'] is List) {
+          m = {...m, ...dm};
+        }
+      }
+    }
+
+    mergeSecondaryObject(m['pagination']);
+    final dataSibling = m['data'];
+    if (dataSibling is Map) {
+      mergeSecondaryObject(dataSibling);
+    }
+    mergeSecondaryObject(m['meta']);
+
+    return m;
+  }
+
+  static bool _hasMoreFromBookmarksJson(Map<String, Object?> m) {
+    final v = m['hasMore'] ?? m['has_more'];
+    if (v is bool) return v;
+    if (v is num) return v != 0;
+    if (v is String) {
+      final t = v.toLowerCase().trim();
+      if (t == 'true' || t == '1') return true;
+      if (t == 'false' || t == '0') return false;
+    }
+    return false;
+  }
+
+  static String? _nextCursorFromBookmarksJson(Map<String, Object?> m) {
+    return _optStr(
+      m['nextCursor'] ?? m['next_cursor'] ?? m['next_page_cursor'],
+    );
+  }
+
+  static int? _totalCountFromBookmarksJson(Map<String, Object?> m) {
+    final v = m['totalCount'] ?? m['total_count'];
+    if (v == null) return null;
+    if (v is int) return v;
+    if (v is double) return v.round();
+    if (v is num) return v.toInt();
+    return int.tryParse(v.toString());
+  }
+
   /// `GET /v1/me/bookmarks?cursor=&limit=` (JWT required).
   Future<PageResult<MonoFeedItem>> fetchBookmarkedPage(
       PageRequest request) async {
@@ -111,7 +180,11 @@ class RemoteMonoSocialRepository {
     };
     final uri = _u('/v1/me/bookmarks').replace(queryParameters: qp);
     if (kDebugMode) {
-      debugPrint('RemoteMonoSocialRepository.fetchBookmarkedPage: GET $uri');
+      debugPrint(
+        '[SavedTab] before GET limit=${request.limit} '
+        'cursor=${request.cursor == null || request.cursor!.trim().isEmpty ? "null" : "set"} '
+        'uri=$uri',
+      );
     }
     final resp = await _nimonAuthSend(
       uri,
@@ -122,7 +195,12 @@ class RemoteMonoSocialRepository {
       (h) => _client.get(uri, headers: h),
     );
     _throwIfNotOk(resp);
-    final m = _jsonObjectFromResponse(resp);
+    final root = _jsonObjectFromResponse(resp);
+    if (kDebugMode) {
+      final rk = root.keys.map((k) => k.toString()).toList()..sort();
+      debugPrint('[SavedTab] raw keys=$rk');
+    }
+    final m = _normalizedBookmarksListJson(root);
     final rawItems = (m['items'] as List?) ?? const [];
     final items = <MonoFeedItem>[];
     for (final x in rawItems) {
@@ -130,12 +208,14 @@ class RemoteMonoSocialRepository {
       final it = Map<String, Object?>.from(
         x.map((k, v) => MapEntry(k.toString(), v)),
       );
-      final id = _optStr(it['monoId']) ?? '';
+      final id = _optStr(it['monoId']) ?? _optStr(it['publishedMonoId']) ?? '';
       if (id.trim().isEmpty) continue;
       final title = _optStr(it['title']);
       final desc = (_optStr(it['description']) ?? '').trim();
       final whRaw = (_optStr(it['writerHandle']) ?? '').trim();
       final av = (_optStr(it['writerAvatarUrl']) ?? '').trim();
+      final catRaw = (_optStr(it['category']) ?? '').trim();
+      final tdRaw = (_optStr(it['targetDurationLabel']) ?? '').trim();
       items.add(
         MonoFeedItem(
           id: id,
@@ -161,16 +241,26 @@ class RemoteMonoSocialRepository {
           isBookmarkedByMe: _bool(it['isBookmarkedByMe']),
           myReaction: _optStr(it['myReaction']),
           shareUrl: _optStr(it['shareUrl']),
+          catalogCategory: catRaw.isNotEmpty ? catRaw : null,
+          readDurationLabel: tdRaw.isNotEmpty ? tdRaw : null,
         ),
       );
     }
-    final nextCursor = _optStr(m['nextCursor']);
-    final hasMore = m['hasMore'] is bool ? (m['hasMore'] as bool) : false;
+    final nextCursor = _nextCursorFromBookmarksJson(m);
+    final hasMore = _hasMoreFromBookmarksJson(m);
+    final totalCount = _totalCountFromBookmarksJson(m);
+    if (kDebugMode) {
+      debugPrint(
+        '[SavedTab] parsed items=${items.length} hasMore=$hasMore '
+        'nextCursor=${nextCursor == null ? "null" : (nextCursor.isEmpty ? "empty" : "set")} '
+        'totalCount=$totalCount',
+      );
+    }
     return PageResult<MonoFeedItem>(
       items: items,
       nextCursor: nextCursor,
       hasMore: hasMore,
-      totalCount: null,
+      totalCount: totalCount,
     );
   }
 

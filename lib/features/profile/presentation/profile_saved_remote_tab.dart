@@ -46,6 +46,39 @@ class ProfileSavedRemoteTab extends ConsumerStatefulWidget {
 
 class _ProfileSavedRemoteTabState extends ConsumerState<ProfileSavedRemoteTab> {
   bool _booted = false;
+  DateTime? _lastSavedLoadMoreHint;
+
+  void _scheduleSavedLoadMore() {
+    final now = DateTime.now();
+    if (_lastSavedLoadMoreHint != null &&
+        now.difference(_lastSavedLoadMoreHint!) <
+            const Duration(milliseconds: 450)) {
+      return;
+    }
+    _lastSavedLoadMoreHint = now;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      unawaited(
+        ref.read(profileSavedMonoPagerProvider.notifier).loadMore(),
+      );
+    });
+  }
+
+  bool _onSavedScrollNearEnd(ScrollNotification n) {
+    if (n.metrics.axis != Axis.vertical) return false;
+    final m = n.metrics;
+    if (!m.hasPixels || !m.hasViewportDimension) return false;
+    final ps = ref.read(profileSavedMonoPagerProvider);
+    if (!ps.canLoadMore) return false;
+
+    final nearEnd = m.maxScrollExtent <= 0
+        ? true
+        : m.pixels >= m.maxScrollExtent - 360;
+    if (!nearEnd) return false;
+
+    _scheduleSavedLoadMore();
+    return false;
+  }
 
   void _ensureLoaded() {
     if (_booted) return;
@@ -197,9 +230,12 @@ class _ProfileSavedRemoteTabState extends ConsumerState<ProfileSavedRemoteTab> {
       child: RefreshIndicator(
         onRefresh: () =>
             ref.read(profileSavedMonoPagerProvider.notifier).refresh(),
-        child: ListView.separated(
+        child: NotificationListener<ScrollNotification>(
+          onNotification: _onSavedScrollNearEnd,
+          child: ListView.separated(
           padding: EdgeInsets.fromLTRB(16, 12, 16, widget.bottomPadding),
-          itemCount: items.length + (ps.canLoadMore ? 1 : 0),
+          itemCount: items.length +
+              (((ps.hasMore || ps.isLoadingMore) && ps.error == null) ? 1 : 0),
           separatorBuilder: (_, __) => Divider(
             height: 1,
             thickness: 0.5,
@@ -207,9 +243,7 @@ class _ProfileSavedRemoteTabState extends ConsumerState<ProfileSavedRemoteTab> {
           ),
           itemBuilder: (ctx, i) {
             if (i >= items.length) {
-              unawaited(
-                ref.read(profileSavedMonoPagerProvider.notifier).loadMore(),
-              );
+              _scheduleSavedLoadMore();
               return const Padding(
                 padding: EdgeInsets.symmetric(vertical: 16),
                 child: Center(child: CircularProgressIndicator()),
@@ -275,6 +309,7 @@ class _ProfileSavedRemoteTabState extends ConsumerState<ProfileSavedRemoteTab> {
               ),
             );
           },
+        ),
         ),
       ),
     );

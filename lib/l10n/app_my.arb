@@ -245,11 +245,11 @@
   "validationProtectedReactLogin": "စတိုးကို တုံ့ပြန်ရန် ဝင်ရောက်ပါ။",
   "validationProtectedFollowLogin": "ဖန်တီးသူကို လိုက်ရန် ဝင်ရောက်ပါ။",
   "validationProtectedSaveLogin": "စတိုးကို သိမ်းရန် ဝင်ရောက်ပါ။",
-  "validationProtectedCreateStoryLogin": "စတိုရီ ဖန်တီးရန် ဝင်ရောက်ပါ။",
+  "validationProtectedCreateStoryLogin": "Mono ဖန်တီးပြီး ထုတ်ဝေရန် ဝင်ရောက်ပါ။",
   "validationProtectedPublishStoryLogin": "စတိုရီ ထုတ်ဝေရန် ဝင်ရောက်ပါ။",
   "validationProtectedCreateCollectionLogin": "စုဆောင်းမှု ဖန်တီးရန် ဝင်ရောက်ပါ။",
   "validationProtectedUploadMediaLogin": "မီဒီယာ တင်ရန် ဝင်ရောက်ပါ။",
-  "validationProtectedEditProfileLogin": "ပရိုဖိုင် ပြင်ရန် ဝင်ရောက်ပါ။",
+  "validationProtectedEditProfileLogin": "ပရိုဖိုင် ကြည့်ရှုနှင့် စီမံရန် ဝင်ရောက်ပါ။",
   "validationProtectedGenericForbidden": "ဤလုပ်ဆောင်ချက် မရနိုင်ပါ။",
   "validationProtectedGenericDisabled": "သင်၏အကောင့်တွင် ဤလုပ်ဆောင်ချက် ပိတ်ထားသည်။",
   "validationMediaFileRequired": "တင်မည့် ဖိုင်ရွေးပါ။",
@@ -311,5 +311,18 @@
         "type": "int"
       }
     }
-  }
+  },
+  "monoFollowingGuestTitle": "Following ကြည့်ရန် ဝင်ရောက်ပါ",
+  "monoFollowingGuestBody": "လိုက်ထားသူများ၏ Mono များကို ဤဖိဒ်တွင် ကြည့်ရန် ဝင်ရောက်ပါ။",
+  "monoGuestRemoteDraftsBanner": "အဝေးထိန်းသိမ်းမူကြမ်းအတွက် ဝင်ရောက်ရန် လိုအပ်ပါသည်။",
+  "learnPackageManualBadge": "Manual",
+  "learnPackageCreatorMadeBadge": "Creator-made",
+  "shareProfileTitle": "Share Profile",
+  "shareProfileCopyLink": "Copy link",
+  "shareProfileShareProfile": "Share profile",
+  "shareProfileLinkCopied": "Link copied",
+  "shareProfileScanToOpen": "Scan to open profile",
+  "shareProfilePublicHint": "Anyone with this link can view your public profile.",
+  "shareProfileLinkUnavailable": "Profile link is not available on this device yet.",
+  "shareProfileFallbackDisplayName": "Creator"
 }

@@ -539,7 +539,7 @@ class AppLocalizationsJa extends AppLocalizations {
   String get validationProtectedSaveLogin => 'ストーリーを保存するにはログインしてください。';
 
   @override
-  String get validationProtectedCreateStoryLogin => 'ストーリーを作成するにはログインしてください。';
+  String get validationProtectedCreateStoryLogin => 'Monoの作成と公開にはログインしてください。';
 
   @override
   String get validationProtectedPublishStoryLogin => 'ストーリーを公開するにはログインしてください。';
@@ -553,7 +553,7 @@ class AppLocalizationsJa extends AppLocalizations {
       'メディアをアップロードするにはログインしてください。';
 
   @override
-  String get validationProtectedEditProfileLogin => 'プロフィールを編集するにはログインしてください。';
+  String get validationProtectedEditProfileLogin => 'プロフィールの表示と管理にはログインしてください。';
 
   @override
   String get validationProtectedGenericForbidden => 'この操作は利用できません。';
@@ -647,4 +647,44 @@ class AppLocalizationsJa extends AppLocalizations {
   String draftStoryLimitReachedMessage(int limit) {
     return '無料プランでは下書きを最大$limit件まで保持できます。新しく作成する前に古い下書きを削除してください。';
   }
+
+  @override
+  String get monoFollowingGuestTitle => 'フォロー中を見るにはログイン';
+
+  @override
+  String get monoFollowingGuestBody =>
+      'フォローしたクリエイターのMonoをこのフィードで見るにはログインしてください。';
+
+  @override
+  String get monoGuestRemoteDraftsBanner => 'リモート下書きを使うにはログインが必要です。';
+
+  @override
+  String get learnPackageManualBadge => 'マニュアル';
+
+  @override
+  String get learnPackageCreatorMadeBadge => 'クリエイター制作';
+
+  @override
+  String get shareProfileTitle => 'プロフィールを共有';
+
+  @override
+  String get shareProfileCopyLink => 'リンクをコピー';
+
+  @override
+  String get shareProfileShareProfile => 'プロフィールを共有';
+
+  @override
+  String get shareProfileLinkCopied => 'リンクをコピーしました';
+
+  @override
+  String get shareProfileScanToOpen => 'スキャンしてプロフィールを開く';
+
+  @override
+  String get shareProfilePublicHint => 'このリンクを知っている人は、あなたの公開プロフィールを閲覧できます。';
+
+  @override
+  String get shareProfileLinkUnavailable => 'この端末ではまだプロフィールのリンクを利用できません。';
+
+  @override
+  String get shareProfileFallbackDisplayName => 'クリエイター';
 }

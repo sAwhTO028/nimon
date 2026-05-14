@@ -57,6 +57,9 @@ MonoFeedItem monoFeedItemFromMonoFeedSummary(MonoFeedSummaryDto dto) {
     shareUrl: dto.shareUrl,
     publishedAccess: access,
     needsRemoteDetailHydration: true,
+    catalogCategory:
+        dto.category.trim().isNotEmpty ? dto.category.trim() : null,
+    readDurationLabel: null,
   );
 }
 
@@ -90,6 +93,16 @@ MonoFeedItem monoFeedItemMergePublishedDetail(
   final bookmarkedOut = d.isBookmarkedByMe;
   final myReactionOut = d.myReaction;
   final shareUrlOut = d.shareUrl;
+
+  final catDetail = d.category.trim();
+  final catBase = (base.catalogCategory ?? '').trim();
+  final catalogCategoryOut =
+      catDetail.isNotEmpty ? catDetail : (catBase.isNotEmpty ? catBase : null);
+
+  final durDetail = (d.targetDurationLabel ?? '').trim();
+  final durBase = (base.readDurationLabel ?? '').trim();
+  final readDurationLabelOut =
+      durDetail.isNotEmpty ? durDetail : (durBase.isNotEmpty ? durBase : null);
 
   final dn = (d.writerDisplayName ?? '').trim();
   final whRaw = (d.writerHandle ?? '').trim();
@@ -135,6 +148,8 @@ MonoFeedItem monoFeedItemMergePublishedDetail(
     isBookmarkedByMe: bookmarkedOut || base.isBookmarkedByMe,
     myReaction: myReactionOut ?? base.myReaction,
     shareUrl: shareUrlOut ?? base.shareUrl,
+    catalogCategory: catalogCategoryOut,
+    readDurationLabel: readDurationLabelOut,
   );
 }
 
@@ -177,6 +192,8 @@ MonoFeedItem monoFeedItemFromPublishedMonoListItemDto(
   final av = avDto.isNotEmpty ? avDto : (writerAvatarUrl?.trim());
 
   final desc = dto.description.trim();
+  final cat = dto.category.trim();
+  final dur = (dto.targetDurationLabel ?? '').trim();
 
   return MonoFeedItem(
     id: dto.id,
@@ -195,5 +212,7 @@ MonoFeedItem monoFeedItemFromPublishedMonoListItemDto(
     catalogMonoId: null,
     sourceDraftId: dto.sourceDraftId,
     shareUrl: dto.shareUrl,
+    catalogCategory: cat.isNotEmpty ? cat : null,
+    readDurationLabel: dur.isNotEmpty ? dur : null,
   );
 }

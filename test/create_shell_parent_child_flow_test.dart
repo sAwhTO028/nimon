@@ -9,6 +9,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:nimon/features/auth/auth_providers.dart';
 import 'package:nimon/features/create/creator_back_policy.dart'
     show CreatorEntryChannel, creatorEntryChannelProvider;
 import 'package:nimon/features/create/creator_drawer_session.dart';
@@ -17,6 +18,8 @@ import 'package:nimon/features/create/story_creator_provider.dart';
 import 'package:nimon/features/create/story_creator_quiz_editor_screen.dart';
 import 'package:nimon/features/create/widgets/creator_fit_info_bottom_sheet.dart';
 import 'package:nimon/main.dart';
+
+import 'auth/in_memory_auth_token_store.dart';
 
 class _FakeHttpOverrides extends HttpOverrides {
   @override
@@ -161,12 +164,22 @@ Future<void> _pumpApp(WidgetTester tester) async {
   await tester.pumpWidget(
     DefaultAssetBundle(
       bundle: _TestAssetBundle(),
-      child: const ProviderScope(child: NimonApp()),
+      child: ProviderScope(
+        overrides: [
+          authTokenStoreProvider.overrideWithValue(InMemoryAuthTokenStore()),
+        ],
+        child: const NimonApp(),
+      ),
     ),
   );
   await tester.pump();
   for (int i = 0; i < 20; i++) {
     await tester.pump();
+  }
+  // M17L: cold start is `/startup` until [restoreSession] finishes; wait for login chrome.
+  for (var i = 0; i < 200; i++) {
+    await tester.pump(const Duration(milliseconds: 16));
+    if (find.text('Great!').evaluate().isNotEmpty) break;
   }
 }
 

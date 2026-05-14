@@ -13,6 +13,7 @@ class _FakeSocialRepo extends RemoteMonoSocialRepository {
 
   PageResult<MonoFeedItem> _page;
   int calls = 0;
+  String? lastCursor;
 
   set page(PageResult<MonoFeedItem> v) => _page = v;
 
@@ -20,6 +21,7 @@ class _FakeSocialRepo extends RemoteMonoSocialRepository {
   Future<PageResult<MonoFeedItem>> fetchBookmarkedPage(
       PageRequest request) async {
     calls++;
+    lastCursor = request.cursor;
     return _page;
   }
 }
@@ -57,5 +59,59 @@ void main() {
     expect(s.items, hasLength(1));
     expect(s.items.single.id, 'm1');
     expect(fake.calls, 1);
+  });
+
+  test('saved pager loadMore appends and clears isLoadingMore', () async {
+    final fake = _FakeSocialRepo(
+      PageResult(
+        items: const [
+          MonoFeedItem(
+            id: 'm1',
+            writerName: 'W',
+            writerHandle: '@w',
+            level: 'N5',
+            contentType: MonoContentType.article,
+            bodyText: 'D',
+            isBookmarkedByMe: true,
+          ),
+        ],
+        hasMore: true,
+        nextCursor: 'c1',
+      ),
+    );
+    final container = ProviderContainer(
+      overrides: [
+        remoteMonoSocialRepositoryProvider.overrideWithValue(fake),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    await container
+        .read(profileSavedMonoPagerProvider.notifier)
+        .loadFirstPage();
+    fake.page = PageResult(
+      items: const [
+        MonoFeedItem(
+          id: 'm2',
+          writerName: 'W',
+          writerHandle: '@w',
+          level: 'N5',
+          contentType: MonoContentType.article,
+          bodyText: 'D',
+          isBookmarkedByMe: true,
+        ),
+      ],
+      hasMore: false,
+      nextCursor: null,
+    );
+
+    await container.read(profileSavedMonoPagerProvider.notifier).loadMore();
+    final s = container.read(profileSavedMonoPagerProvider);
+    expect(s.items, hasLength(2));
+    expect(s.items.map((e) => e.id).toList(), ['m1', 'm2']);
+    expect(s.hasMore, false);
+    expect(s.isLoadingMore, false);
+    expect(fake.lastCursor, 'c1');
+    expect(fake.calls, 2);
   });
 }

@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:nimon/features/learn/learn_explanation_language.dart';
 import 'package:nimon/features/learn/learn_module_surface_tokens.dart';
+import 'package:nimon/l10n/app_localizations.dart';
 import 'package:nimon/features/learn/learn_explanation_language_provider.dart';
 import 'package:nimon/ui/widgets/nimon_circle_nav_button.dart';
 
@@ -179,12 +180,14 @@ class _LearnHubScreenState extends ConsumerState<LearnHubScreen> {
 
   /// Reuses the project’s existing “4 small stat cards in one row” pattern
   /// (see `StoryDetailScreen._fixedTagsRow` / `_buildStatCard`).
-  Widget _fixedInfoRow({
+  Widget _fixedInfoRow(
+    BuildContext context, {
     required String level,
     required String category,
     required String unlock,
   }) {
     const gap = 8.0;
+    final l10n = AppLocalizations.of(context)!;
     return LayoutBuilder(
       builder: (context, constraints) {
         final screenWidth = constraints.maxWidth;
@@ -208,9 +211,9 @@ class _LearnHubScreenState extends ConsumerState<LearnHubScreen> {
           ),
           _statCard(
             context,
-            icon: Icons.download_for_offline_outlined,
-            value: 'Download',
-            caption: 'Use offline',
+            icon: Icons.edit_note_outlined,
+            value: l10n.learnPackageManualBadge,
+            caption: l10n.learnPackageCreatorMadeBadge,
             width: cardWidth,
           ),
           _statCard(
@@ -406,6 +409,7 @@ class _LearnHubScreenState extends ConsumerState<LearnHubScreen> {
                   ),
                   const SizedBox(height: 12),
                   _fixedInfoRow(
+                    context,
                     level: vLevel,
                     category: vCategory,
                     unlock: vUnlock,

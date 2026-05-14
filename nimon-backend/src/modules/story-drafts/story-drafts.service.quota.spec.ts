@@ -12,15 +12,35 @@ const pmId = 'eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee';
  * `publishedMono.count` for M17E-6 tab-visible quota:
  * - `where` with `NOT` + `id` → per-mono tab visibility (0/1)
  * - `where` with `NOT` only → owner Published tab total
+ * - `where` `{ ownerId }` only → total rows (M17E-9 diagnostics)
+ * - `where` `{ ownerId, trashedAt: null }` → active non-trashed rows (M17E-9 diagnostics)
  */
 function mockPublishedMonoCountForPublishedTab(opts: {
   tabVisibleTotal: number;
   /** When set, `count({ id: monoId, NOT: … })` returns this instead of 0. */
   monoTabVisible?: boolean;
   monoIdForPerRowCheck?: string;
+  /** `count({ where: { ownerId } })` — defaults to tabVisibleTotal. */
+  totalPublishedMonosIncludingTrashed?: number;
+  /** `count({ where: { ownerId, trashedAt: null } })` — defaults to tabVisibleTotal. */
+  activeNonTrashedPublishedMonos?: number;
 }) {
   return jest.fn((call: { where: Record<string, unknown> }) => {
     const w = call.where as Record<string, unknown> & { id?: string };
+    const keysExOwner = Object.keys(w).filter((k) => k !== 'ownerId');
+    if (w.ownerId != null && keysExOwner.length === 0) {
+      return Promise.resolve(opts.totalPublishedMonosIncludingTrashed ?? opts.tabVisibleTotal);
+    }
+    if (
+      w.ownerId != null &&
+      w.trashedAt === null &&
+      !w.NOT &&
+      w.id === undefined &&
+      keysExOwner.length === 1 &&
+      keysExOwner[0] === 'trashedAt'
+    ) {
+      return Promise.resolve(opts.activeNonTrashedPublishedMonos ?? opts.tabVisibleTotal);
+    }
     if (w.NOT != null && typeof w.id === 'string') {
       const want = opts.monoIdForPerRowCheck;
       if (want != null && w.id === want) {
@@ -232,9 +252,14 @@ describe('StoryDraftsService M17E free quotas', () => {
       storyDraft: {
         findFirst: jest.fn().mockResolvedValueOnce(draft),
         updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+        count: jest.fn().mockResolvedValue(32),
       },
       publishedMono: {
-        count: mockPublishedMonoCountForPublishedTab({ tabVisibleTotal: 30 }),
+        count: mockPublishedMonoCountForPublishedTab({
+          tabVisibleTotal: 30,
+          totalPublishedMonosIncludingTrashed: 30,
+          activeNonTrashedPublishedMonos: 30,
+        }),
         findFirst: jest.fn().mockResolvedValue(null),
         create: jest.fn(),
         findUnique: jest.fn(),
@@ -277,6 +302,42 @@ describe('StoryDraftsService M17E free quotas', () => {
       },
       publishedMono: {
         count: mockPublishedMonoCountForPublishedTab({ tabVisibleTotal: 29 }),
+        findFirst: jest.fn().mockResolvedValue(null),
+        create: jest.fn().mockResolvedValue({ id: newPmId }),
+        findUnique: jest.fn().mockResolvedValue({ content: {}, trashedAt: null }),
+        update: jest.fn().mockResolvedValue({}),
+      },
+    };
+    const prisma = {
+      $transaction: jest.fn((fn: (t: typeof tx) => Promise<unknown>) => fn(tx)),
+      user: { upsert: jest.fn() },
+    } as any;
+
+    await new StoryDraftsService(prisma).publishReadOnly(OWNER, draftId, '"v1"');
+    expect(tx.publishedMono.create).toHaveBeenCalled();
+  });
+
+  it('M17E-9: first publish allowed with 29 catalog-visible monos and 32 story_drafts rows', async () => {
+    const draft = minimalReadOnlyDraft();
+    const newPmId = 'ffffffff-ffff-ffff-ffff-ffffffffffff';
+    const reloaded = {
+      ...draft,
+      version: 2,
+      publishState: PublishState.reading_only_published,
+      publishedMonoId: newPmId,
+    };
+    const tx = {
+      storyDraft: {
+        findFirst: jest.fn().mockResolvedValueOnce(draft).mockResolvedValueOnce(reloaded),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+        count: jest.fn().mockResolvedValue(32),
+      },
+      publishedMono: {
+        count: mockPublishedMonoCountForPublishedTab({
+          tabVisibleTotal: 29,
+          totalPublishedMonosIncludingTrashed: 29,
+          activeNonTrashedPublishedMonos: 29,
+        }),
         findFirst: jest.fn().mockResolvedValue(null),
         create: jest.fn().mockResolvedValue({ id: newPmId }),
         findUnique: jest.fn().mockResolvedValue({ content: {}, trashedAt: null }),

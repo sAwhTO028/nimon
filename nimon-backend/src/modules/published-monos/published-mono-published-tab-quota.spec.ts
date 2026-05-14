@@ -44,9 +44,10 @@ describe('published-mono-published-tab-quota (M17E-7)', () => {
     const count = jest.fn().mockResolvedValue(30);
     try {
       await assertCanRevealOnePublishedTabMono(
-        { publishedMono: { count } },
+        { publishedMono: { count }, storyDraft: { count: jest.fn().mockResolvedValue(0) } },
         ownerId,
-        { tag: 'publish-quota', draftId: 'd1' },
+        { tag: 'publish-quota', draftId: 'd1', actionName: 'test_throw' },
+        jest.fn(),
       );
       throw new Error('expected QuotaExceededException');
     } catch (e) {

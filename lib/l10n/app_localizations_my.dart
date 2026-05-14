@@ -613,7 +613,7 @@ class AppLocalizationsMy extends AppLocalizations {
 
   @override
   String get validationProtectedCreateStoryLogin =>
-      'စတိုရီ ဖန်တီးရန် ဝင်ရောက်ပါ။';
+      'Mono ဖန်တီးပြီး ထုတ်ဝေရန် ဝင်ရောက်ပါ။';
 
   @override
   String get validationProtectedPublishStoryLogin =>
@@ -628,7 +628,7 @@ class AppLocalizationsMy extends AppLocalizations {
 
   @override
   String get validationProtectedEditProfileLogin =>
-      'ပရိုဖိုင် ပြင်ရန် ဝင်ရောက်ပါ။';
+      'ပရိုဖိုင် ကြည့်ရှုနှင့် စီမံရန် ဝင်ရောက်ပါ။';
 
   @override
   String get validationProtectedGenericForbidden => 'ဤလုပ်ဆောင်ချက် မရနိုင်ပါ။';
@@ -732,4 +732,47 @@ class AppLocalizationsMy extends AppLocalizations {
   String draftStoryLimitReachedMessage(int limit) {
     return 'အခမဲ့ အစီအစဉ်ဖြင့် မူကြမ်း $limit ခုအထိ ထားနိုင်ပါသည်။ အသစ်ဖန်တီးမီ မူကြမ်းအဟောင်းကို ဖျက်ပါ။';
   }
+
+  @override
+  String get monoFollowingGuestTitle => 'Following ကြည့်ရန် ဝင်ရောက်ပါ';
+
+  @override
+  String get monoFollowingGuestBody =>
+      'လိုက်ထားသူများ၏ Mono များကို ဤဖိဒ်တွင် ကြည့်ရန် ဝင်ရောက်ပါ။';
+
+  @override
+  String get monoGuestRemoteDraftsBanner =>
+      'အဝေးထိန်းသိမ်းမူကြမ်းအတွက် ဝင်ရောက်ရန် လိုအပ်ပါသည်။';
+
+  @override
+  String get learnPackageManualBadge => 'Manual';
+
+  @override
+  String get learnPackageCreatorMadeBadge => 'Creator-made';
+
+  @override
+  String get shareProfileTitle => 'Share Profile';
+
+  @override
+  String get shareProfileCopyLink => 'Copy link';
+
+  @override
+  String get shareProfileShareProfile => 'Share profile';
+
+  @override
+  String get shareProfileLinkCopied => 'Link copied';
+
+  @override
+  String get shareProfileScanToOpen => 'Scan to open profile';
+
+  @override
+  String get shareProfilePublicHint =>
+      'Anyone with this link can view your public profile.';
+
+  @override
+  String get shareProfileLinkUnavailable =>
+      'Profile link is not available on this device yet.';
+
+  @override
+  String get shareProfileFallbackDisplayName => 'Creator';
 }

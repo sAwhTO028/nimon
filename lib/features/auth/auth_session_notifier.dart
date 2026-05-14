@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:nimon/features/auth/auth_models.dart';
 import 'package:nimon/features/auth/auth_repository.dart';
@@ -13,11 +14,18 @@ class AuthSessionNotifier extends StateNotifier<AuthSessionState> {
 
   /// Bootstrap: secure tokens → `/v1/me`, refresh on failure, else clear.
   Future<void> restoreSession() async {
+    debugPrint('[AuthStartup] restoreSession begin');
     state = const AuthSessionLoading();
     try {
       final stored = await _store.readTokens();
+      final hasAccess = stored?.accessToken.trim().isNotEmpty ?? false;
+      final hasRefresh = stored?.refreshToken.trim().isNotEmpty ?? false;
+      debugPrint(
+        '[AuthStartup] state=loading tokens stored=${stored != null} accessToken=${hasAccess ? 'yes' : 'no'} refreshToken=${hasRefresh ? 'yes' : 'no'}',
+      );
       if (stored == null ||
-          stored.accessToken.isEmpty && stored.refreshToken.isEmpty) {
+          (stored.accessToken.isEmpty && stored.refreshToken.isEmpty)) {
+        debugPrint('[AuthStartup] no tokens → unauthenticated');
         state = const AuthSessionUnauthenticated();
         return;
       }
@@ -36,6 +44,7 @@ class AuthSessionNotifier extends StateNotifier<AuthSessionState> {
 
       var user = await loadUser(access);
       if (user == null && refresh.isNotEmpty) {
+        debugPrint('[AuthStartup] refreshAttempt=true');
         try {
           final t = await _repo.refresh(refreshToken: refresh);
           await _store.writeTokens(
@@ -47,7 +56,11 @@ class AuthSessionNotifier extends StateNotifier<AuthSessionState> {
           access = t.accessToken;
           refresh = t.refreshToken;
           user = await loadUser(access);
+          debugPrint(
+            '[AuthStartup] refreshAttempt result=${user != null ? 'success' : 'failure'}',
+          );
         } on AuthRepositoryException {
+          debugPrint('[AuthStartup] refreshAttempt result=failure');
           user = null;
         }
       }
@@ -55,11 +68,14 @@ class AuthSessionNotifier extends StateNotifier<AuthSessionState> {
       if (user == null) {
         await _store.clearTokens();
         state = const AuthSessionUnauthenticated();
+        debugPrint('[AuthStartup] final=unauthenticated');
         return;
       }
 
       state = AuthSessionAuthenticated(user);
-    } catch (_) {
+      debugPrint('[AuthStartup] final=authenticated userId=${user.id}');
+    } catch (e, st) {
+      debugPrint('[AuthStartup] restoreSession error=$e stack=$st');
       await _store.clearTokens();
       state = const AuthSessionUnauthenticated();
     }

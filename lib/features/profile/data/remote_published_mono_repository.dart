@@ -547,6 +547,9 @@ class RemotePublishedMonoRepository {
       writerDisplayName: _optStr(it['writerDisplayName']),
       writerHandle: _optStr(it['writerHandle']),
       writerAvatarUrl: _optStr(it['writerAvatarUrl']),
+      likesCount: _jsonInt(it['likesCount']),
+      isBookmarkedByMe: it['isBookmarkedByMe'] == true,
+      myReaction: _optStr(it['myReaction']),
     );
   }
 
@@ -592,5 +595,13 @@ class RemotePublishedMonoRepository {
       resp,
       fallback: 'Could not permanently delete this story.',
     );
+  }
+
+  static int _jsonInt(Object? v) {
+    if (v == null) return 0;
+    if (v is int) return v;
+    if (v is double) return v.round();
+    if (v is num) return v.toInt();
+    return int.tryParse(v.toString()) ?? 0;
   }
 }

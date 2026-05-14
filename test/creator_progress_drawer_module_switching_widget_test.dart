@@ -2,11 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+import 'package:nimon/features/auth/auth_providers.dart';
 import 'package:nimon/features/create/creator_drawer_session.dart';
 import 'package:nimon/features/create/creator_progress_drawer.dart';
 import 'package:nimon/features/create/creator_step_id.dart';
 import 'package:nimon/features/create/creator_workspace_step.dart';
 import 'package:nimon/main.dart';
+
+import 'auth/in_memory_auth_token_store.dart';
 
 Finder _creatorDrawerScope() =>
     find.byKey(kCreatorProgressDrawerKeySentences, skipOffstage: false);
@@ -134,9 +137,20 @@ void main() {
 
   group('Creator progress drawer module switching (runtime widget)', () {
     Future<void> pumpApp(WidgetTester tester) async {
-      await tester.pumpWidget(const ProviderScope(child: NimonApp()));
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            authTokenStoreProvider.overrideWithValue(InMemoryAuthTokenStore()),
+          ],
+          child: const NimonApp(),
+        ),
+      );
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
+      for (var i = 0; i < 200; i++) {
+        await tester.pump(const Duration(milliseconds: 16));
+        if (find.text('Great!').evaluate().isNotEmpty) break;
+      }
     }
 
     testWidgets('A. From Vocabulary page -> Grammar/Quiz/Listening',

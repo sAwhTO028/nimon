@@ -71,6 +71,12 @@ class MonoFeedItem {
   /// Canonical share URL, when present (M7a).
   final String? shareUrl;
 
+  /// Server Story Basics category label (not [MonoContentType] display name).
+  final String? catalogCategory;
+
+  /// Server read-duration label (e.g. `3–5 min` from `targetDurationBandKey`).
+  final String? readDurationLabel;
+
   const MonoFeedItem({
     required this.id,
     this.writerId,
@@ -93,6 +99,8 @@ class MonoFeedItem {
     this.isBookmarkedByMe = false,
     this.myReaction,
     this.shareUrl,
+    this.catalogCategory,
+    this.readDurationLabel,
   });
 
   /// Id for **`/learn/...`** and [catalogPublishedMonoDetailProvider] — never includes

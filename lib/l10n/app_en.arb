@@ -176,11 +176,11 @@
   "validationProtectedReactLogin": "Sign in to react to stories.",
   "validationProtectedFollowLogin": "Sign in to follow creators.",
   "validationProtectedSaveLogin": "Sign in to save stories.",
-  "validationProtectedCreateStoryLogin": "Sign in to create stories.",
+  "validationProtectedCreateStoryLogin": "Sign in to create and publish Monos.",
   "validationProtectedPublishStoryLogin": "Sign in to publish your story.",
   "validationProtectedCreateCollectionLogin": "Sign in to create collections.",
   "validationProtectedUploadMediaLogin": "Sign in to upload media.",
-  "validationProtectedEditProfileLogin": "Sign in to edit your profile.",
+  "validationProtectedEditProfileLogin": "Sign in to view and manage your profile.",
   "validationProtectedGenericForbidden": "This action is not available.",
   "validationProtectedGenericDisabled": "This action is disabled for your account.",
   "validationMediaFileRequired": "Please choose a file to upload.",
@@ -311,5 +311,18 @@
         "type": "int"
       }
     }
-  }
+  },
+  "monoFollowingGuestTitle": "Sign in to see Following",
+  "monoFollowingGuestBody": "Sign in to see stories from people you follow.",
+  "monoGuestRemoteDraftsBanner": "Remote drafts require sign-in.",
+  "learnPackageManualBadge": "Manual",
+  "learnPackageCreatorMadeBadge": "Creator-made",
+  "shareProfileTitle": "Share Profile",
+  "shareProfileCopyLink": "Copy link",
+  "shareProfileShareProfile": "Share profile",
+  "shareProfileLinkCopied": "Link copied",
+  "shareProfileScanToOpen": "Scan to open profile",
+  "shareProfilePublicHint": "Anyone with this link can view your public profile.",
+  "shareProfileLinkUnavailable": "Profile link is not available on this device yet.",
+  "shareProfileFallbackDisplayName": "Creator"
 }

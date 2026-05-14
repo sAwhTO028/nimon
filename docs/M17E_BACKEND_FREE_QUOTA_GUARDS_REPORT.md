@@ -74,6 +74,43 @@ V1 **source of truth** for the published mono free-tier cap is the **same row se
 
 ---
 
+## M17E-9 Runtime quota block resolution
+
+**DB evidence (operator):** A direct SQL check on the database used for investigation showed **`published_monos`** **`count(*) = 29`** for owner **`1cf3efd7-804d-4802-87bd-deb1e4ed665a`** (owner-scoped `published_monos` rows as counted in SQL at that time).
+
+**V1 rule vs. symptom:** With a **tab-visible / quota `current` count of 29**, first publish must be **allowed**, because **29 + 1 = 30** and the cap is **30**. The Flutter “free limit reached” (`published_mono_limit_reached`) alert **before** a clean restart was therefore **not** explained by the inspected row count alone.
+
+**Root cause (runtime):** The **running API process** was **stale** — it had **not** been restarted after deploying the latest quota logic (M17E-7 / M17E-9). The live process was still enforcing older behavior, so the client saw a quota block even though the DB showed **29** rows for that owner.
+
+**After clean backend restart:** Upload / first publish **worked correctly** against the same data expectation (**29 → allow**).
+
+**Final rule confirmed (V1, Published-tab–aligned visible `current`):**
+
+- **`current` 28 or 29** → **upload / first publish allowed** (next visible count **29** or **30**, both **≤ 30**).
+- **`current` 30** → **upload / first publish blocked** (next would be **31** **> 30**).
+
+**M17E-9 diagnostics (for any future incident):**
+
+- **`[M17E-9 db-target]`** — logged at **`PrismaService`** startup: parsed **`DATABASE_URL`** **host** and **database name** only (no credentials). Confirms **which database instance** the API is connected to.
+- **`[M17E-9 quota-block]`** — logged **only on the throw path** for **`published_mono_limit_reached`**: includes **`publishedMonosTotal`**, **`publishedMonosActiveNonTrashed`**, **`publishedTabVisibleCount`** (the quota `current`), **`storyDraftRows`** (diagnostic only; **not** part of the cap), **`nextCount`**, **`limit`**, **`actionName`**, etc.
+
+**If the issue appears again, compare before changing code:**
+
+1. **DB query** — owner-scoped **`published_monos`** counts (and, if needed, active vs. trashed) from the **same** DB you intend the API to use.
+2. **`[M17E-9 db-target]`** — from a **fresh** API boot: host + database name must match (1).
+3. **`[M17E-9 quota-block]`** (only if a block still occurs) — **`publishedTabVisibleCount`** vs. your SQL; mismatches indicate wrong DB, wrong owner, or **visible** predicate vs. raw row count drift.
+
+**Release / operations note:** **Quota behavior and diagnostics depend on deploying the new build and performing a clean backend restart** so the running process loads the current quota implementation and emits **`[M17E-9 db-target]`** on boot. Skipping restart after a quota deploy can reproduce “wrong” client-side limit alerts that do not match DB counts.
+
+### M17E-9 Implementation (reference)
+
+- **Single throw site** for **`published_mono_limit_reached`:** **`assertCanRevealOnePublishedTabMono`** (`published-mono-published-tab-quota.ts`).
+- **Tab-visible count:** Prefer **`$queryRaw`** SQL when the scope is a real Prisma client / transaction — same semantics as **`PUBLISHED_MONO_CATALOG_VISIBLE`** (non-trashed `published_monos` with no linked **`story_drafts`** row where **`hasUnpublishedCoreChanges === true`**). Falls back to Prisma **`count`** in tests / if raw fails.
+- **On block (including production):** **`[M17E-9 quota-block]`** line as above; draft totals are **diagnostic only** — not used in the quota formula.
+- **Tests:** `story-drafts.service.quota.spec.ts` (M17E-9 first publish with **29** visible monos + **32** drafts → allowed), `published-monos.service.spec.ts` (restore mock totals aligned with M17E-9 log).
+
+---
+
 ## M17E-2 Published edit staging quota leak fix
 
 **Problem:** First-publish quota used **`PUBLISHED_MONO_CATALOG_VISIBLE`**, which hides published monos while a linked draft has **`hasUnpublishedCoreChanges`**. Owners at 30 published could “free” a visible slot by editing, then first-publish a **new** `PublishedMono`, then finish the staged edit — ending with **> 30** active published monos.

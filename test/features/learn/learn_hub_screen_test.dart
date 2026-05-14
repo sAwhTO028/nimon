@@ -2,19 +2,29 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nimon/features/learn/learn_hub_screen.dart';
+import 'package:nimon/l10n/app_localizations.dart';
 import 'package:nimon/ui/widgets/nimon_circle_nav_button.dart';
+
+Widget _learnApp(Widget home) {
+  return ProviderScope(
+    child: MaterialApp(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      locale: const Locale('en'),
+      home: home,
+    ),
+  );
+}
 
 void main() {
   testWidgets('Learn hub shows Description heading and basics text', (
     tester,
   ) async {
     await tester.pumpWidget(
-      const ProviderScope(
-        child: MaterialApp(
-          home: LearnHubScreen(
-            contentId: 'cid',
-            description: 'Story Basics description text.',
-          ),
+      _learnApp(
+        const LearnHubScreen(
+          contentId: 'cid',
+          description: 'Story Basics description text.',
         ),
       ),
     );
@@ -26,11 +36,7 @@ void main() {
 
   testWidgets('Learn hub hides Description block when empty', (tester) async {
     await tester.pumpWidget(
-      const ProviderScope(
-        child: MaterialApp(
-          home: LearnHubScreen(contentId: 'cid'),
-        ),
-      ),
+      _learnApp(const LearnHubScreen(contentId: 'cid')),
     );
     await tester.pumpAndSettle();
     expect(find.text('Description'), findsNothing);
@@ -40,12 +46,10 @@ void main() {
     tester,
   ) async {
     await tester.pumpWidget(
-      const ProviderScope(
-        child: MaterialApp(
-          home: LearnHubScreen(
-            contentId: 'cid',
-            storyTitle: 'Shown Title',
-          ),
+      _learnApp(
+        const LearnHubScreen(
+          contentId: 'cid',
+          storyTitle: 'Shown Title',
         ),
       ),
     );
@@ -54,5 +58,18 @@ void main() {
     expect(find.byType(NimonCircleNavButton), findsOneWidget);
     expect(find.byIcon(Icons.translate_outlined), findsNothing);
     expect(find.byTooltip('Explanation language'), findsNothing);
+  });
+
+  testWidgets('Learn hub shows Manual / Creator-made (not download/offline)', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _learnApp(const LearnHubScreen(contentId: 'cid')),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Manual'), findsOneWidget);
+    expect(find.text('Creator-made'), findsOneWidget);
+    expect(find.text('Download'), findsNothing);
+    expect(find.text('Use offline'), findsNothing);
   });
 }

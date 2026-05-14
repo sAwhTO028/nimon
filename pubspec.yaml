@@ -24,6 +24,8 @@ dependencies:
   just_audio: ^0.9.40
   http: ^1.2.2
   connectivity_plus: ^7.1.1
+  share_plus: ^10.1.4
+  qr_flutter: ^4.1.0
 
 dev_dependencies:
   flutter_test:

@@ -30,7 +30,21 @@ export function attachWriterProfileToDetail(
   mediaPublicBaseUrl: string,
 ): PublishedMonoDetailDto {
   const stamped = attachWriterProfileToListItem(detail, writer, mediaPublicBaseUrl);
-  return { ...stamped, content: detail.content };
+  const withAltCounts = detail as PublishedMonoDetailDto & {
+    likeCount?: number;
+    reactionsCount?: number;
+  };
+  return {
+    ...stamped,
+    content: detail.content,
+    likesCount:
+      detail.likesCount ??
+      withAltCounts.likeCount ??
+      withAltCounts.reactionsCount ??
+      0,
+    isBookmarkedByMe: detail.isBookmarkedByMe ?? false,
+    myReaction: detail.myReaction ?? null,
+  };
 }
 
 export const DURATION_BY_BAND: Record<string, string> = {
@@ -129,5 +143,8 @@ export function publishedMonoDetailFromRow(
   return {
     ...publishedMonoListItemFromRow(m, mediaPublicBaseUrl),
     content: clonePublishedContentWithCanonicalMedia(m.content, mediaPublicBaseUrl),
+    likesCount: 0,
+    isBookmarkedByMe: false,
+    myReaction: null,
   };
 }

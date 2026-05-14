@@ -8,6 +8,7 @@ import { QuotaExceededException } from '../../common/limits/quota-exceeded.excep
 import { PublicWebBaseUrlService } from '../common/public-web-base-url.service';
 import { MediaUrlCanonicalizerService } from '../media/media-url-canonicalizer.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { durationLabelFromKey } from '../published-monos/published-mono-common';
 import { PUBLISHED_MONO_CATALOG_VISIBLE } from '../published-monos/published-mono-visibility';
 import type {
   MonoBookmarkStateDto,
@@ -160,7 +161,13 @@ export class MonoSocialService {
       });
     }
 
-    const rows = await this.prisma.monoBookmark.findMany({
+    const listWhere: import('@prisma/client').Prisma.MonoBookmarkWhereInput = {
+      userId: opts.userId,
+      publishedMono: PUBLISHED_MONO_CATALOG_VISIBLE,
+    };
+
+    const [rows, totalCount] = await Promise.all([
+      this.prisma.monoBookmark.findMany({
       where: { AND: and },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       take,
@@ -186,7 +193,9 @@ export class MonoSocialService {
           },
         },
       },
-    });
+    }),
+      this.prisma.monoBookmark.count({ where: listWhere }),
+    ]);
 
     const hasMore = rows.length > limit;
     const page = hasMore ? rows.slice(0, limit) : rows;
@@ -234,6 +243,11 @@ export class MonoSocialService {
         typeof storyAudio?.sourceUrl === 'string' &&
         storyAudio.sourceUrl.trim() !== '';
       const cat = (m.category ?? '').trim();
+      const durationKey =
+        typeof core?.targetDurationBandKey === 'string'
+          ? core.targetDurationBandKey.trim()
+          : null;
+      const targetDurationLabel = durationLabelFromKey(durationKey);
       return {
         monoId: m.id,
         title: m.title ?? '',
@@ -255,10 +269,11 @@ export class MonoSocialService {
         publishKind,
         accessType: 'public' as const,
         bookmarkedAt: b.createdAt.toISOString(),
+        targetDurationLabel,
       };
     });
 
-    return { items, nextCursor, hasMore };
+    return { items, nextCursor, hasMore, totalCount };
   }
 }
 

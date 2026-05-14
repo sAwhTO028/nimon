@@ -138,11 +138,13 @@ const validationFallbackMessagesEn = <String, String>{
   'protected.react.login': 'Sign in to react to stories.',
   'protected.follow.login': 'Sign in to follow creators.',
   'protected.save.login': 'Sign in to save stories.',
-  'protected.createStory.login': 'Sign in to create stories.',
+  'protected.createStory.login':
+      'Sign in to create and publish Monos.',
   'protected.publishStory.login': 'Sign in to publish your story.',
   'protected.createCollection.login': 'Sign in to create collections.',
   'protected.uploadMedia.login': 'Sign in to upload media.',
-  'protected.editProfile.login': 'Sign in to edit your profile.',
+  'protected.editProfile.login':
+      'Sign in to view and manage your profile.',
   'protected.generic.forbidden': 'This action is not available.',
   'protected.generic.disabled': 'This action is disabled for your account.',
 

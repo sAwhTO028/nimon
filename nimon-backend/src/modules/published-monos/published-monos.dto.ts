@@ -44,6 +44,10 @@ export type PublishedMonoListResponseDto = {
 export type PublishedMonoDetailDto = PublishedMonoListItemDto & {
   /** Full JSON blob: core, learn, publishKind, sourceDraftId, etc. */
   content: unknown;
+  /** Heart reactions on this published mono (M17J). */
+  likesCount: number;
+  isBookmarkedByMe: boolean;
+  myReaction: 'heart' | null;
 };
 
 /** Response for `POST .../trash` — `trashedAt` is ISO-8601 when in Trash. */

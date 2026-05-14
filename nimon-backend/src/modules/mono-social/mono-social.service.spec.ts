@@ -118,5 +118,46 @@ describe('MonoSocialService', () => {
     expect(prisma.monoReaction.deleteMany).toHaveBeenCalled();
     expect(out.myReaction).toBeNull();
   });
+
+  it('listMyBookmarks returns paging envelope with totalCount (M17I)', async () => {
+    const { prisma, svc } = mk();
+    prisma.monoBookmark.count.mockResolvedValue(35);
+    const mkRows = (n: number, timeOffset: number) =>
+      Array.from({ length: n }, (_, j) => ({
+        id: `00000000-0000-4000-8000-${String(40960 + j + timeOffset).padStart(12, '0')}`,
+        createdAt: new Date(Date.UTC(2026, 0, 20, 12, 0, 0 - j - timeOffset)),
+        publishedMono: {
+          id: `11111111-1111-4111-8111-${String(81920 + j + timeOffset).padStart(12, '0')}`,
+          ownerId: userId,
+          title: `T${j}`,
+          category: '',
+          level: 'N5',
+          description: 'd',
+          createdAt: new Date(Date.UTC(2025, 5, 1)),
+          updatedAt: new Date(Date.UTC(2025, 5, 2)),
+          content: {},
+          owner: { profile: { displayName: 'Writer', handle: 'w' } },
+        },
+      }));
+
+    prisma.monoBookmark.findMany.mockResolvedValueOnce(mkRows(21, 0));
+    const p1 = await svc.listMyBookmarks({ userId, limit: 20, cursor: undefined });
+    expect(p1.items).toHaveLength(20);
+    expect(p1.hasMore).toBe(true);
+    expect(p1.nextCursor).toBeTruthy();
+    expect(p1.totalCount).toBe(35);
+
+    prisma.monoBookmark.findMany.mockResolvedValueOnce(mkRows(15, 100));
+    const p2 = await svc.listMyBookmarks({
+      userId,
+      limit: 20,
+      cursor: p1.nextCursor!,
+    });
+    expect(p2.items).toHaveLength(15);
+    expect(p2.hasMore).toBe(false);
+    expect(p2.nextCursor).toBeNull();
+    expect(p2.totalCount).toBe(35);
+    expect(prisma.monoBookmark.count).toHaveBeenCalled();
+  });
 });
 

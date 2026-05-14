@@ -1117,7 +1117,7 @@ abstract class AppLocalizations {
   /// No description provided for @validationProtectedCreateStoryLogin.
   ///
   /// In en, this message translates to:
-  /// **'Sign in to create stories.'**
+  /// **'Sign in to create and publish Monos.'**
   String get validationProtectedCreateStoryLogin;
 
   /// No description provided for @validationProtectedPublishStoryLogin.
@@ -1141,7 +1141,7 @@ abstract class AppLocalizations {
   /// No description provided for @validationProtectedEditProfileLogin.
   ///
   /// In en, this message translates to:
-  /// **'Sign in to edit your profile.'**
+  /// **'Sign in to view and manage your profile.'**
   String get validationProtectedEditProfileLogin;
 
   /// No description provided for @validationProtectedGenericForbidden.
@@ -1305,6 +1305,84 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'You can keep up to {limit} drafts on the free plan. Delete an old draft before creating a new one.'**
   String draftStoryLimitReachedMessage(int limit);
+
+  /// No description provided for @monoFollowingGuestTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign in to see Following'**
+  String get monoFollowingGuestTitle;
+
+  /// No description provided for @monoFollowingGuestBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign in to see stories from people you follow.'**
+  String get monoFollowingGuestBody;
+
+  /// No description provided for @monoGuestRemoteDraftsBanner.
+  ///
+  /// In en, this message translates to:
+  /// **'Remote drafts require sign-in.'**
+  String get monoGuestRemoteDraftsBanner;
+
+  /// No description provided for @learnPackageManualBadge.
+  ///
+  /// In en, this message translates to:
+  /// **'Manual'**
+  String get learnPackageManualBadge;
+
+  /// No description provided for @learnPackageCreatorMadeBadge.
+  ///
+  /// In en, this message translates to:
+  /// **'Creator-made'**
+  String get learnPackageCreatorMadeBadge;
+
+  /// No description provided for @shareProfileTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Share Profile'**
+  String get shareProfileTitle;
+
+  /// No description provided for @shareProfileCopyLink.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy link'**
+  String get shareProfileCopyLink;
+
+  /// No description provided for @shareProfileShareProfile.
+  ///
+  /// In en, this message translates to:
+  /// **'Share profile'**
+  String get shareProfileShareProfile;
+
+  /// No description provided for @shareProfileLinkCopied.
+  ///
+  /// In en, this message translates to:
+  /// **'Link copied'**
+  String get shareProfileLinkCopied;
+
+  /// No description provided for @shareProfileScanToOpen.
+  ///
+  /// In en, this message translates to:
+  /// **'Scan to open profile'**
+  String get shareProfileScanToOpen;
+
+  /// No description provided for @shareProfilePublicHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Anyone with this link can view your public profile.'**
+  String get shareProfilePublicHint;
+
+  /// No description provided for @shareProfileLinkUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Profile link is not available on this device yet.'**
+  String get shareProfileLinkUnavailable;
+
+  /// No description provided for @shareProfileFallbackDisplayName.
+  ///
+  /// In en, this message translates to:
+  /// **'Creator'**
+  String get shareProfileFallbackDisplayName;
 }
 
 class _AppLocalizationsDelegate

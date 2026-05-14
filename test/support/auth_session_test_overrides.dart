@@ -36,3 +36,10 @@ Override authenticatedAuthSessionOverride = authSessionProvider.overrideWith(
     ),
   ),
 );
+
+/// Guest session for shell / dock UX tests (M17K).
+Override guestAuthSessionOverride = authSessionProvider.overrideWith(
+  (_) => TestAuthSessionNotifierForTest(
+    const AuthSessionUnauthenticated(),
+  ),
+);

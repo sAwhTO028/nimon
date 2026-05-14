@@ -38,6 +38,7 @@ import 'package:nimon/features/profile/mono_story_list_row.dart';
 import 'package:nimon/features/profile/profile_processing_refresh.dart';
 import 'package:nimon/features/profile/workspace_draft_menu_policy.dart';
 import 'package:nimon/features/profile/public_profile_widgets.dart';
+import 'package:nimon/features/profile/share_profile_screen.dart';
 import 'package:nimon/features/profile/owner_creator_collection_detail_screen.dart';
 import 'package:nimon/ui/widgets/nimon_circle_nav_button.dart';
 import 'package:nimon/features/auth/auth_session_state.dart';
@@ -1594,7 +1595,20 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
         child: Column(
           children: [
             _ProfileTopHeaderBar(
-              onAdd: () => context.push('/profile/share'),
+              onAdd: () {
+                final uid = session is AuthSessionAuthenticated
+                    ? session.user.id
+                    : null;
+                context.push(
+                  '/profile/share',
+                  extra: ShareProfileScreenArgs(
+                    displayName: ownerDisplayName,
+                    handleLine: ownerHandleLine,
+                    avatarUrl: ownerAvatarUrl,
+                    userId: uid,
+                  ),
+                );
+              },
               onNotifications: () => context.push('/profile/notifications'),
               onMenu: _handleProfileMenu,
             ),

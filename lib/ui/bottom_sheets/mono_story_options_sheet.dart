@@ -8,7 +8,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:nimon/features/create/creator_resume_draft.dart';
 import 'package:nimon/features/mono/mono_reader_dock.dart';
-import 'package:nimon/core/format_social_count.dart';
+import 'package:nimon/features/mono/mono_feed_item_detail_metrics.dart';
 import 'package:nimon/features/mono/mono_reader_menu_origin.dart';
 import 'package:nimon/features/mono/mono_screen.dart';
 import 'package:nimon/features/mono/saved_only_ux_policy.dart';
@@ -300,9 +300,9 @@ class _MonoStoryOptionsContent extends StatelessWidget {
         : 'Mono Story';
     final subtitle = _subtitleFor(item);
     final basicsDescription = item.storyDescription.trim();
-    final likes = item.likesCount;
-    final readTime = _readTimeFor(item.bodyText);
-    final category = _categoryFor(item);
+    final likesLabel = monoDetailSheetLikesValue(item);
+    final readTime = monoDetailSheetReadTimeValue(item);
+    final category = monoDetailSheetCategoryValue(item);
 
     return Container(
       color: colorScheme.surface,
@@ -351,7 +351,7 @@ class _MonoStoryOptionsContent extends StatelessWidget {
                   Padding(
                     padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
                     child: _MetricsRow(
-                      likes: likes,
+                      likesLabel: likesLabel,
                       readTime: readTime,
                       category: category,
                     ),
@@ -605,23 +605,6 @@ class _MonoStoryOptionsContent extends StatelessWidget {
     final who = '${item.writerName}${handle.isNotEmpty ? ' $handle' : ''}';
     return who;
   }
-
-  static String _readTimeFor(String body) {
-    final chars = body.replaceAll(RegExp(r'\s+'), '').length;
-    final minutes = math.max(1, (chars / 450).ceil());
-    return '${minutes}m';
-  }
-
-  static String _categoryFor(MonoFeedItem item) {
-    return switch (item.contentType) {
-      MonoContentType.story => 'Story',
-      MonoContentType.letter => 'Letter',
-      MonoContentType.dialogue => 'Dialogue',
-      MonoContentType.sentence => 'Sentence',
-      MonoContentType.diary => 'Diary',
-      MonoContentType.article => 'Article',
-    };
-  }
 }
 
 class _Header extends StatelessWidget {
@@ -840,12 +823,12 @@ class _DescriptionCard extends StatelessWidget {
 }
 
 class _MetricsRow extends StatelessWidget {
-  final int likes;
+  final String likesLabel;
   final String readTime;
   final String category;
 
   const _MetricsRow({
-    required this.likes,
+    required this.likesLabel,
     required this.readTime,
     required this.category,
   });
@@ -859,7 +842,7 @@ class _MetricsRow extends StatelessWidget {
           Expanded(
             child: _MetricCard(
               icon: Icons.favorite,
-              value: formatSocialCount(likes),
+              value: likesLabel,
               caption: 'Likes',
             ),
           ),

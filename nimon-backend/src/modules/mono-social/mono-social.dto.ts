@@ -31,11 +31,15 @@ export type MonoBookmarksListItemDto = {
   publishKind: string | null;
   accessType: 'public';
   bookmarkedAt: string;
+  /** Same derivation as published list (`content.core.targetDurationBandKey`). */
+  targetDurationLabel: string | null;
 };
 
 export type MonoBookmarksListResponseDto = {
   items: MonoBookmarksListItemDto[];
   nextCursor: string | null;
   hasMore: boolean;
+  /** Catalog-visible saved rows for this viewer (same filter as [items]). */
+  totalCount: number;
 };
 

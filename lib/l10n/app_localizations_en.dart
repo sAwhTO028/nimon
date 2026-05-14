@@ -615,7 +615,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get validationProtectedCreateStoryLogin =>
-      'Sign in to create stories.';
+      'Sign in to create and publish Monos.';
 
   @override
   String get validationProtectedPublishStoryLogin =>
@@ -630,7 +630,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get validationProtectedEditProfileLogin =>
-      'Sign in to edit your profile.';
+      'Sign in to view and manage your profile.';
 
   @override
   String get validationProtectedGenericForbidden =>
@@ -732,4 +732,46 @@ class AppLocalizationsEn extends AppLocalizations {
   String draftStoryLimitReachedMessage(int limit) {
     return 'You can keep up to $limit drafts on the free plan. Delete an old draft before creating a new one.';
   }
+
+  @override
+  String get monoFollowingGuestTitle => 'Sign in to see Following';
+
+  @override
+  String get monoFollowingGuestBody =>
+      'Sign in to see stories from people you follow.';
+
+  @override
+  String get monoGuestRemoteDraftsBanner => 'Remote drafts require sign-in.';
+
+  @override
+  String get learnPackageManualBadge => 'Manual';
+
+  @override
+  String get learnPackageCreatorMadeBadge => 'Creator-made';
+
+  @override
+  String get shareProfileTitle => 'Share Profile';
+
+  @override
+  String get shareProfileCopyLink => 'Copy link';
+
+  @override
+  String get shareProfileShareProfile => 'Share profile';
+
+  @override
+  String get shareProfileLinkCopied => 'Link copied';
+
+  @override
+  String get shareProfileScanToOpen => 'Scan to open profile';
+
+  @override
+  String get shareProfilePublicHint =>
+      'Anyone with this link can view your public profile.';
+
+  @override
+  String get shareProfileLinkUnavailable =>
+      'Profile link is not available on this device yet.';
+
+  @override
+  String get shareProfileFallbackDisplayName => 'Creator';
 }

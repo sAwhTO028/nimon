@@ -245,11 +245,11 @@
   "validationProtectedReactLogin": "ストーリーにリアクションするにはログインしてください。",
   "validationProtectedFollowLogin": "クリエイターをフォローするにはログインしてください。",
   "validationProtectedSaveLogin": "ストーリーを保存するにはログインしてください。",
-  "validationProtectedCreateStoryLogin": "ストーリーを作成するにはログインしてください。",
+  "validationProtectedCreateStoryLogin": "Monoの作成と公開にはログインしてください。",
   "validationProtectedPublishStoryLogin": "ストーリーを公開するにはログインしてください。",
   "validationProtectedCreateCollectionLogin": "コレクションを作成するにはログインしてください。",
   "validationProtectedUploadMediaLogin": "メディアをアップロードするにはログインしてください。",
-  "validationProtectedEditProfileLogin": "プロフィールを編集するにはログインしてください。",
+  "validationProtectedEditProfileLogin": "プロフィールの表示と管理にはログインしてください。",
   "validationProtectedGenericForbidden": "この操作は利用できません。",
   "validationProtectedGenericDisabled": "このアカウントではこの操作は無効です。",
   "validationMediaFileRequired": "アップロードするファイルを選んでください。",
@@ -311,5 +311,18 @@
         "type": "int"
       }
     }
-  }
+  },
+  "monoFollowingGuestTitle": "フォロー中を見るにはログイン",
+  "monoFollowingGuestBody": "フォローしたクリエイターのMonoをこのフィードで見るにはログインしてください。",
+  "monoGuestRemoteDraftsBanner": "リモート下書きを使うにはログインが必要です。",
+  "learnPackageManualBadge": "マニュアル",
+  "learnPackageCreatorMadeBadge": "クリエイター制作",
+  "shareProfileTitle": "プロフィールを共有",
+  "shareProfileCopyLink": "リンクをコピー",
+  "shareProfileShareProfile": "プロフィールを共有",
+  "shareProfileLinkCopied": "リンクをコピーしました",
+  "shareProfileScanToOpen": "スキャンしてプロフィールを開く",
+  "shareProfilePublicHint": "このリンクを知っている人は、あなたの公開プロフィールを閲覧できます。",
+  "shareProfileLinkUnavailable": "この端末ではまだプロフィールのリンクを利用できません。",
+  "shareProfileFallbackDisplayName": "クリエイター"
 }

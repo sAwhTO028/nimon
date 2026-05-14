@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -8,6 +9,7 @@ import 'package:nimon/core/validation/localized_validation_messages.dart';
 import 'package:nimon/core/validation/validation_issue.dart';
 import 'package:nimon/features/auth/auth_providers.dart';
 import 'package:nimon/features/auth/auth_repository.dart';
+import 'package:nimon/features/auth/auth_session_state.dart';
 
 /// Email/password entry. **Guest** stays local-only (no Bearer token); remote drafts
 /// require login or backend dev fallback (see M1b report).
@@ -86,6 +88,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
+    final session = ref.watch(authSessionProvider);
+    final sessionBusy =
+        session is AuthSessionUnknown || session is AuthSessionLoading;
     const horizontal = 24.0;
     const topPad = 24.0;
     const bottomPad = 24.0;
@@ -191,9 +196,19 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                   : const Text('LOGIN'),
                             ),
                             TextButton(
-                              onPressed: _submitting
+                              onPressed: _submitting || sessionBusy
                                   ? null
-                                  : () => context.go('/mono'),
+                                  : () {
+                                      final s = ref.read(authSessionProvider);
+                                      debugPrint(
+                                        '[GuestEntry] authState=${s.runtimeType} action=goMono',
+                                      );
+                                      if (s is AuthSessionUnknown ||
+                                          s is AuthSessionLoading) {
+                                        return;
+                                      }
+                                      context.go('/mono');
+                                    },
                               child: const Text('Guest >>'),
                             ),
                             TextButton(

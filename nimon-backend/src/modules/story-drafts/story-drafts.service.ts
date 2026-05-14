@@ -432,7 +432,12 @@ export class StoryDraftsService {
           await assertCanRevealOnePublishedTabMono(
             this.prisma,
             ownerId,
-            { tag: 'cancel-edit', draftId, publishedMonoId: linkedId },
+            {
+              tag: 'cancel-edit',
+              draftId,
+              publishedMonoId: linkedId,
+              actionName: 'deleteDraft_cancelPublishedEditStaging',
+            },
             (line) => this.logger.log(line),
           );
         }
@@ -1024,7 +1029,12 @@ export class StoryDraftsService {
         await assertCanRevealOnePublishedTabMono(
           tx,
           ownerId,
-          { tag: 'publish-quota', draftId, publishedMonoId: undefined },
+          {
+            tag: 'publish-quota',
+            draftId,
+            publishedMonoId: undefined,
+            actionName: 'publishReadOnly_firstPublish',
+          },
           (line) => this.logger.log(line),
         );
         const mono = await tx.publishedMono.create({
@@ -1048,7 +1058,12 @@ export class StoryDraftsService {
           await assertCanRevealOnePublishedTabMono(
             tx,
             ownerId,
-            { tag: 'publish-quota', draftId, publishedMonoId },
+            {
+              tag: 'publish-quota',
+              draftId,
+              publishedMonoId,
+              actionName: 'publishReadOnly_revealCatalogRow',
+            },
             (line) => this.logger.log(line),
           );
         } else {
@@ -1193,7 +1208,12 @@ export class StoryDraftsService {
         await assertCanRevealOnePublishedTabMono(
           tx,
           ownerId,
-          { tag: 'publish-quota', draftId, publishedMonoId: pmIdForQuota },
+          {
+            tag: 'publish-quota',
+            draftId,
+            publishedMonoId: pmIdForQuota,
+            actionName: 'publishFullLearn_revealCatalogRow',
+          },
           (line) => this.logger.log(line),
         );
       } else {

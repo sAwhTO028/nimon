@@ -28,6 +28,8 @@ MonoFeedItem monoFeedItemFromPublishedMonoDetail(
 
   final basicsDesc = d.description.trim();
   final sid = d.sourceDraftId?.trim();
+  final cat = d.category.trim();
+  final dur = (d.targetDurationLabel ?? '').trim();
 
   final dn = (d.writerDisplayName ?? '').trim();
   final whRaw = (d.writerHandle ?? '').trim();
@@ -60,7 +62,7 @@ MonoFeedItem monoFeedItemFromPublishedMonoDetail(
     writerHandle: handleOut,
     writerAvatarUrl: avatarOut,
     level: d.level.trim().isEmpty ? '—' : d.level.trim(),
-    contentType: MonoContentType.story,
+    contentType: MonoContentType.article,
     title: d.title.trim().isEmpty ? null : d.title.trim(),
     bodyText: coreText.isNotEmpty ? coreText : '',
     storyDescription: basicsDesc,
@@ -72,5 +74,7 @@ MonoFeedItem monoFeedItemFromPublishedMonoDetail(
     isBookmarkedByMe: d.isBookmarkedByMe,
     myReaction: d.myReaction,
     shareUrl: d.shareUrl,
+    catalogCategory: cat.isNotEmpty ? cat : null,
+    readDurationLabel: dur.isNotEmpty ? dur : null,
   );
 }

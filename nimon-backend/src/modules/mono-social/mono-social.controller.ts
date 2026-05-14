@@ -1,10 +1,23 @@
-import { Controller, Delete, Get, Header, Param, Post, Query, Req, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Delete,
+  Get,
+  Header,
+  Logger,
+  Param,
+  Post,
+  Query,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import type { JwtValidatedUser } from '../auth/jwt.strategy';
 import { MonoSocialService } from './mono-social.service';
 
 @Controller()
 export class MonoSocialController {
+  private readonly logger = new Logger(MonoSocialController.name);
+
   constructor(private readonly social: MonoSocialService) {}
 
   @Post('v1/mono/:monoId/bookmark')
@@ -51,11 +64,18 @@ export class MonoSocialController {
   ) {
     const limitNum = limitRaw ? Number(limitRaw) : 15;
     const limit = Number.isFinite(limitNum) ? Math.floor(limitNum) : 15;
-    return await this.social.listMyBookmarks({
+    const c = cursor?.trim() || undefined;
+    const out = await this.social.listMyBookmarks({
       userId: req.user.userId,
       limit,
-      cursor: cursor?.trim() || undefined,
+      cursor: c,
     });
+    this.logger.debug(
+      `[SavedTab API] route hit userId=${req.user.userId} limit=${limit} cursor=${c ?? 'null'} ` +
+        `itemsReturned=${out.items.length} hasMore=${out.hasMore} nextCursor=${out.nextCursor ?? 'null'} ` +
+        `totalCount=${out.totalCount} responseKeys=${Object.keys(out as object).join(',')}`,
+    );
+    return out;
   }
 }
 

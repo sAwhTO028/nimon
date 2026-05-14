@@ -145,9 +145,21 @@ Future<void> showProtectedActionPrompt(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              if (decision == ProtectedActionDecision.loginRequired) ...[
+                Text(
+                  l10n.settingsSignInRequiredTitle,
+                  style: Theme.of(ctx).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                        color: Theme.of(ctx).colorScheme.onSurface,
+                      ),
+                ),
+                const SizedBox(height: 10),
+              ],
               Text(
                 body,
-                style: Theme.of(ctx).textTheme.bodyLarge,
+                style: Theme.of(ctx).textTheme.bodyLarge?.copyWith(
+                      color: Theme.of(ctx).colorScheme.onSurfaceVariant,
+                    ),
               ),
               const SizedBox(height: 16),
               if (decision == ProtectedActionDecision.loginRequired) ...[
