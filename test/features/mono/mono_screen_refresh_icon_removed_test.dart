@@ -8,7 +8,7 @@ void main() {
     final p = File('lib/features/mono/mono_screen.dart').readAsStringSync();
     expect(p.contains("message: 'Refresh feed'"), isFalse);
     expect(p.contains('Icons.refresh_rounded'), isFalse);
-    expect(p.contains("message: 'Search Mono'"), isTrue);
+    expect(p.contains('searchTitle'), isTrue);
     expect(p.contains('Icons.search_rounded'), isTrue);
   });
 }

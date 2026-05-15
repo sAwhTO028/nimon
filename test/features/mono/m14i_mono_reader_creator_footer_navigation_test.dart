@@ -6,7 +6,9 @@ import 'package:nimon/data/story_repo_mock.dart';
 import 'package:nimon/features/auth/auth_models.dart';
 import 'package:nimon/features/auth/auth_providers.dart';
 import 'package:nimon/features/auth/auth_session_state.dart';
+import 'package:nimon/features/mono/mono_feed_models.dart';
 import 'package:nimon/features/mono/mono_screen.dart';
+import 'package:nimon/l10n/app_localizations.dart';
 import 'package:nimon/features/settings/data/user_preferences_repository.dart';
 import 'package:nimon/features/settings/presentation/providers/user_preferences_notifier.dart';
 import '../../support/auth_session_test_overrides.dart';
@@ -94,7 +96,12 @@ void main() {
             userPreferencesRepositoryProvider
                 .overrideWithValue(_FakeUserPrefsRepo()),
           ],
-          child: MaterialApp.router(routerConfig: router),
+          child: MaterialApp.router(
+            routerConfig: router,
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            locale: const Locale('en'),
+          ),
         ),
       ),
     );
@@ -164,7 +171,12 @@ void main() {
             userPreferencesRepositoryProvider
                 .overrideWithValue(_FakeUserPrefsRepo()),
           ],
-          child: MaterialApp.router(routerConfig: router),
+          child: MaterialApp.router(
+            routerConfig: router,
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            locale: const Locale('en'),
+          ),
         ),
       ),
     );

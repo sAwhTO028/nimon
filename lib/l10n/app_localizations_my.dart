@@ -775,4 +775,46 @@ class AppLocalizationsMy extends AppLocalizations {
 
   @override
   String get shareProfileFallbackDisplayName => 'Creator';
+
+  @override
+  String get searchTitle => 'ရှာဖွေရန်';
+
+  @override
+  String get searchInputHint => 'Mono များ ရှာဖွေရန်';
+
+  @override
+  String get searchInitialTitle => 'Mono များ ရှာဖွေရန်';
+
+  @override
+  String get searchInitialBody =>
+      'ခေါင်းစဉ်၊ ခေါင်းစဉ်အကြောင်း၊ ဖန်တီးသူ၊ အဆင့်၊ အမျိုးအစားဖြင့် ရှာပါ။';
+
+  @override
+  String get searchNoResultsTitle => 'ရလဒ် မတွေ့ပါ';
+
+  @override
+  String get searchNoResultsBody =>
+      'စာလုံးပေါင်းအခြား သို့မဟုတ် စစ်ထုတ်ချက်ကို စမ်းကြည့်ပါ။';
+
+  @override
+  String get searchRetry => 'ထပ်စမ်းရန်';
+
+  @override
+  String get searchAll => 'အားလုံး';
+
+  @override
+  String get searchLatest => 'နောက်ဆုံးပေါ်';
+
+  @override
+  String get searchClearFiltersTooltip =>
+      'ရှာဖွေမှုနှင့် စစ်ထုတ်ချက်များ ရှင်းရန်';
+
+  @override
+  String get searchErrorTitle => 'ရှာဖွေ၍ မရပါ';
+
+  @override
+  String get searchLevelLabel => 'အဆင့်';
+
+  @override
+  String get searchCategoryLabel => 'အမျိုးအစား';
 }

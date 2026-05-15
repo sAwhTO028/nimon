@@ -324,5 +324,18 @@
   "shareProfileScanToOpen": "スキャンしてプロフィールを開く",
   "shareProfilePublicHint": "このリンクを知っている人は、あなたの公開プロフィールを閲覧できます。",
   "shareProfileLinkUnavailable": "この端末ではまだプロフィールのリンクを利用できません。",
-  "shareProfileFallbackDisplayName": "クリエイター"
+  "shareProfileFallbackDisplayName": "クリエイター",
+  "searchTitle": "検索",
+  "searchInputHint": "Monoを検索",
+  "searchInitialTitle": "Monoを検索",
+  "searchInitialBody": "タイトル、トピック、クリエイター、レベル、カテゴリから作品を見つけられます。",
+  "searchNoResultsTitle": "該当する結果がありません",
+  "searchNoResultsBody": "別のキーワードやフィルターを試してください。",
+  "searchRetry": "再試行",
+  "searchAll": "すべて",
+  "searchLatest": "最新",
+  "searchClearFiltersTooltip": "検索とフィルターをクリア",
+  "searchErrorTitle": "検索できませんでした",
+  "searchLevelLabel": "レベル",
+  "searchCategoryLabel": "カテゴリー"
 }

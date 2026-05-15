@@ -6,6 +6,7 @@ import '../../../models/story.dart';
 import '../../../data/episode_mock_data.dart'; // Canonical mock data source
 import '../../features/learn/learn_hub_screen.dart';
 import '../../features/reader/episode_reader_screen.dart';
+import '../nimon_story_cover_image.dart';
 
 /// Global Episode Bottom Sheet - Reusable across the entire app
 ///
@@ -284,7 +285,7 @@ class _EpisodeBottomSheetContent extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Cover image
-          _buildCoverImage(colorScheme),
+          _buildCoverImage(),
 
           const SizedBox(width: 12),
 
@@ -401,37 +402,16 @@ class _EpisodeBottomSheetContent extends StatelessWidget {
     );
   }
 
-  Widget _buildCoverImage(ColorScheme colorScheme) {
+  Widget _buildCoverImage() {
     return ClipRRect(
       borderRadius: BorderRadius.circular(12),
-      child: Container(
+      child: NimonStoryCoverImage(
+        coverImageUrl:
+            episode.coverUrl.trim().isEmpty ? null : episode.coverUrl.trim(),
         width: 56,
         height: 56,
-        color: colorScheme.surfaceContainerLow,
-        child: episode.coverUrl.isNotEmpty
-            ? Image.network(
-                episode.coverUrl,
-                fit: BoxFit.cover,
-                errorBuilder: (context, error, stackTrace) =>
-                    _buildFallbackCover(colorScheme),
-              )
-            : _buildFallbackCover(colorScheme),
-      ),
-    );
-  }
-
-  Widget _buildFallbackCover(ColorScheme colorScheme) {
-    return Container(
-      color: colorScheme.surfaceContainerLow,
-      child: Center(
-        child: Text(
-          episode.title.isNotEmpty ? episode.title[0].toUpperCase() : 'E',
-          style: TextStyle(
-            fontSize: 24,
-            fontWeight: FontWeight.bold,
-            color: colorScheme.onSurfaceVariant,
-          ),
-        ),
+        borderRadius: 0,
+        fit: BoxFit.cover,
       ),
     );
   }

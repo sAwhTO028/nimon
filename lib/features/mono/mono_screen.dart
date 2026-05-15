@@ -48,25 +48,9 @@ import 'package:nimon/features/settings/presentation/providers/user_preferences_
 import 'package:nimon/features/mono/bookmark_ownership_policy.dart';
 import 'package:nimon/features/profile/data/profile_public_providers.dart';
 import 'package:nimon/features/profile/presentation/providers/profile_following_pager.dart';
+import 'package:nimon/ui/nimon_default_cover_asset.dart';
 
 export 'mono_feed_models.dart';
-
-String _monoCoverFallbackAsset(MonoCoverCategory c) {
-  switch (c) {
-    case MonoCoverCategory.love:
-      return 'assets/images/one_short/love.png';
-    case MonoCoverCategory.horror:
-      return 'assets/images/one_short/horror.png';
-    case MonoCoverCategory.culture:
-      return 'assets/images/one_short/history.png';
-    case MonoCoverCategory.comedy:
-      return 'assets/images/one_short/comedy.png';
-    case MonoCoverCategory.art:
-      return 'assets/images/one_short/art.png';
-    case MonoCoverCategory.history:
-      return 'assets/images/one_short/history.png';
-  }
-}
 
 MonoCoverCategory _monoDefaultCoverCategory(MonoContentType t) {
   switch (t) {
@@ -2315,6 +2299,12 @@ class _MonoScreenState extends ConsumerState<MonoScreen> {
     int centerIndex,
   ) {
     if (!context.mounted) return;
+    unawaited(
+      precacheImage(
+        const AssetImage(nimonDefaultStoryCoverAsset),
+        context,
+      ),
+    );
     for (final j in [centerIndex - 1, centerIndex, centerIndex + 1]) {
       if (j < 0 || j >= items.length) continue;
       final it = items[j];
@@ -2322,8 +2312,6 @@ class _MonoScreenState extends ConsumerState<MonoScreen> {
       if (url != null && url.isNotEmpty) {
         precacheImage(NetworkImage(url), context);
       }
-      final asset = _monoCoverFallbackAsset(_monoEffectiveCoverCategory(it));
-      precacheImage(AssetImage(asset), context);
     }
   }
 
@@ -2707,7 +2695,7 @@ class _MonoScreenState extends ConsumerState<MonoScreen> {
     }
     final url = item.coverImageUrl?.trim();
     final effectiveCategory = _monoEffectiveCoverCategory(item);
-    final fallbackAsset = _monoCoverFallbackAsset(effectiveCategory);
+    const fallbackAsset = nimonDefaultStoryCoverAsset;
     final categoryLabel = switch (effectiveCategory) {
       MonoCoverCategory.love => 'Love',
       MonoCoverCategory.horror => 'Horror',
@@ -3379,7 +3367,7 @@ class _MonoScreenState extends ConsumerState<MonoScreen> {
                             if (_mainFeedKind == _MonoMainFeedKind.forYou)
                               const SizedBox(width: 2),
                             Tooltip(
-                              message: 'Search Mono',
+                              message: l10n?.searchTitle ?? 'Search',
                               child: Material(
                                 color: Colors.transparent,
                                 child: InkWell(
@@ -3706,14 +3694,14 @@ class _MonoCoverPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final fallback = _monoCoverFallbackAsset(_monoEffectiveCoverCategory(item));
+    const defaultCover = nimonDefaultStoryCoverAsset;
     final url = item.coverImageUrl?.trim();
 
     final ImageProvider<Object> coverProvider;
     if (url != null && url.isNotEmpty) {
       coverProvider = NetworkImage(url);
     } else {
-      coverProvider = AssetImage(fallback);
+      coverProvider = const AssetImage(defaultCover);
     }
 
     return ColoredBox(
@@ -3742,7 +3730,14 @@ class _MonoCoverPage extends StatelessWidget {
             height: bh,
             alignment: Alignment.center,
             filterQuality: FilterQuality.low,
-            errorBuilder: (_, __, ___) => ColoredBox(color: background),
+            errorBuilder: (_, __, ___) => Image.asset(
+              defaultCover,
+              fit: BoxFit.cover,
+              width: cw,
+              height: bh,
+              alignment: Alignment.center,
+              filterQuality: FilterQuality.low,
+            ),
           );
 
           final Widget fgSharp = Image(
@@ -3751,7 +3746,7 @@ class _MonoCoverPage extends StatelessWidget {
             alignment: Alignment.center,
             filterQuality: FilterQuality.high,
             errorBuilder: (_, __, ___) => Image.asset(
-              fallback,
+              defaultCover,
               fit: BoxFit.contain,
               alignment: Alignment.center,
             ),

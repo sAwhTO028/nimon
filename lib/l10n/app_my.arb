@@ -324,5 +324,18 @@
   "shareProfileScanToOpen": "Scan to open profile",
   "shareProfilePublicHint": "Anyone with this link can view your public profile.",
   "shareProfileLinkUnavailable": "Profile link is not available on this device yet.",
-  "shareProfileFallbackDisplayName": "Creator"
+  "shareProfileFallbackDisplayName": "Creator",
+  "searchTitle": "ရှာဖွေရန်",
+  "searchInputHint": "Mono များ ရှာဖွေရန်",
+  "searchInitialTitle": "Mono များ ရှာဖွေရန်",
+  "searchInitialBody": "ခေါင်းစဉ်၊ ခေါင်းစဉ်အကြောင်း၊ ဖန်တီးသူ၊ အဆင့်၊ အမျိုးအစားဖြင့် ရှာပါ။",
+  "searchNoResultsTitle": "ရလဒ် မတွေ့ပါ",
+  "searchNoResultsBody": "စာလုံးပေါင်းအခြား သို့မဟုတ် စစ်ထုတ်ချက်ကို စမ်းကြည့်ပါ။",
+  "searchRetry": "ထပ်စမ်းရန်",
+  "searchAll": "အားလုံး",
+  "searchLatest": "နောက်ဆုံးပေါ်",
+  "searchClearFiltersTooltip": "ရှာဖွေမှုနှင့် စစ်ထုတ်ချက်များ ရှင်းရန်",
+  "searchErrorTitle": "ရှာဖွေ၍ မရပါ",
+  "searchLevelLabel": "အဆင့်",
+  "searchCategoryLabel": "အမျိုးအစား"
 }

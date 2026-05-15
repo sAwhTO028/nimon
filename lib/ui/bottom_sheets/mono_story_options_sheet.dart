@@ -16,6 +16,7 @@ import 'package:nimon/features/mono/share_mono_link.dart';
 import 'package:nimon/features/profile/saved_library_copy.dart';
 import 'package:nimon/features/profile/presentation/providers/profile_published_mono_pager.dart';
 import 'package:nimon/features/profile/profile_processing_refresh.dart';
+import 'package:nimon/ui/nimon_story_cover_image.dart';
 
 OverlayEntry? _monoStoryOptionsOverlay;
 ScrollController? _monoStoryOptionsScrollController;
@@ -724,33 +725,15 @@ class _CoverThumb extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final r = BorderRadius.circular(14);
-    final url = item.coverImageUrl?.trim();
-    final hasUrl = url != null && url.isNotEmpty;
     return ClipRRect(
       borderRadius: r,
-      child: SizedBox(
+      child: NimonStoryCoverImage(
+        coverImageUrl: item.coverImageUrl,
         width: 66,
         height: 66,
-        child: hasUrl
-            ? Image.network(
-                url,
-                fit: BoxFit.cover,
-                filterQuality: FilterQuality.low,
-                errorBuilder: (_, __, ___) => ColoredBox(
-                  color: Colors.grey.shade200,
-                  child: Icon(
-                    Icons.image_outlined,
-                    color: Colors.black.withValues(alpha: 0.35),
-                  ),
-                ),
-              )
-            : ColoredBox(
-                color: Colors.grey.shade200,
-                child: Icon(
-                  Icons.image_outlined,
-                  color: Colors.black.withValues(alpha: 0.35),
-                ),
-              ),
+        borderRadius: 0,
+        fit: BoxFit.cover,
+        filterQuality: FilterQuality.low,
       ),
     );
   }

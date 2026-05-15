@@ -774,4 +774,44 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get shareProfileFallbackDisplayName => 'Creator';
+
+  @override
+  String get searchTitle => 'Search';
+
+  @override
+  String get searchInputHint => 'Search Monos';
+
+  @override
+  String get searchInitialTitle => 'Search Monos';
+
+  @override
+  String get searchInitialBody =>
+      'Find stories by title, topic, creator, level, or category.';
+
+  @override
+  String get searchNoResultsTitle => 'No results found';
+
+  @override
+  String get searchNoResultsBody => 'Try another keyword or filter.';
+
+  @override
+  String get searchRetry => 'Retry';
+
+  @override
+  String get searchAll => 'All';
+
+  @override
+  String get searchLatest => 'Latest';
+
+  @override
+  String get searchClearFiltersTooltip => 'Clear search and filters';
+
+  @override
+  String get searchErrorTitle => 'Could not search';
+
+  @override
+  String get searchLevelLabel => 'Level';
+
+  @override
+  String get searchCategoryLabel => 'Category';
 }

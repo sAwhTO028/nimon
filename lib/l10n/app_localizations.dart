@@ -1383,6 +1383,84 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Creator'**
   String get shareProfileFallbackDisplayName;
+
+  /// No description provided for @searchTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Search'**
+  String get searchTitle;
+
+  /// No description provided for @searchInputHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Search Monos'**
+  String get searchInputHint;
+
+  /// No description provided for @searchInitialTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Search Monos'**
+  String get searchInitialTitle;
+
+  /// No description provided for @searchInitialBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Find stories by title, topic, creator, level, or category.'**
+  String get searchInitialBody;
+
+  /// No description provided for @searchNoResultsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'No results found'**
+  String get searchNoResultsTitle;
+
+  /// No description provided for @searchNoResultsBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Try another keyword or filter.'**
+  String get searchNoResultsBody;
+
+  /// No description provided for @searchRetry.
+  ///
+  /// In en, this message translates to:
+  /// **'Retry'**
+  String get searchRetry;
+
+  /// No description provided for @searchAll.
+  ///
+  /// In en, this message translates to:
+  /// **'All'**
+  String get searchAll;
+
+  /// No description provided for @searchLatest.
+  ///
+  /// In en, this message translates to:
+  /// **'Latest'**
+  String get searchLatest;
+
+  /// No description provided for @searchClearFiltersTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear search and filters'**
+  String get searchClearFiltersTooltip;
+
+  /// No description provided for @searchErrorTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not search'**
+  String get searchErrorTitle;
+
+  /// No description provided for @searchLevelLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Level'**
+  String get searchLevelLabel;
+
+  /// No description provided for @searchCategoryLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Category'**
+  String get searchCategoryLabel;
 }
 
 class _AppLocalizationsDelegate

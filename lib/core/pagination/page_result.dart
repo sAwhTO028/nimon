@@ -60,3 +60,6 @@ class PageResult<T> {
         totalCount,
       );
 }
+
+/// Cursor page alias for APIs that name the envelope "paginated" (M18 search).
+typedef PaginatedPage<T> = PageResult<T>;

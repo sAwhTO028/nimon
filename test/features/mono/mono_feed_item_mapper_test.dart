@@ -3,6 +3,7 @@ import 'package:nimon/features/mono/data/mono_feed_item_mapper.dart';
 import 'package:nimon/features/mono/data/mono_feed_summary_dto.dart';
 import 'package:nimon/features/mono/mono_feed_models.dart';
 import 'package:nimon/features/profile/data/published_mono_dto.dart';
+import 'package:nimon/features/search/data/mono_search_result.dart';
 
 void main() {
   test(
@@ -390,5 +391,35 @@ void main() {
       reason: 'Do not use Story Basics text as horizontal reading body',
     );
     expect(merged.content, isNull);
+  });
+
+  test('monoFeedItemFromMonoSearchResult maps social fields', () {
+    final dto = PublishedMonoListItemDto(
+      id: 's1',
+      ownerId: 'o',
+      sourceDraftId: null,
+      title: 'T',
+      category: 'Love',
+      level: 'N5',
+      description: 'D',
+      publishKind: 'read_only_v1',
+      displayPublishKind: 'read_only',
+      coverImageUrl: null,
+      targetDurationLabel: '2 min',
+      createdAt: '2020-01-01T00:00:00.000Z',
+      updatedAt: '2020-01-01T00:00:00.000Z',
+      contentSummary: null,
+    );
+    final r = MonoSearchResult(
+      listItem: dto,
+      likesCount: 42,
+      isBookmarkedByMe: true,
+      myReaction: 'heart',
+    );
+    final it = monoFeedItemFromMonoSearchResult(r);
+    expect(it.likesCount, 42);
+    expect(it.isBookmarkedByMe, isTrue);
+    expect(it.myReaction, 'heart');
+    expect(it.id, 's1');
   });
 }

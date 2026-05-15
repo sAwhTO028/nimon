@@ -9,6 +9,7 @@ import { MonoSocialModule } from './modules/mono-social/mono-social.module';
 import { UserFollowModule } from './modules/user-follow/user-follow.module';
 import { PublishedMonosModule } from './modules/published-monos/published-monos.module';
 import { PublishingModule } from './modules/publishing/publishing.module';
+import { SearchModule } from './modules/search/search.module';
 import { StoryDraftsModule } from './modules/story-drafts/story-drafts.module';
 import { UsersModule } from './modules/users/users.module';
 import { MediaModule } from './modules/media/media.module';
@@ -27,6 +28,7 @@ import { CreatorCollectionsModule } from './modules/creator-collections/creator-
     StoryDraftsModule,
     PublishedMonosModule,
     MonoFeedModule,
+    SearchModule,
     MonoSocialModule,
     UserFollowModule,
     ProcessingModule,

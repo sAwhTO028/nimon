@@ -324,5 +324,18 @@
   "shareProfileScanToOpen": "Scan to open profile",
   "shareProfilePublicHint": "Anyone with this link can view your public profile.",
   "shareProfileLinkUnavailable": "Profile link is not available on this device yet.",
-  "shareProfileFallbackDisplayName": "Creator"
+  "shareProfileFallbackDisplayName": "Creator",
+  "searchTitle": "Search",
+  "searchInputHint": "Search Monos",
+  "searchInitialTitle": "Search Monos",
+  "searchInitialBody": "Find stories by title, topic, creator, level, or category.",
+  "searchNoResultsTitle": "No results found",
+  "searchNoResultsBody": "Try another keyword or filter.",
+  "searchRetry": "Retry",
+  "searchAll": "All",
+  "searchLatest": "Latest",
+  "searchClearFiltersTooltip": "Clear search and filters",
+  "searchErrorTitle": "Could not search",
+  "searchLevelLabel": "Level",
+  "searchCategoryLabel": "Category"
 }

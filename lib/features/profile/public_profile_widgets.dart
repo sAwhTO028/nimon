@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:nimon/features/profile/public_profile_data.dart';
+import 'package:nimon/ui/nimon_story_cover_image.dart';
 
 /// Thumbnail + JLPT badge for public story rows.
 class PublicStoryThumb extends StatelessWidget {
@@ -18,34 +19,7 @@ class PublicStoryThumb extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final hasThumb = (thumbnailUrl ?? '').trim().isNotEmpty;
     final r = BorderRadius.circular(borderRadius);
-
-    Widget image() {
-      if (hasThumb) {
-        return Image.network(
-          thumbnailUrl!,
-          fit: BoxFit.cover,
-          filterQuality: FilterQuality.low,
-          gaplessPlayback: true,
-          errorBuilder: (_, __, ___) => ColoredBox(
-            color: scheme.surfaceContainerHighest,
-            child: Icon(
-              Icons.image_outlined,
-              color: scheme.onSurfaceVariant.withValues(alpha: 0.45),
-            ),
-          ),
-        );
-      }
-      return ColoredBox(
-        color: scheme.surfaceContainerHighest,
-        child: Icon(
-          Icons.auto_stories_outlined,
-          color: scheme.onSurfaceVariant.withValues(alpha: 0.45),
-        ),
-      );
-    }
 
     return ClipRRect(
       borderRadius: r,
@@ -55,7 +29,15 @@ class PublicStoryThumb extends StatelessWidget {
         child: Stack(
           fit: StackFit.expand,
           children: [
-            image(),
+            NimonStoryCoverImage(
+              coverImageUrl: thumbnailUrl,
+              width: size,
+              height: size,
+              borderRadius: 0,
+              fit: BoxFit.cover,
+              filterQuality: FilterQuality.low,
+              gaplessPlayback: true,
+            ),
             Positioned(
               top: 4,
               left: 4,

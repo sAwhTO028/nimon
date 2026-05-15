@@ -4,6 +4,7 @@ import 'package:nimon/features/mono/data/mono_feed_summary_dto.dart';
 import 'package:nimon/features/profile/data/published_mono_detail_parser.dart';
 import 'package:nimon/features/profile/data/published_mono_display_contract.dart';
 import 'package:nimon/features/profile/data/published_mono_dto.dart';
+import 'package:nimon/features/search/data/mono_search_result.dart';
 
 /// Public handle line for reels/reader footer (leading `@` when missing).
 String monoWriterHandleDisplay(String? rawBackendHandle) {
@@ -159,6 +160,9 @@ MonoFeedItem monoFeedItemFromPublishedMonoListItemDto(
   String writerName = 'Writer',
   String writerHandle = '@reader',
   String? writerAvatarUrl,
+  int likesCount = 0,
+  bool isBookmarkedByMe = false,
+  String? myReaction,
 }) {
   final pk = (dto.publishKind ?? '').trim();
   final dpk = dto.displayPublishKind.trim();
@@ -214,5 +218,18 @@ MonoFeedItem monoFeedItemFromPublishedMonoListItemDto(
     shareUrl: dto.shareUrl,
     catalogCategory: cat.isNotEmpty ? cat : null,
     readDurationLabel: dur.isNotEmpty ? dur : null,
+    likesCount: likesCount,
+    isBookmarkedByMe: isBookmarkedByMe,
+    myReaction: myReaction,
+  );
+}
+
+/// Search API row → reader/list [MonoFeedItem] (M18C).
+MonoFeedItem monoFeedItemFromMonoSearchResult(MonoSearchResult r) {
+  return monoFeedItemFromPublishedMonoListItemDto(
+    r.listItem,
+    likesCount: r.likesCount,
+    isBookmarkedByMe: r.isBookmarkedByMe,
+    myReaction: r.myReaction,
   );
 }

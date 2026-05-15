@@ -16,6 +16,7 @@ import 'package:nimon/features/profile/profile_processing_refresh.dart';
 import 'package:nimon/ui/blocking_loading_overlay.dart';
 import 'package:nimon/ui/quota_exceeded_dialog.dart';
 import 'package:nimon/ui/widgets/nimon_circle_nav_button.dart';
+import 'package:nimon/ui/nimon_story_cover_image.dart';
 
 /// Owner Trash list for published monos (`GET /v1/published-monos?trashed=true`).
 class ProfileTrashScreen extends ConsumerStatefulWidget {
@@ -406,12 +407,12 @@ class _ProfileTrashScreenState extends ConsumerState<ProfileTrashScreen> {
                                         ClipRRect(
                                           borderRadius:
                                               BorderRadius.circular(12),
-                                          child: SizedBox(
+                                          child: NimonStoryCoverImage(
+                                            coverImageUrl: row.coverImageUrl,
                                             width: 56,
                                             height: 56,
-                                            child: _TrashCover(
-                                              url: row.coverImageUrl,
-                                            ),
+                                            borderRadius: 0,
+                                            fit: BoxFit.cover,
                                           ),
                                         ),
                                         const SizedBox(width: 12),
@@ -498,40 +499,6 @@ class _ProfileTrashScreenState extends ConsumerState<ProfileTrashScreen> {
                             },
                           ),
                         ),
-    );
-  }
-}
-
-class _TrashCover extends StatelessWidget {
-  const _TrashCover({this.url});
-
-  final String? url;
-
-  @override
-  Widget build(BuildContext context) {
-    final u = url?.trim();
-    if (u != null && u.isNotEmpty) {
-      return Image.network(
-        u,
-        fit: BoxFit.cover,
-        errorBuilder: (_, __, ___) => const _TrashCoverPlaceholder(),
-      );
-    }
-    return const _TrashCoverPlaceholder();
-  }
-}
-
-class _TrashCoverPlaceholder extends StatelessWidget {
-  const _TrashCoverPlaceholder();
-
-  @override
-  Widget build(BuildContext context) {
-    return ColoredBox(
-      color: Colors.grey.shade200,
-      child: Icon(
-        Icons.image_outlined,
-        color: Colors.black.withValues(alpha: 0.35),
-      ),
     );
   }
 }

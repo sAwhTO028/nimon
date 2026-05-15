@@ -687,4 +687,43 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get shareProfileFallbackDisplayName => 'クリエイター';
+
+  @override
+  String get searchTitle => '検索';
+
+  @override
+  String get searchInputHint => 'Monoを検索';
+
+  @override
+  String get searchInitialTitle => 'Monoを検索';
+
+  @override
+  String get searchInitialBody => 'タイトル、トピック、クリエイター、レベル、カテゴリから作品を見つけられます。';
+
+  @override
+  String get searchNoResultsTitle => '該当する結果がありません';
+
+  @override
+  String get searchNoResultsBody => '別のキーワードやフィルターを試してください。';
+
+  @override
+  String get searchRetry => '再試行';
+
+  @override
+  String get searchAll => 'すべて';
+
+  @override
+  String get searchLatest => '最新';
+
+  @override
+  String get searchClearFiltersTooltip => '検索とフィルターをクリア';
+
+  @override
+  String get searchErrorTitle => '検索できませんでした';
+
+  @override
+  String get searchLevelLabel => 'レベル';
+
+  @override
+  String get searchCategoryLabel => 'カテゴリー';
 }

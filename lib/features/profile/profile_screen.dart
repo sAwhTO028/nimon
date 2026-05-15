@@ -41,6 +41,7 @@ import 'package:nimon/features/profile/public_profile_widgets.dart';
 import 'package:nimon/features/profile/share_profile_screen.dart';
 import 'package:nimon/features/profile/owner_creator_collection_detail_screen.dart';
 import 'package:nimon/ui/widgets/nimon_circle_nav_button.dart';
+import 'package:nimon/ui/nimon_story_cover_image.dart';
 import 'package:nimon/features/auth/auth_session_state.dart';
 import 'package:nimon/features/auth/auth_providers.dart';
 import 'package:nimon/features/profile/presentation/add_to_collection_sheet.dart';
@@ -5342,33 +5343,7 @@ class _StoryCoverThumb extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final hasThumb = (thumbnailUrl ?? '').trim().isNotEmpty;
     final r = BorderRadius.circular(borderRadius);
-
-    Widget image() {
-      if (hasThumb) {
-        return Image.network(
-          thumbnailUrl!,
-          fit: BoxFit.cover,
-          filterQuality: FilterQuality.low,
-          gaplessPlayback: true,
-          errorBuilder: (_, __, ___) => ColoredBox(
-            color: Colors.grey.shade200,
-            child: Icon(
-              Icons.image_outlined,
-              color: Colors.black.withOpacity(0.35),
-            ),
-          ),
-        );
-      }
-      return ColoredBox(
-        color: Colors.grey.shade200,
-        child: Icon(
-          Icons.image_outlined,
-          color: Colors.black.withOpacity(0.35),
-        ),
-      );
-    }
 
     return ClipRRect(
       borderRadius: r,
@@ -5378,7 +5353,15 @@ class _StoryCoverThumb extends StatelessWidget {
         child: Stack(
           fit: StackFit.expand,
           children: [
-            image(),
+            NimonStoryCoverImage(
+              coverImageUrl: thumbnailUrl,
+              width: size,
+              height: size,
+              borderRadius: 0,
+              fit: BoxFit.cover,
+              filterQuality: FilterQuality.low,
+              gaplessPlayback: true,
+            ),
             Positioned(
               top: denseBadge ? 4 : 8,
               left: denseBadge ? 4 : 8,

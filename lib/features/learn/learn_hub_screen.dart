@@ -7,6 +7,7 @@ import 'package:nimon/features/learn/learn_explanation_language.dart';
 import 'package:nimon/features/learn/learn_module_surface_tokens.dart';
 import 'package:nimon/l10n/app_localizations.dart';
 import 'package:nimon/features/learn/learn_explanation_language_provider.dart';
+import 'package:nimon/ui/nimon_default_cover_asset.dart';
 import 'package:nimon/ui/widgets/nimon_circle_nav_button.dart';
 
 /// Grid entry from Mono; [contentId] ties learning to the current reading post.
@@ -51,7 +52,10 @@ class _LearnHubScreenState extends ConsumerState<LearnHubScreen> {
 
   Widget _cover(BuildContext context) {
     final url = widget.coverImageUrl?.trim();
-    final fallback = widget.coverFallbackAsset;
+    final rawFallback = widget.coverFallbackAsset?.trim();
+    final fallback = (rawFallback == null || rawFallback.isEmpty)
+        ? nimonDefaultStoryCoverAsset
+        : rawFallback;
 
     Widget img;
     if (url != null && url.isNotEmpty) {
@@ -60,7 +64,6 @@ class _LearnHubScreenState extends ConsumerState<LearnHubScreen> {
         fit: BoxFit.cover,
         alignment: Alignment.center,
         errorBuilder: (_, __, ___) {
-          if (fallback == null) return const SizedBox.shrink();
           return Image.asset(
             fallback,
             fit: BoxFit.cover,
@@ -75,16 +78,11 @@ class _LearnHubScreenState extends ConsumerState<LearnHubScreen> {
           );
         },
       );
-    } else if (fallback != null) {
+    } else {
       img = Image.asset(
         fallback,
         fit: BoxFit.cover,
         alignment: Alignment.center,
-      );
-    } else {
-      final cs = Theme.of(context).colorScheme;
-      img = ColoredBox(
-        color: cs.surfaceContainerHighest.withValues(alpha: 0.35),
       );
     }
 
