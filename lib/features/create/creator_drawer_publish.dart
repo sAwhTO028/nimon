@@ -20,6 +20,16 @@ import 'package:nimon/ui/app_messenger.dart';
 import 'package:nimon/ui/blocking_loading_overlay.dart';
 import 'package:nimon/ui/quota_exceeded_dialog.dart';
 
+String _publishFailureSnackText(String? lastSaveError, String fallback) {
+  if (lastSaveError == kStoryDraftPublishConflictMessage) {
+    return lastSaveError!;
+  }
+  if (lastSaveError != null && lastSaveError.isNotEmpty) {
+    return 'Could not publish: $lastSaveError';
+  }
+  return fallback;
+}
+
 String _publishOverlayMessage(
     StoryReviewPublishMode mode, CreatorStoryV1 draft) {
   if (mode == StoryReviewPublishMode.readingOnly) {
@@ -122,7 +132,8 @@ Future<void> performCreatorDrawerPublish({
         }
         if (validationErr != null) {
           if (context.mounted) {
-            await showPublishValidationSheet(context, issues: validationErr.issues);
+            await showPublishValidationSheet(context,
+                issues: validationErr.issues);
           }
           return;
         }
@@ -136,9 +147,10 @@ Future<void> performCreatorDrawerPublish({
         final st = ref.read(storyCreatorDraftProvider);
         final failureSnack = SnackBar(
           content: Text(
-            st.lastSaveError?.isNotEmpty == true
-                ? 'Could not publish: ${st.lastSaveError}'
-                : 'Could not publish Read Only. Try again.',
+            _publishFailureSnackText(
+              st.lastSaveError,
+              'Could not publish Read Only. Try again.',
+            ),
           ),
         );
         final successSnack = SnackBar(
@@ -197,7 +209,8 @@ Future<void> performCreatorDrawerPublish({
         }
         if (validationErrFl != null) {
           if (context.mounted) {
-            await showPublishValidationSheet(context, issues: validationErrFl.issues);
+            await showPublishValidationSheet(context,
+                issues: validationErrFl.issues);
           }
           return;
         }
@@ -211,9 +224,10 @@ Future<void> performCreatorDrawerPublish({
         final st = ref.read(storyCreatorDraftProvider);
         final failureSnack = SnackBar(
           content: Text(
-            st.lastSaveError?.isNotEmpty == true
-                ? 'Could not publish: ${st.lastSaveError}'
-                : 'Could not publish Full Learn. Try again.',
+            _publishFailureSnackText(
+              st.lastSaveError,
+              'Could not publish Full Learn. Try again.',
+            ),
           ),
         );
         final successSnack = SnackBar(

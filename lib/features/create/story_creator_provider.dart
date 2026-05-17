@@ -164,6 +164,9 @@ class StoryCreatorDraftNotifier extends StateNotifier<StoryCreatorDraftState> {
   bool _hydrated = false;
   Timer? _persistDebounce;
 
+  /// Serializes overlapping [persistLocalNow] calls (debounced save vs publish).
+  Future<void> _persistSerial = Future<void>.value();
+
   bool get hydratedFromDisk => _hydrated;
 
   CreatorStoryV1 get draft => state.draft;
@@ -321,67 +324,124 @@ class StoryCreatorDraftNotifier extends StateNotifier<StoryCreatorDraftState> {
 
   Future<void> persistLocalNow({String reason = ''}) async {
     _persistDebounce?.cancel();
-    if (kDebugMode) {
-      debugPrint(
-        '[creator_draft] persist_now${reason.isEmpty ? '' : ' reason=$reason'}',
-      );
-    }
-    state = state.copyWith(
-      saveStatus: CreatorDraftSaveStatus.saving,
-      clearLastSaveError: true,
-    );
+    final prior = _persistSerial;
+    final gate = Completer<void>();
+    _persistSerial = gate.future;
+    await prior;
     try {
-      // Save incomplete drafts too; keep publish state + module statuses.
-      final nextDraft = await _drafts.saveDraft(
-        state.draft,
-        remotePublishAfterPut: _remotePublishIntentForSaveReason(reason),
-      );
-      state = state.copyWith(
-        draft: nextDraft,
-        dirty: false,
-        saveStatus: CreatorDraftSaveStatus.saved,
-        lastSavedAt: DateTime.now(),
-        clearLastSaveError: true,
-      );
       if (kDebugMode) {
         debugPrint(
-          '[creator_draft] saved_ok draftId=${state.draft.id.trim()} '
-          'publishState=${state.draft.publishState.storageKey} '
-          'hasUnpublishedCoreChanges=${state.draft.hasUnpublishedCoreChanges}',
+          '[creator_draft] persist_now${reason.isEmpty ? '' : ' reason=$reason'}',
         );
       }
-      if (RemoteBackendConfig.useRemoteDrafts &&
-          state.draft.publishState != StoryPublishState.draft) {
-        _bumpProfileCatalogSurfacesRefresh();
-      }
-    } on StoryDraftValidationFailedException {
       state = state.copyWith(
-        dirty: true,
-        saveStatus: CreatorDraftSaveStatus.failed,
-        lastSaveError: 'Validation failed',
-      );
-      rethrow;
-    } on AppQuotaExceededException {
-      state = state.copyWith(
-        dirty: true,
-        saveStatus: CreatorDraftSaveStatus.failed,
+        saveStatus: CreatorDraftSaveStatus.saving,
         clearLastSaveError: true,
       );
-      rethrow;
-    } on StoryDraftHttpResponseException catch (e) {
-      state = state.copyWith(
-        dirty: true,
-        saveStatus: CreatorDraftSaveStatus.failed,
-        lastSaveError: e.message,
-      );
-    } catch (e) {
-      state = state.copyWith(
-        dirty: true,
-        saveStatus: CreatorDraftSaveStatus.failed,
-        lastSaveError: e.toString(),
-      );
-      if (kDebugMode) debugPrint('[creator_draft] saved_failed error=$e');
+      try {
+        // Save incomplete drafts too; keep publish state + module statuses.
+        final nextDraft = await _drafts.saveDraft(
+          state.draft,
+          remotePublishAfterPut: _remotePublishIntentForSaveReason(reason),
+        );
+        state = state.copyWith(
+          draft: nextDraft,
+          dirty: false,
+          saveStatus: CreatorDraftSaveStatus.saved,
+          lastSavedAt: DateTime.now(),
+          clearLastSaveError: true,
+        );
+        if (kDebugMode) {
+          debugPrint(
+            '[creator_draft] saved_ok draftId=${state.draft.id.trim()} '
+            'publishState=${state.draft.publishState.storageKey} '
+            'hasUnpublishedCoreChanges=${state.draft.hasUnpublishedCoreChanges}',
+          );
+        }
+        if (RemoteBackendConfig.useRemoteDrafts &&
+            state.draft.publishState != StoryPublishState.draft) {
+          _bumpProfileCatalogSurfacesRefresh();
+        }
+      } on StoryDraftValidationFailedException {
+        state = state.copyWith(
+          dirty: true,
+          saveStatus: CreatorDraftSaveStatus.failed,
+          lastSaveError: 'Validation failed',
+        );
+        rethrow;
+      } on AppQuotaExceededException {
+        state = state.copyWith(
+          dirty: true,
+          saveStatus: CreatorDraftSaveStatus.failed,
+          clearLastSaveError: true,
+        );
+        rethrow;
+      } on StoryDraftPublishConflictException catch (e) {
+        if (e.refreshedDraft != null) {
+          state = state.copyWith(
+            draft: e.refreshedDraft,
+            dirty: false,
+            saveStatus: CreatorDraftSaveStatus.failed,
+            lastSaveError: kStoryDraftPublishConflictMessage,
+          );
+        } else {
+          state = state.copyWith(
+            dirty: true,
+            saveStatus: CreatorDraftSaveStatus.failed,
+            lastSaveError: kStoryDraftPublishConflictMessage,
+          );
+        }
+        rethrow;
+      } on StoryDraftHttpResponseException catch (e) {
+        state = state.copyWith(
+          dirty: true,
+          saveStatus: CreatorDraftSaveStatus.failed,
+          lastSaveError: e.message,
+        );
+      } catch (e) {
+        state = state.copyWith(
+          dirty: true,
+          saveStatus: CreatorDraftSaveStatus.failed,
+          lastSaveError: e.toString(),
+        );
+        if (kDebugMode) debugPrint('[creator_draft] saved_failed error=$e');
+      }
+    } finally {
+      gate.complete();
     }
+  }
+
+  /// Flush debounced / in-flight saves before publish so If-Match matches server.
+  Future<void> _awaitPendingPersistBeforePublish() async {
+    _persistDebounce?.cancel();
+    await _persistSerial;
+    if (state.dirty) {
+      await persistLocalNow(reason: 'pre_publish_flush');
+    }
+  }
+
+  /// One notifier-level publish retry after server reload when no local edits remain.
+  Future<bool> _persistPublishWithConflictRetry(String publishReason) async {
+    var notifierRetried = false;
+    for (var attempt = 0; attempt < 2; attempt++) {
+      try {
+        await persistLocalNow(reason: publishReason);
+      } on StoryDraftPublishConflictException {
+        if (attempt == 0 && !state.dirty) {
+          notifierRetried = true;
+          if (kDebugMode) {
+            debugPrint('[M20F publish-retry] attempted=true');
+          }
+          continue;
+        }
+        if (kDebugMode) {
+          debugPrint('[M20F publish-retry] attempted=$notifierRetried');
+        }
+        return false;
+      }
+      return state.saveStatus == CreatorDraftSaveStatus.saved;
+    }
+    return false;
   }
 
   /// Flush meaningful creator state so Profile > Processing reflects it.
@@ -762,6 +822,7 @@ class StoryCreatorDraftNotifier extends StateNotifier<StoryCreatorDraftState> {
   /// Review / explicit actions: publish then await local disk flush (single completion signal).
   Future<bool> publishReadingOnlyToDisk() async {
     if (!computeReadOnlyReady(state.draft).ready) return false;
+    await _awaitPendingPersistBeforePublish();
     final previousPublish = state.draft.publishState;
     _setDraft(
       state.draft.copyWith(
@@ -770,7 +831,17 @@ class StoryCreatorDraftNotifier extends StateNotifier<StoryCreatorDraftState> {
       ),
     );
     try {
-      await persistLocalNow(reason: 'publish_reading_only');
+      final persisted =
+          await _persistPublishWithConflictRetry('publish_reading_only');
+      if (!persisted) {
+        _setDraft(
+          state.draft.copyWith(
+            publishState: previousPublish,
+            basics: state.draft.basics.copyWith(updatedAt: DateTime.now()),
+          ),
+        );
+        return false;
+      }
     } on StoryDraftValidationFailedException {
       _setDraft(
         state.draft.copyWith(
@@ -808,6 +879,7 @@ class StoryCreatorDraftNotifier extends StateNotifier<StoryCreatorDraftState> {
 
   Future<bool> publishFullLearnToDisk() async {
     if (!computeFullLearnReady(state.draft).ready) return false;
+    await _awaitPendingPersistBeforePublish();
     final previousPublish = state.draft.publishState;
     _setDraft(
       state.draft.copyWith(
@@ -816,7 +888,17 @@ class StoryCreatorDraftNotifier extends StateNotifier<StoryCreatorDraftState> {
       ),
     );
     try {
-      await persistLocalNow(reason: 'publish_full_learn');
+      final persisted =
+          await _persistPublishWithConflictRetry('publish_full_learn');
+      if (!persisted) {
+        _setDraft(
+          state.draft.copyWith(
+            publishState: previousPublish,
+            basics: state.draft.basics.copyWith(updatedAt: DateTime.now()),
+          ),
+        );
+        return false;
+      }
     } on StoryDraftValidationFailedException {
       _setDraft(
         state.draft.copyWith(

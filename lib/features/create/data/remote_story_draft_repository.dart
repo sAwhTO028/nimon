@@ -236,24 +236,92 @@ class RemoteStoryDraftRepository implements StoryDraftRepository {
   }
 
   /// Parses [error.details.currentEtag] from a Nest `409` `conflict` draft response.
-  String? _parseConflictCurrentEtag(http.Response r) {
-    if (r.statusCode != 409) return null;
-    final body = r.body.trim();
-    if (body.isEmpty) return null;
-    try {
-      final decoded = jsonDecode(body);
-      if (decoded is! Map) return null;
-      final err = decoded['error'];
-      if (err is! Map) return null;
-      if (err['code'] != 'conflict') return null;
-      final details = err['details'];
-      if (details is! Map) return null;
-      final tag = details['currentEtag'];
-      if (tag is String && tag.trim().isNotEmpty) return tag.trim();
-    } catch (_) {
-      return null;
+  String? _parseConflictCurrentEtag(http.Response r) =>
+      draftVersionConflictCurrentEtagFromBody(r.body);
+
+  void _m20fLogPublishConflict(String draftId, String? currentEtag) {
+    if (!kDebugMode) return;
+    debugPrint(
+      '[M20F publish-conflict] draftId=$draftId currentEtag=${currentEtag ?? ''}',
+    );
+  }
+
+  void _m20fLogPublishRefresh(String draftId, String? refreshedEtag) {
+    if (!kDebugMode) return;
+    debugPrint(
+      '[M20F publish-refresh] draftId=$draftId refreshedEtag=${refreshedEtag ?? ''}',
+    );
+  }
+
+  void _m20fLogPublishRetry(bool attempted) {
+    if (!kDebugMode) return;
+    debugPrint('[M20F publish-retry] attempted=$attempted');
+  }
+
+  /// GET latest draft from server, persist etag + local cache (publish conflict recovery).
+  Future<CreatorStoryV1> _reloadDraftFromServer(String draftId) async {
+    final id = draftId.trim();
+    final resp = await _nimonAuthSend(
+      _u('/v1/story-drafts/$id'),
+      () => _mergeAuth(const {'Accept': 'application/json'}),
+      (h) => _client.get(_u('/v1/story-drafts/$id'), headers: h),
+    );
+    if (isDraftVersionConflictResponse(
+      statusCode: resp.statusCode,
+      body: resp.body,
+    )) {
+      final tag = _parseConflictCurrentEtag(resp);
+      _m20fLogPublishConflict(id, tag);
+      throw StoryDraftPublishConflictException(
+        draftId: id,
+        currentEtag: tag,
+      );
     }
-    return null;
+    await _throwIfNotOk(resp);
+    final dto = _dtoFromJson(await _jsonObjectFromResponse(resp));
+    await _saveEtag(id, dto.etag);
+    final domain = StoryDraftMapper.toDomain(dto);
+    await _local.saveDraft(domain);
+    _m20fLogPublishRefresh(id, dto.etag);
+    return domain;
+  }
+
+  Never _throwPublishConflictAfterReload({
+    required String draftId,
+    required http.Response conflictResp,
+  }) {
+    final id = draftId.trim();
+    final tag = _parseConflictCurrentEtag(conflictResp);
+    _m20fLogPublishConflict(id, tag);
+    throw StoryDraftPublishConflictException(
+      draftId: id,
+      currentEtag: tag,
+    );
+  }
+
+  Future<Never> _failPublishConflictWithReload({
+    required String draftId,
+    required http.Response conflictResp,
+  }) async {
+    final id = draftId.trim();
+    final tag = _parseConflictCurrentEtag(conflictResp);
+    _m20fLogPublishConflict(id, tag);
+    CreatorStoryV1? refreshed;
+    try {
+      refreshed = await _reloadDraftFromServer(id);
+    } on StoryDraftPublishConflictException {
+      rethrow;
+    } catch (_) {
+      _throwPublishConflictAfterReload(
+        draftId: id,
+        conflictResp: conflictResp,
+      );
+    }
+    throw StoryDraftPublishConflictException(
+      draftId: id,
+      currentEtag: tag,
+      refreshedDraft: refreshed,
+    );
   }
 
   /// One automatic retry on stale If-Match: updates stored etag, re-sends same [body] intent.
@@ -268,6 +336,8 @@ class RemoteStoryDraftRepository implements StoryDraftRepository {
     if (current == null || current.isEmpty) {
       return firstResp;
     }
+    _m20fLogPublishConflict(draftId, current);
+    _m20fLogPublishRetry(true);
     developer.log(
       'draftId=$draftId op=$operation HTTP 409 conflict oldIfMatch="$firstIfMatch" '
       'currentEtagFromServer="$current" retryCount=1',
@@ -334,6 +404,12 @@ class RemoteStoryDraftRepository implements StoryDraftRepository {
         ),
       ),
     );
+    if (isDraftVersionConflictResponse(
+      statusCode: roResp.statusCode,
+      body: roResp.body,
+    )) {
+      await _failPublishConflictWithReload(draftId: id, conflictResp: roResp);
+    }
     await _throwIfNotOk(roResp);
     _m20eLogHttpResult('publish/read-only', roResp);
     developer.log(
@@ -392,6 +468,12 @@ class RemoteStoryDraftRepository implements StoryDraftRepository {
         ),
       ),
     );
+    if (isDraftVersionConflictResponse(
+      statusCode: flResp.statusCode,
+      body: flResp.body,
+    )) {
+      await _failPublishConflictWithReload(draftId: id, conflictResp: flResp);
+    }
     await _throwIfNotOk(flResp);
     _m20eLogHttpResult('publish/full-learn', flResp);
     developer.log(
@@ -888,6 +970,15 @@ class RemoteStoryDraftRepository implements StoryDraftRepository {
           ),
         ),
       );
+
+      if (remotePublishAfterPut != StoryDraftRemotePublishIntent.none &&
+          isDraftVersionConflictResponse(
+            statusCode: putResp.statusCode,
+            body: putResp.body,
+          )) {
+        await _failPublishConflictWithReload(
+            draftId: id, conflictResp: putResp);
+      }
 
       await _throwIfNotOk(putResp);
       developer.log(
