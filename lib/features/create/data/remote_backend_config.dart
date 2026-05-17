@@ -1,29 +1,34 @@
+import 'package:nimon/core/config/nimon_api_config.dart';
+
 /// Minimal backend config for the Add-flow remote repository.
 ///
-/// Override at runtime with:
-/// - `--dart-define=NIMON_USE_REMOTE_DRAFTS=true`
-/// - `--dart-define=NIMON_API_BASE_URL=http://10.0.2.2:3000` (Android emulator)
-/// - `--dart-define=NIMON_STRICT_REMOTE_DRAFTS=true` (fail loudly; no silent fallback)
+/// API / public-web URLs are resolved in [NimonApiConfig] (single source of truth).
+///
+/// **Examples**
+///
+/// LAN Nest (default binary, no dart-define):
+/// - API: `http://192.168.11.5:3000`
+///
+/// Render global test:
+/// `--dart-define=NIMON_API_BASE_URL=https://nimon-api-global-test.onrender.com`
+///
+/// Android emulator → host loopback:
+/// `--dart-define=NIMON_API_BASE_URL=http://10.0.2.2:3000`
+///
+/// Remote features (opt-in per flag):
+/// `--dart-define=NIMON_USE_REMOTE_DRAFTS=true`
+/// `--dart-define=NIMON_USE_REMOTE_MONO_FEED=true`
+/// `--dart-define=NIMON_STRICT_REMOTE_DRAFTS=true` (fail loudly; no silent fallback)
 abstract final class RemoteBackendConfig {
   RemoteBackendConfig._();
 
   static const bool useRemoteDrafts =
       bool.fromEnvironment('NIMON_USE_REMOTE_DRAFTS', defaultValue: false);
 
-  static const String apiBaseUrl = String.fromEnvironment(
-    'NIMON_API_BASE_URL',
-    defaultValue: 'http://localhost:3000',
-  );
+  static String get apiBaseUrl => NimonApiConfig.apiBaseUrl;
 
-  /// Public web origin for share links (`/mono/:id`). **Not** the uploads base
-  /// ([MEDIA_PUBLIC_BASE_URL] on the server). Leave empty to prefer the backend
-  /// [MonoFeedItem.shareUrl]; optional fallback uses [apiBaseUrl] when it is not loopback.
-  ///
-  /// `--dart-define=NIMON_PUBLIC_WEB_BASE_URL=http://192.168.11.5:3000`
-  static const String publicWebBaseUrl = String.fromEnvironment(
-    'NIMON_PUBLIC_WEB_BASE_URL',
-    defaultValue: '',
-  );
+  /// Public web origin for share links (`/mono/:id`). **Not** the uploads base.
+  static String get publicWebBaseUrl => NimonApiConfig.publicWebBaseUrl;
 
   /// Dev owner id sent on draft writes (`basics.ownerId` / `creatorOwnerId`).
   ///

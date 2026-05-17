@@ -110,7 +110,7 @@ class _SeededStoryCreatorDraftNotifier extends StoryCreatorDraftNotifier {
           seed.basics.creatorOwnerId.trim().isEmpty
               ? 'm14c_owner'
               : seed.basics.creatorOwnerId,
-          onProfileProcessingListChanged: () {},
+          onProfileCatalogSurfacesChanged: () {},
         ) {
     state = state.copyWith(draft: seed);
   }

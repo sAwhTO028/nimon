@@ -93,6 +93,63 @@ class RemoteStoryDraftRepository implements StoryDraftRepository {
   /// returning successful local fallback results.
   bool get _strict => RemoteBackendConfig.strictRemoteDrafts;
 
+  void _m20eLogEditAction({
+    required String tag,
+    required String draftId,
+    String? publishedMonoId,
+  }) {
+    if (!kDebugMode) return;
+    debugPrint(
+      '[M20E $tag] draftId=$draftId publishedMonoId=${publishedMonoId ?? ''} '
+      'apiBase=$_apiBaseUrl',
+    );
+  }
+
+  void _m20eLogHttpResult(String op, http.Response r) {
+    if (!kDebugMode) return;
+    final code = _m20eBodyCodeKey(r.body);
+    debugPrint(
+      '[M20E edit-result] op=$op status=${r.statusCode} bodyCode=$code bodyKey=$code',
+    );
+  }
+
+  String _m20eBodyCodeKey(String body) {
+    final t = body.trim();
+    if (t.isEmpty) return '';
+    try {
+      final decoded = jsonDecode(t);
+      if (decoded is! Map) return '';
+      final err = decoded['error'];
+      if (err is Map) {
+        final c = err['code'];
+        if (c is String && c.isNotEmpty) return c;
+      }
+      final c = decoded['code'];
+      if (c is String && c.isNotEmpty) return c;
+    } catch (_) {
+      return '';
+    }
+    return '';
+  }
+
+  Never _failRemotePublishIncomplete(String draftId, String step) {
+    throw StoryDraftHttpResponseException(
+      'Publish did not complete ($step). Try again from Review.',
+    );
+  }
+
+  void _assertRemotePublishClean(StoryDraftDto dto, String draftId) {
+    if (dto.hasUnpublishedCoreChanges == true) {
+      throw StoryDraftHttpResponseException(
+        'Publish did not complete: story still has unpublished changes.',
+      );
+    }
+    final pm = dto.publishedMonoId?.trim() ?? '';
+    if (pm.isEmpty) {
+      _failRemotePublishIncomplete(draftId, 'missing publishedMonoId');
+    }
+  }
+
   T _fallbackOrThrow<T>(Object error, StackTrace st, T Function() fallback) {
     if (_strict) {
       Error.throwWithStackTrace(error, st);
@@ -232,9 +289,20 @@ class RemoteStoryDraftRepository implements StoryDraftRepository {
 
   Future<StoryDraftDto> _postPublishReadOnlyHttp(
     String draftId,
-    String ifMatch,
-  ) async {
+    String ifMatch, {
+    String? publishedMonoIdHint,
+  }) async {
     final id = draftId.trim();
+    _m20eLogEditAction(
+      tag: 'edit-update',
+      draftId: id,
+      publishedMonoId: publishedMonoIdHint,
+    );
+    if (kDebugMode) {
+      debugPrint(
+        '[M20E update-url] ${_u('/v1/story-drafts/$id/publish/read-only')}',
+      );
+    }
     var sent = ifMatch.trim();
     http.Response roResp = await _nimonAuthSend(
       _u('/v1/story-drafts/$id/publish/read-only'),
@@ -267,18 +335,32 @@ class RemoteStoryDraftRepository implements StoryDraftRepository {
       ),
     );
     await _throwIfNotOk(roResp);
+    _m20eLogHttpResult('publish/read-only', roResp);
     developer.log(
       'draftId=$id publish read-only succeeded httpStatus=${roResp.statusCode}',
       name: 'RemoteStoryDraftRepository',
     );
-    return _dtoFromJson(await _jsonObjectFromResponse(roResp));
+    final dto = _dtoFromJson(await _jsonObjectFromResponse(roResp));
+    _assertRemotePublishClean(dto, id);
+    return dto;
   }
 
   Future<StoryDraftDto> _postPublishFullLearnHttp(
     String draftId,
-    String ifMatch,
-  ) async {
+    String ifMatch, {
+    String? publishedMonoIdHint,
+  }) async {
     final id = draftId.trim();
+    _m20eLogEditAction(
+      tag: 'edit-update',
+      draftId: id,
+      publishedMonoId: publishedMonoIdHint,
+    );
+    if (kDebugMode) {
+      debugPrint(
+        '[M20E update-url] ${_u('/v1/story-drafts/$id/publish/full-learn')}',
+      );
+    }
     var sent = ifMatch.trim();
     http.Response flResp = await _nimonAuthSend(
       _u('/v1/story-drafts/$id/publish/full-learn'),
@@ -311,11 +393,14 @@ class RemoteStoryDraftRepository implements StoryDraftRepository {
       ),
     );
     await _throwIfNotOk(flResp);
+    _m20eLogHttpResult('publish/full-learn', flResp);
     developer.log(
       'draftId=$id publish full-learn succeeded httpStatus=${flResp.statusCode}',
       name: 'RemoteStoryDraftRepository',
     );
-    return _dtoFromJson(await _jsonObjectFromResponse(flResp));
+    final dto = _dtoFromJson(await _jsonObjectFromResponse(flResp));
+    _assertRemotePublishClean(dto, id);
+    return dto;
   }
 
   StoryDraftDto _dtoFromJson(Map<String, Object?> m) {
@@ -819,74 +904,66 @@ class RemoteStoryDraftRepository implements StoryDraftRepository {
       }
 
       if (remotePublishAfterPut == StoryDraftRemotePublishIntent.readOnly) {
+        _m20eLogEditAction(
+          tag: 'edit-update',
+          draftId: id,
+          publishedMonoId: putDto.publishedMonoId,
+        );
         final roEtag = (putDto.etag != null && putDto.etag!.trim().isNotEmpty)
             ? putDto.etag!.trim()
             : await _tryFetchRemoteEtag(id);
         if (roEtag == null || roEtag.isEmpty) {
-          if (kDebugMode) {
-            developer.log(
-              'saveDraft: skipping POST publish/read-only (missing If-Match etag) '
-              'draftId=$id strictRemoteDrafts=$_strict',
-              name: 'RemoteStoryDraftRepository',
-            );
-          }
-          if (_strict) {
-            throw StateError(
-              'RemoteStoryDraftRepository: missing If-Match before publishReadOnly for $id',
-            );
-          }
-          return persisted;
+          _failRemotePublishIncomplete(
+              id, 'missing If-Match before read-only publish');
         }
-        final roDto = await _postPublishReadOnlyHttp(id, roEtag.trim());
+        final roDto = await _postPublishReadOnlyHttp(
+          id,
+          roEtag.trim(),
+          publishedMonoIdHint: putDto.publishedMonoId,
+        );
         await _saveEtag(id, roDto.etag);
         final domain = StoryDraftMapper.toDomain(roDto);
         return await _local.saveDraft(domain);
       }
 
       if (remotePublishAfterPut == StoryDraftRemotePublishIntent.fullLearn) {
+        _m20eLogEditAction(
+          tag: 'edit-update',
+          draftId: id,
+          publishedMonoId: putDto.publishedMonoId,
+        );
         var workEtag = (putDto.etag != null && putDto.etag!.trim().isNotEmpty)
             ? putDto.etag!.trim()
             : await _tryFetchRemoteEtag(id);
         if (workEtag == null || workEtag.isEmpty) {
-          if (kDebugMode) {
-            developer.log(
-              'saveDraft: skipping publish/full-learn chain (missing If-Match etag) '
-              'draftId=$id strictRemoteDrafts=$_strict',
-              name: 'RemoteStoryDraftRepository',
-            );
-          }
-          if (_strict) {
-            throw StateError(
-              'RemoteStoryDraftRepository: missing If-Match before publishFullLearn for $id',
-            );
-          }
-          return persisted;
+          _failRemotePublishIncomplete(
+              id, 'missing If-Match before full-learn publish');
         }
         var serverDto = putDto;
         if (_publishedMonoIdMissing(serverDto)) {
           _onPublishProgress?.call('Publishing story…');
-          serverDto = await _postPublishReadOnlyHttp(id, workEtag.trim());
+          serverDto = await _postPublishReadOnlyHttp(
+            id,
+            workEtag.trim(),
+            publishedMonoIdHint: putDto.publishedMonoId,
+          );
           await _saveEtag(id, serverDto.etag);
           final nextTag = serverDto.etag?.trim();
           if (nextTag == null || nextTag.isEmpty) {
-            if (kDebugMode) {
-              developer.log(
-                'saveDraft: aborting publish/full-learn after read-only (missing etag) '
-                'draftId=$id strictRemoteDrafts=$_strict',
-                name: 'RemoteStoryDraftRepository',
-              );
-            }
-            if (_strict) {
-              throw StateError(
-                'RemoteStoryDraftRepository: missing If-Match after publishReadOnly for $id',
-              );
-            }
-            return persisted;
+            _failRemotePublishIncomplete(
+              id,
+              'missing If-Match after read-only before full-learn',
+            );
           }
           workEtag = nextTag;
         }
         _onPublishProgress?.call('Publishing learn modules…');
-        final flDto = await _postPublishFullLearnHttp(id, workEtag.trim());
+        final flDto = await _postPublishFullLearnHttp(
+          id,
+          workEtag.trim(),
+          publishedMonoIdHint:
+              serverDto.publishedMonoId ?? putDto.publishedMonoId,
+        );
         await _saveEtag(id, flDto.etag);
         _onPublishProgress?.call(null);
         final domain = StoryDraftMapper.toDomain(flDto);
@@ -898,6 +975,9 @@ class RemoteStoryDraftRepository implements StoryDraftRepository {
       return await _local.saveDraft(domain);
     } catch (e, st) {
       _onPublishProgress?.call(null);
+      if (remotePublishAfterPut != StoryDraftRemotePublishIntent.none) {
+        Error.throwWithStackTrace(e, st);
+      }
       // In strict mode, fail loudly even though we already persisted locally.
       // This prevents remote/backend issues from being masked during development.
       return _fallbackOrThrow(e, st, () => persisted);
@@ -961,10 +1041,57 @@ class RemoteStoryDraftRepository implements StoryDraftRepository {
   Future<bool> discardPublishedEditStaging(String draftId) async {
     final id = draftId.trim();
     if (id.isEmpty) return false;
-    final draft = await loadDraft(id);
+    _m20eLogEditAction(tag: 'edit-cancel', draftId: id);
+    if (kDebugMode) {
+      debugPrint('[M20E cancel-url] ${_u('/v1/story-drafts/$id')}');
+    }
+
+    CreatorStoryV1? draft;
+    try {
+      final getResp = await _nimonAuthSend(
+        _u('/v1/story-drafts/$id'),
+        () => _mergeAuth(const {'Accept': 'application/json'}),
+        (h) => _client.get(_u('/v1/story-drafts/$id'), headers: h),
+      );
+      if (_isMissingDraftResponse(getResp)) return false;
+      _m20eLogHttpResult('discard/get', getResp);
+      await _throwIfNotOk(getResp);
+      final dto = _dtoFromJson(await _jsonObjectFromResponse(getResp));
+      draft = StoryDraftMapper.toDomain(dto);
+      _m20eLogEditAction(
+        tag: 'edit-cancel',
+        draftId: id,
+        publishedMonoId: draft.publishedMonoId,
+      );
+    } catch (e, st) {
+      if (e is AppQuotaExceededException) rethrow;
+      if (_strict) Error.throwWithStackTrace(e, st);
+      return false;
+    }
+
     if (!isLinkedPublishedEditStagingDraft(draft)) return false;
-    await deleteDraft(id);
-    return true;
+
+    try {
+      final delResp = await _nimonAuthSend(
+        _u('/v1/story-drafts/$id'),
+        () => _mergeAuth({}),
+        (h) => _client.delete(_u('/v1/story-drafts/$id'), headers: h),
+      );
+      _m20eLogHttpResult('discard/delete', delResp);
+      await _throwIfNotOk(delResp);
+      await _saveEtag(id, null);
+      try {
+        await _local.deleteDraft(id);
+      } catch (_) {
+        // Best-effort local cache cleanup.
+      }
+      return true;
+    } on AppQuotaExceededException {
+      rethrow;
+    } catch (e, st) {
+      if (_strict) Error.throwWithStackTrace(e, st);
+      return false;
+    }
   }
 
   // ---------------------------------------------------------------------------

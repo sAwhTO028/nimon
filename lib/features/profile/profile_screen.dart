@@ -4640,6 +4640,12 @@ Future<void> _discardPublishedEditStagingForProcessingCard({
 
   final container = ProviderScope.containerOf(context, listen: false);
   final repo = ref.read(storyDraftRepositoryProvider);
+  if (kDebugMode) {
+    debugPrint(
+      '[M20E edit-cancel] draftId=$id workspaceState=${summary.workspaceState ?? ''} '
+      'apiBase=${RemoteBackendConfig.apiBaseUrl}',
+    );
+  }
   final outcome = await discardPublishedEditStagingWithBlockingOverlay(
     context: context,
     discardStaging: () => repo.discardPublishedEditStaging(id),
@@ -4663,6 +4669,11 @@ Future<void> _discardPublishedEditStagingForProcessingCard({
   ref
       .read(storyCreatorDraftProvider.notifier)
       .syncIfDraftWasRemovedExternally(id);
+  if (kDebugMode) {
+    debugPrint(
+      '[M20E profile-refresh] workspaceReload=true publishedReload=true',
+    );
+  }
   await ref.read(profileWorkspaceDraftPagerProvider.notifier).refresh();
   bumpProfileCatalogSurfacesRefresh(container);
   await ref.read(profilePublishedMonoPagerProvider.notifier).refresh();

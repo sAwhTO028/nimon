@@ -37,6 +37,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   }
 
   void _clearFieldErrors() {
+    if (!mounted) return;
     setState(() {
       _error = null;
       _bannerIssue = null;
@@ -53,6 +54,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
       password: _password.text,
       confirmPassword: _confirmPassword.text,
     );
+    if (!mounted) return false;
     setState(() {
       _bannerIssue = null;
       _emailIssue = firstBlockingIssueForField(res, 'email');
@@ -63,10 +65,12 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   }
 
   Future<void> _onRegister() async {
+    if (!mounted) return;
     _clearFieldErrors();
     if (!_validateFields()) {
       return;
     }
+    if (!mounted) return;
     final email = normalizeEmailInput(_email.text);
     final password = _password.text;
     setState(() {
@@ -80,6 +84,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
       if (!mounted) return;
       context.go('/mono');
     } on HttpValidationFailedException catch (e) {
+      if (!mounted) return;
       final byField = blockingIssuesByField(e.issues);
       setState(() {
         _emailIssue = byField['email'];
@@ -90,17 +95,23 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
         _error = null;
       });
     } on AuthRepositoryException catch (e) {
+      if (!mounted) return;
       setState(() {
         _bannerIssue = null;
         _error = e.message;
       });
     } catch (e) {
+      if (!mounted) return;
       setState(() {
         _bannerIssue = null;
         _error = e.toString();
       });
     } finally {
-      if (mounted) setState(() => _submitting = false);
+      if (mounted) {
+        setState(() {
+          _submitting = false;
+        });
+      }
     }
   }
 

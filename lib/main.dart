@@ -1,6 +1,7 @@
 import 'dart:async' show unawaited;
 import 'dart:ui' show PlatformDispatcher;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -41,6 +42,7 @@ import 'package:nimon/features/create/create_screen.dart';
 import 'package:nimon/features/create/story_creator_add_tab_screen.dart';
 import 'package:nimon/features/create/story_creator_basics_screen.dart';
 import 'package:nimon/features/create/creator_back_policy.dart';
+import 'package:nimon/features/create/data/remote_backend_config.dart';
 import 'package:nimon/features/create/story_creator_sentences_screen.dart';
 import 'package:nimon/core/networking/connectivity_status.dart';
 import 'package:nimon/core/theme.dart';
@@ -56,6 +58,10 @@ import 'package:nimon/ui/shell/floating_dock_tab_handler.dart';
 import 'package:nimon/widgets/floating_dock_nav_bar.dart';
 
 void main() {
+  if (kDebugMode || kProfileMode) {
+    debugPrint('[M20D api-base] ${RemoteBackendConfig.apiBaseUrl}');
+  }
+
   // Temporary crash stack capture (remove when resolved).
   FlutterError.onError = (details) {
     debugPrint(

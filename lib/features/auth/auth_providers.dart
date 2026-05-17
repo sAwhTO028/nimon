@@ -12,6 +12,7 @@ final authTokenStoreProvider = Provider<AuthTokenStore>((ref) {
   return SecureAuthTokenStore();
 });
 
+/// [AuthRepository] uses [RemoteBackendConfig.apiBaseUrl] (single compile-time API origin).
 final authRepositoryProvider = Provider<AuthRepository>((ref) {
   return AuthRepository(apiBaseUrl: RemoteBackendConfig.apiBaseUrl);
 });

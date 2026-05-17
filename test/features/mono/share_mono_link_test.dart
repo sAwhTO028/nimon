@@ -53,12 +53,15 @@ void main() {
     expect(find.text(NimonAppStrings.shareLinkCopied), findsOneWidget);
   });
 
-  testWidgets('missing shareUrl shows friendly message and does not copy body',
+  testWidgets(
+      'missing shareUrl falls back to default LAN api base and copies link',
       (tester) async {
-    int clipboardCalls = 0;
+    String? copied;
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(SystemChannels.platform, (call) async {
-      if (call.method == 'Clipboard.setData') clipboardCalls++;
+      if (call.method == 'Clipboard.setData') {
+        copied = (call.arguments as Map)['text'] as String?;
+      }
       return null;
     });
     addTearDown(() {
@@ -92,7 +95,7 @@ void main() {
     await tester.tap(find.text('Share'));
     await tester.pump();
 
-    expect(clipboardCalls, 0);
-    expect(find.text(NimonAppStrings.shareLinkUnavailable), findsOneWidget);
+    expect(copied, 'http://192.168.11.5:3000/mono/m1');
+    expect(find.text(NimonAppStrings.shareLinkCopied), findsOneWidget);
   });
 }

@@ -6,6 +6,7 @@ import 'package:http/testing.dart';
 import 'package:nimon/features/create/data/local_story_draft_repository.dart';
 import 'package:nimon/features/create/data/remote_backend_config.dart';
 import 'package:nimon/features/create/data/remote_story_draft_repository.dart';
+import 'package:nimon/features/create/data/story_draft_remote_publish_errors.dart';
 import 'package:nimon/features/create/data/story_draft_repository.dart';
 import 'package:nimon/features/create/story_creator_models.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -237,13 +238,14 @@ void main() {
         fallbackLocal: const LocalStoryDraftRepository(),
       );
 
-      // Default test VM has strict remote drafts off: repo falls back to local
-      // after the failed read-only POST, but must never continue to full-learn.
-      final out = await repo.saveDraft(
-        fullLearnDraft,
-        remotePublishAfterPut: StoryDraftRemotePublishIntent.fullLearn,
+      // M20E: failed publish must not fall back to local success or chain full-learn.
+      await expectLater(
+        repo.saveDraft(
+          fullLearnDraft,
+          remotePublishAfterPut: StoryDraftRemotePublishIntent.fullLearn,
+        ),
+        throwsA(isA<StoryDraftHttpResponseException>()),
       );
-      expect(out.id, fullLearnDraft.id);
       expect(calls.any((c) => c.contains('publish/read-only')), isTrue);
       expect(calls.any((c) => c.contains('publish/full-learn')), isFalse);
     });

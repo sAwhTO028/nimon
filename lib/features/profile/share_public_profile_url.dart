@@ -16,8 +16,8 @@ String resolvePublicProfileShareUrl({
   String? explicitUrl,
   String? userId,
   String? handle,
-  String publicWebBaseFromDefine = RemoteBackendConfig.publicWebBaseUrl,
-  String apiBaseFromDefine = RemoteBackendConfig.apiBaseUrl,
+  String? publicWebBaseFromDefine,
+  String? apiBaseFromDefine,
 }) {
   final ex = (explicitUrl ?? '').trim();
   if (ex.isNotEmpty) return ex;
@@ -25,10 +25,12 @@ String resolvePublicProfileShareUrl({
   final slug = _publicProfilePathSlug(handle: handle, userId: userId);
   if (slug.isEmpty) return '';
 
-  final pub = publicWebBaseFromDefine.trim().replaceAll(RegExp(r'/+$'), '');
+  final pubRaw = publicWebBaseFromDefine ?? RemoteBackendConfig.publicWebBaseUrl;
+  final pub = pubRaw.trim().replaceAll(RegExp(r'/+$'), '');
   if (pub.isNotEmpty) return '$pub/u/$slug';
 
-  final api = apiBaseFromDefine.trim().replaceAll(RegExp(r'/+$'), '');
+  final apiRaw = apiBaseFromDefine ?? RemoteBackendConfig.apiBaseUrl;
+  final api = apiRaw.trim().replaceAll(RegExp(r'/+$'), '');
   if (_isNonLoopbackHttpOrigin(api)) return '$api/u/$slug';
   return '';
 }

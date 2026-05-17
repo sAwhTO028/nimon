@@ -37,6 +37,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   }
 
   Future<void> _onLogin() async {
+    if (!mounted) return;
     final loginRes = validateLoginFields(
       email: _email.text,
       password: _password.text,
@@ -49,6 +50,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     });
     if (!loginRes.ok) return;
 
+    if (!mounted) return;
     final email = normalizeEmailInput(_email.text);
     final password = _password.text;
     setState(() {
@@ -62,6 +64,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       if (!mounted) return;
       context.go('/mono');
     } on HttpValidationFailedException catch (e) {
+      if (!mounted) return;
       final byField = blockingIssuesByField(e.issues);
       setState(() {
         _emailIssue = byField['email'];
@@ -71,17 +74,23 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         _error = null;
       });
     } on AuthRepositoryException catch (_) {
+      if (!mounted) return;
       setState(() {
         _bannerIssue = null;
         _error = validationMessageKeyLocalized(context, 'auth.login.failed');
       });
     } catch (e) {
+      if (!mounted) return;
       setState(() {
         _bannerIssue = null;
         _error = e.toString();
       });
     } finally {
-      if (mounted) setState(() => _submitting = false);
+      if (mounted) {
+        setState(() {
+          _submitting = false;
+        });
+      }
     }
   }
 

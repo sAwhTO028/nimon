@@ -11,16 +11,18 @@ import 'package:nimon/l10n/nimon_app_strings.dart';
 @visibleForTesting
 String resolveMonoShareUrlForItem(
   MonoFeedItem item, {
-  String publicWebBaseFromDefine = RemoteBackendConfig.publicWebBaseUrl,
-  String apiBaseFromDefine = RemoteBackendConfig.apiBaseUrl,
+  String? publicWebBaseFromDefine,
+  String? apiBaseFromDefine,
 }) {
   final u = item.shareUrl?.trim() ?? '';
   if (u.isNotEmpty) return u;
-  final pub = publicWebBaseFromDefine.trim().replaceAll(RegExp(r'/+$'), '');
+  final pubRaw = publicWebBaseFromDefine ?? RemoteBackendConfig.publicWebBaseUrl;
+  final pub = pubRaw.trim().replaceAll(RegExp(r'/+$'), '');
   if (pub.isNotEmpty) {
     return '$pub/mono/${item.monoIdForLearnRoutes}';
   }
-  final api = apiBaseFromDefine.trim().replaceAll(RegExp(r'/+$'), '');
+  final apiRaw = apiBaseFromDefine ?? RemoteBackendConfig.apiBaseUrl;
+  final api = apiRaw.trim().replaceAll(RegExp(r'/+$'), '');
   if (_isNonLoopbackHttpOrigin(api)) {
     return '$api/mono/${item.monoIdForLearnRoutes}';
   }

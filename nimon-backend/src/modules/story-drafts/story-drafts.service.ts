@@ -429,17 +429,15 @@ export class StoryDraftsService {
           );
         }
         if (existing.hasUnpublishedCoreChanges) {
-          await assertCanRevealOnePublishedTabMono(
-            this.prisma,
-            ownerId,
-            {
-              tag: 'cancel-edit',
-              draftId,
-              publishedMonoId: linkedId,
-              actionName: 'deleteDraft_cancelPublishedEditStaging',
-            },
-            (line) => this.logger.log(line),
-          );
+          // M20E: Cancel edit deletes the staging workspace row only; the PublishedMono
+          // already exists. Do not apply Published-tab reveal quota (M17E-6).
+          if (process.env.NODE_ENV !== 'production') {
+            this.logger.log(
+              `[M20E backend-edit-cancel] ownerId=${ownerId} draftId=${draftId} ` +
+                `publishedMonoId=${linkedId} hasUnpublishedCoreChanges_before=${existing.hasUnpublishedCoreChanges} ` +
+                `publishState_before=${existing.publishState} skipRevealQuota=true`,
+            );
+          }
         }
       }
     }
@@ -449,6 +447,13 @@ export class StoryDraftsService {
     });
     if (result.count === 0) {
       throw apiError(HttpStatus.NOT_FOUND, 'draft_not_found', 'Draft not found');
+    }
+    if (process.env.NODE_ENV !== 'production' && existing.hasUnpublishedCoreChanges) {
+      this.logger.log(
+        `[M20E backend-edit-cancel] ownerId=${ownerId} draftId=${draftId} ` +
+          `publishedMonoId=${linkedId ?? 'null'} hasUnpublishedCoreChanges_after=deleted ` +
+          `publishState_after=deleted publishedMonoExists=true responseStatus=204`,
+      );
     }
   }
 
@@ -1146,6 +1151,15 @@ export class StoryDraftsService {
       return reloaded;
     });
 
+    if (process.env.NODE_ENV !== 'production') {
+      this.logger.log(
+        `[M20E backend-edit-update] ownerId=${ownerId} draftId=${draftId} ` +
+          `publishedMonoId=${updated.publishedMonoId ?? 'null'} ` +
+          `hasUnpublishedCoreChanges_after=${updated.hasUnpublishedCoreChanges} ` +
+          `publishState_after=${updated.publishState} publishedMonoExists=true trashedAt=n/a`,
+      );
+    }
+
     return this.mapFullDraft(updated);
   }
 
@@ -1293,6 +1307,15 @@ export class StoryDraftsService {
 
       return reloaded;
     });
+
+    if (process.env.NODE_ENV !== 'production') {
+      this.logger.log(
+        `[M20E backend-edit-update] ownerId=${ownerId} draftId=${draftId} ` +
+          `publishedMonoId=${updated.publishedMonoId ?? 'null'} ` +
+          `hasUnpublishedCoreChanges_after=${updated.hasUnpublishedCoreChanges} ` +
+          `publishState_after=${updated.publishState} publishedMonoExists=true trashedAt=n/a`,
+      );
+    }
 
     return this.mapFullDraft(updated);
   }

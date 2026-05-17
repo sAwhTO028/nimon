@@ -143,7 +143,7 @@ void main() {
     });
 
     test(
-        'discardPublishedEditStaging throws AppQuotaExceededException when DELETE is 403 quota',
+        'discardPublishedEditStaging succeeds on DELETE even when body looks like quota (M20E cancel exempt)',
         () async {
       final client = MockClient((request) async {
         if (request.method == 'GET' &&
@@ -193,11 +193,7 @@ void main() {
         }
         if (request.method == 'DELETE' &&
             request.url.path.endsWith('/v1/story-drafts/$draftId')) {
-          return http.Response(
-            '{"code":"quota_exceeded","key":"published_mono_limit_reached","limit":30,"current":30}',
-            403,
-            headers: const {'content-type': 'application/json'},
-          );
+          return http.Response('', 204);
         }
         fail('unexpected ${request.method} ${request.url}');
       });
@@ -208,10 +204,7 @@ void main() {
         authHeaderBuilder: () async => <String, String>{},
       );
 
-      await expectLater(
-        remote.discardPublishedEditStaging(draftId),
-        throwsA(isA<AppQuotaExceededException>()),
-      );
+      expect(await remote.discardPublishedEditStaging(draftId), isTrue);
     });
   });
 }

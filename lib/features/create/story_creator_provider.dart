@@ -10,6 +10,7 @@ import 'package:nimon/features/create/creator_published_edit_baseline.dart';
 import 'package:nimon/features/create/creator_read_only_publish_tracking.dart';
 import 'package:nimon/features/create/data/story_draft_remote_publish_errors.dart';
 import 'package:nimon/features/create/data/story_draft_repository.dart';
+import 'package:nimon/features/profile/presentation/providers/profile_published_mono_pager.dart';
 import 'package:nimon/features/create/data/story_draft_repository_provider.dart';
 import 'package:nimon/features/profile/profile_processing_refresh.dart';
 import 'package:nimon/features/create/story_creator_draft_storage.dart'
@@ -141,15 +142,20 @@ class StoryCreatorDraftNotifier extends StateNotifier<StoryCreatorDraftState> {
   StoryCreatorDraftNotifier(
     this._drafts,
     this._devOwnerId, {
-    void Function()? onProfileProcessingListChanged,
-  })  : _onProfileProcessingListChanged = onProfileProcessingListChanged,
+    void Function()? onProfileCatalogSurfacesChanged,
+  })  : _onProfileCatalogSurfacesChanged = onProfileCatalogSurfacesChanged,
         super(StoryCreatorDraftState.initial(creatorOwnerId: _devOwnerId));
 
   final StoryDraftRepository _drafts;
-  final void Function()? _onProfileProcessingListChanged;
+  final void Function()? _onProfileCatalogSurfacesChanged;
 
-  void _bumpProfileProcessingListRefresh() {
-    _onProfileProcessingListChanged?.call();
+  void _bumpProfileCatalogSurfacesRefresh() {
+    if (kDebugMode) {
+      debugPrint(
+        '[M20E profile-refresh] workspaceReload=true publishedReload=true',
+      );
+    }
+    _onProfileCatalogSurfacesChanged?.call();
   }
 
   /// Development (later: authenticated) user id for [StoryBasics.creatorOwnerId].
@@ -346,7 +352,7 @@ class StoryCreatorDraftNotifier extends StateNotifier<StoryCreatorDraftState> {
       }
       if (RemoteBackendConfig.useRemoteDrafts &&
           state.draft.publishState != StoryPublishState.draft) {
-        _bumpProfileProcessingListRefresh();
+        _bumpProfileCatalogSurfacesRefresh();
       }
     } on StoryDraftValidationFailedException {
       state = state.copyWith(
@@ -362,6 +368,12 @@ class StoryCreatorDraftNotifier extends StateNotifier<StoryCreatorDraftState> {
         clearLastSaveError: true,
       );
       rethrow;
+    } on StoryDraftHttpResponseException catch (e) {
+      state = state.copyWith(
+        dirty: true,
+        saveStatus: CreatorDraftSaveStatus.failed,
+        lastSaveError: e.message,
+      );
     } catch (e) {
       state = state.copyWith(
         dirty: true,
@@ -403,7 +415,7 @@ class StoryCreatorDraftNotifier extends StateNotifier<StoryCreatorDraftState> {
           );
         }
         state = state.copyWith(saveStatus: CreatorDraftSaveStatus.saved);
-        _bumpProfileProcessingListRefresh();
+        _bumpProfileCatalogSurfacesRefresh();
         return true;
       }
 
@@ -420,7 +432,7 @@ class StoryCreatorDraftNotifier extends StateNotifier<StoryCreatorDraftState> {
         lastSavedAt: DateTime.now(),
         clearLastSaveError: true,
       );
-      _bumpProfileProcessingListRefresh();
+      _bumpProfileCatalogSurfacesRefresh();
       return true;
     } catch (e) {
       state = state.copyWith(
@@ -441,7 +453,7 @@ class StoryCreatorDraftNotifier extends StateNotifier<StoryCreatorDraftState> {
     await persistLocalNow(reason: 'global_save');
     if (kDebugMode) debugPrint('[creator_global_save] saved_local_ok');
     if (state.saveStatus == CreatorDraftSaveStatus.saved) {
-      _bumpProfileProcessingListRefresh();
+      _bumpProfileCatalogSurfacesRefresh();
     }
   }
 
@@ -777,12 +789,19 @@ class StoryCreatorDraftNotifier extends StateNotifier<StoryCreatorDraftState> {
       rethrow;
     }
     if (state.saveStatus == CreatorDraftSaveStatus.saved) {
+      if (!_remotePublishCompletedOnServer()) {
+        state = state.copyWith(
+          saveStatus: CreatorDraftSaveStatus.failed,
+          lastSaveError: 'Publish did not complete on the server.',
+        );
+        return false;
+      }
       final sig = computeReadOnlyPublishedCoreSignature(state.draft);
       await saveReadOnlyPublishedCoreSignature(
           draftId: state.draft.id, signature: sig);
       state = state.copyWith(readOnlyPublishedCoreSig: sig);
       await _persistPublishedEditBaselinesAfterSuccessfulPublish();
-      _bumpProfileProcessingListRefresh();
+      _bumpProfileCatalogSurfacesRefresh();
     }
     return state.saveStatus == CreatorDraftSaveStatus.saved;
   }
@@ -816,15 +835,28 @@ class StoryCreatorDraftNotifier extends StateNotifier<StoryCreatorDraftState> {
       rethrow;
     }
     if (state.saveStatus == CreatorDraftSaveStatus.saved) {
+      if (!_remotePublishCompletedOnServer()) {
+        state = state.copyWith(
+          saveStatus: CreatorDraftSaveStatus.failed,
+          lastSaveError: 'Publish did not complete on the server.',
+        );
+        return false;
+      }
       // Full Learn implies a Read Only published baseline exists for the story core.
       final sig = computeReadOnlyPublishedCoreSignature(state.draft);
       await saveReadOnlyPublishedCoreSignature(
           draftId: state.draft.id, signature: sig);
       state = state.copyWith(readOnlyPublishedCoreSig: sig);
       await _persistPublishedEditBaselinesAfterSuccessfulPublish();
-      _bumpProfileProcessingListRefresh();
+      _bumpProfileCatalogSurfacesRefresh();
     }
     return state.saveStatus == CreatorDraftSaveStatus.saved;
+  }
+
+  bool _remotePublishCompletedOnServer() {
+    final pm = state.draft.publishedMonoId?.trim() ?? '';
+    if (pm.isEmpty) return false;
+    return state.draft.hasUnpublishedCoreChanges != true;
   }
 
   /// Save as draft (publish state) and persist — for flows that mark draft explicitly.
@@ -837,7 +869,7 @@ class StoryCreatorDraftNotifier extends StateNotifier<StoryCreatorDraftState> {
     );
     await persistLocalNow(reason: 'publish_state_draft');
     if (state.saveStatus == CreatorDraftSaveStatus.saved) {
-      _bumpProfileProcessingListRefresh();
+      _bumpProfileCatalogSurfacesRefresh();
     }
     return state.saveStatus == CreatorDraftSaveStatus.saved;
   }
@@ -1342,9 +1374,11 @@ final storyCreatorDraftProvider =
   return StoryCreatorDraftNotifier(
     ref.watch(storyDraftRepositoryProvider),
     ref.watch(currentUserIdProvider),
-    onProfileProcessingListChanged: () {
-      final c = ref.read(profileProcessingListRefreshProvider.notifier);
-      c.state = c.state + 1;
+    onProfileCatalogSurfacesChanged: () {
+      final processing =
+          ref.read(profileProcessingListRefreshProvider.notifier);
+      processing.state = processing.state + 1;
+      unawaited(ref.read(profilePublishedMonoPagerProvider.notifier).refresh());
     },
   );
 });

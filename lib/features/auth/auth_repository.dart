@@ -6,7 +6,6 @@ import 'package:http/http.dart' as http;
 import 'package:nimon/core/validation/http_validation_failed_exception.dart';
 import 'package:nimon/core/validation/validation_issue_from_json.dart';
 import 'package:nimon/features/auth/auth_models.dart';
-import 'package:nimon/features/create/data/remote_backend_config.dart';
 
 const String _kFriendlyNetworkMessage =
     'Cannot connect to server. Please check that the backend is running.';
@@ -54,9 +53,7 @@ class AuthRepository {
           debugPrint(
             '[AuthRepository] $op connectivity failure: ${e.runtimeType}',
           );
-          debugPrint(
-            '[AuthRepository] apiBase=${RemoteBackendConfig.apiBaseUrl}',
-          );
+          debugPrint('[AuthRepository] apiBase=$_base');
         }
         throw AuthRepositoryException(_kFriendlyNetworkMessage);
       }
@@ -109,6 +106,10 @@ class AuthRepository {
     required String password,
   }) async {
     return _withFriendlyNetwork(() async {
+      if (kDebugMode) {
+        debugPrint('[M20D api-base] $_base');
+        debugPrint('[M20D register-url] ${_u('/v1/auth/register')}');
+      }
       final resp = await _client.post(
         _u('/v1/auth/register'),
         headers: const {'Content-Type': 'application/json'},
@@ -124,6 +125,10 @@ class AuthRepository {
     required String password,
   }) async {
     return _withFriendlyNetwork(() async {
+      if (kDebugMode) {
+        debugPrint('[M20D api-base] $_base');
+        debugPrint('[M20D login-url] ${_u('/v1/auth/login')}');
+      }
       final resp = await _client.post(
         _u('/v1/auth/login'),
         headers: const {'Content-Type': 'application/json'},

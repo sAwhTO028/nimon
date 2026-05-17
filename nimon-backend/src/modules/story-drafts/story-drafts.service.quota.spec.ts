@@ -577,7 +577,7 @@ describe('StoryDraftsService M17E free quotas', () => {
     expect(tx.storyDraft.updateMany).toHaveBeenCalled();
   });
 
-  it('M17E-6: cancel editing (discard staging delete) blocked when tab visible is 30 and mono not tab-visible', async () => {
+  it('M20E: cancel editing (discard staging delete) allowed even when tab visible is 30 and mono not tab-visible', async () => {
     const prisma = {
       storyDraft: {
         findFirst: jest.fn().mockResolvedValue({
@@ -597,17 +597,8 @@ describe('StoryDraftsService M17E free quotas', () => {
       },
     } as any;
 
-    try {
-      await new StoryDraftsService(prisma).deleteDraft(OWNER, draftId);
-      throw new Error('expected QuotaExceededException');
-    } catch (e) {
-      expect(e).toBeInstanceOf(QuotaExceededException);
-      expect((e as QuotaExceededException).getResponse()).toMatchObject({
-        code: 'quota_exceeded',
-        current: 30,
-      });
-    }
-    expect(prisma.storyDraft.deleteMany).not.toHaveBeenCalled();
+    await new StoryDraftsService(prisma).deleteDraft(OWNER, draftId);
+    expect(prisma.storyDraft.deleteMany).toHaveBeenCalled();
   });
 
   it('M17E-6: cancel editing allowed when tab visible is 29', async () => {
