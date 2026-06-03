@@ -201,6 +201,42 @@ void main() {
       );
     });
 
+    test('ja community + ja learning rejects same-language pair', () {
+      final r = validateNimonImportPayload(
+        NimonImportRawPayload.fromJsonMap({
+          'nimonImportMeta': meta(
+            contentCommunity: 'Japanese',
+            learningLanguage: 'Japanese',
+          ),
+          'core': coreWithSentences(),
+        }),
+        const NimonImportValidationContext(
+          learningLanguageCode: 'ja',
+          contentLocaleCode: 'ja',
+          authenticatedEmail: 'user@example.com',
+        ),
+      );
+      expect(r.canImport, isFalse);
+      expect(
+        r.blockingErrors.map((e) => e.code),
+        contains('import.context.languagePairSameNotAllowed'),
+      );
+    });
+
+    test('Myanmar community + Japanese learning passes pair check', () {
+      final r = validate({
+        'nimonImportMeta': meta(
+          contentCommunity: 'Myanmar',
+          learningLanguage: 'Japanese',
+        ),
+        'core': coreWithSentences(),
+      });
+      expect(
+        r.blockingErrors.map((e) => e.code),
+        isNot(contains('import.context.languagePairSameNotAllowed')),
+      );
+    });
+
     test('email mismatch blocks import', () {
       final r = validate({
         'nimonImportMeta': meta(createdForEmail: 'other@example.com'),

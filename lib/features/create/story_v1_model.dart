@@ -727,6 +727,8 @@ class StoryBasics {
     required this.promptSourceNote,
     this.targetDurationBandKey,
     this.coverImageUrl,
+    this.contentLocale,
+    this.learningLanguage,
     required this.creatorOwnerId,
     required this.createdAt,
     required this.updatedAt,
@@ -738,6 +740,12 @@ class StoryBasics {
   final String level;
   final String description;
   final String promptSourceNote;
+
+  /// Community / audience language wire code (`en` | `my` | `ja`).
+  final String? contentLocale;
+
+  /// Target language being learned (V1: `ja`).
+  final String? learningLanguage;
 
   /// V1 intended duration band storage key (e.g. `3_5`, `5_7`, `7_9`).
   ///
@@ -761,6 +769,8 @@ class StoryBasics {
     bool clearTargetDurationBandKey = false,
     String? coverImageUrl,
     bool replaceCoverImage = false,
+    String? contentLocale,
+    String? learningLanguage,
     String? creatorOwnerId,
     DateTime? createdAt,
     DateTime? updatedAt,
@@ -778,6 +788,8 @@ class StoryBasics {
       coverImageUrl: replaceCoverImage
           ? coverImageUrl
           : (coverImageUrl ?? this.coverImageUrl),
+      contentLocale: contentLocale ?? this.contentLocale,
+      learningLanguage: learningLanguage ?? this.learningLanguage,
       creatorOwnerId: creatorOwnerId ?? this.creatorOwnerId,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
@@ -821,7 +833,11 @@ class CreatorStoryV1 {
 
   static final _uuid = Uuid();
 
-  factory CreatorStoryV1.empty({String creatorOwnerId = ''}) {
+  factory CreatorStoryV1.empty({
+    String creatorOwnerId = '',
+    String? contentLocale,
+    String? learningLanguage,
+  }) {
     final id = _uuid.v4();
     final now = DateTime.now();
     final modules = {
@@ -836,6 +852,8 @@ class CreatorStoryV1 {
         description: '',
         promptSourceNote: '',
         coverImageUrl: null,
+        contentLocale: contentLocale,
+        learningLanguage: learningLanguage,
         creatorOwnerId: creatorOwnerId,
         createdAt: now,
         updatedAt: now,

@@ -90,6 +90,8 @@ class StoryDraftBasicsDto {
     required this.promptSourceNote,
     this.targetDurationBandKey,
     this.coverImageUrl,
+    this.contentLocale,
+    this.learningLanguage,
     required this.createdAt,
     required this.updatedAt,
   });
@@ -103,6 +105,8 @@ class StoryDraftBasicsDto {
   final String promptSourceNote;
   final String? targetDurationBandKey;
   final String? coverImageUrl;
+  final String? contentLocale;
+  final String? learningLanguage;
   final String createdAt;
   final String updatedAt;
 }

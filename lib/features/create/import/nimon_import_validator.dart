@@ -1,4 +1,5 @@
 import 'package:nimon/core/settings/content_community.dart';
+import 'package:nimon/core/settings/language_pair.dart';
 import 'package:nimon/core/validation/auth_validators.dart' show normalizeEmailInput;
 import 'package:nimon/core/limits/html_generator_limits.dart';
 import 'package:nimon/core/validation/text_normalization.dart' show charLength;
@@ -809,6 +810,21 @@ void _validateAppContext(
       'import.context.contentCommunityMismatch',
       'Import contentCommunity does not match your Content Community setting.',
       path: 'nimonImportMeta.contentCommunity',
+    );
+  }
+
+  final communityWire = meta.contentCommunity.contentLocaleWireCode;
+  final learningWire = meta.learningLanguage.preferencesWireCode;
+  if (communityWire != null &&
+      learningWire != null &&
+      isSameLanguagePair(
+        contentLocale: communityWire,
+        learningLanguage: learningWire,
+      )) {
+    block(
+      'import.context.languagePairSameNotAllowed',
+      'Import content community and learning language must be different.',
+      path: 'nimonImportMeta',
     );
   }
 }

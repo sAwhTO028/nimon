@@ -138,6 +138,8 @@ StoryBasics _mapBasics({
     coverImageUrl: _optStrOrNull(
       core['coverImageUrl'] ?? core['cover_image_url'],
     ),
+    contentLocale: meta.contentCommunity.contentLocaleWireCode,
+    learningLanguage: meta.learningLanguage.preferencesWireCode,
     creatorOwnerId: ownerId,
     createdAt: now,
     updatedAt: now,

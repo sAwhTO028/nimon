@@ -113,6 +113,8 @@ void main() {
       expect(draft.audio.storyAudio, isNull);
       expect(draft.basics.promptSourceNote, contains('[nimon-import]'));
       expect(draft.basics.promptSourceNote, contains('sourceDraftId=generator-draft-99'));
+      expect(draft.basics.contentLocale, 'my');
+      expect(draft.basics.learningLanguage, 'ja');
     });
 
     test('sentence order is reindexed sequentially', () {

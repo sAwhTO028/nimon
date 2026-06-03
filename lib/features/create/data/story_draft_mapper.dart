@@ -149,6 +149,8 @@ abstract final class StoryDraftMapper {
       promptSourceNote: b.promptSourceNote,
       targetDurationBandKey: b.targetDurationBandKey,
       coverImageUrl: b.coverImageUrl,
+      contentLocale: b.contentLocale,
+      learningLanguage: b.learningLanguage,
       createdAt: b.createdAt.toUtc().toIso8601String(),
       updatedAt: b.updatedAt.toUtc().toIso8601String(),
     );
@@ -164,6 +166,8 @@ abstract final class StoryDraftMapper {
       promptSourceNote: b.promptSourceNote,
       targetDurationBandKey: b.targetDurationBandKey,
       coverImageUrl: b.coverImageUrl,
+      contentLocale: b.contentLocale,
+      learningLanguage: b.learningLanguage,
       creatorOwnerId: b.ownerId,
       createdAt: _parseIso(b.createdAt),
       updatedAt: _parseIso(b.updatedAt),

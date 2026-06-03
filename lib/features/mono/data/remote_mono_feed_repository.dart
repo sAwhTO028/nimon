@@ -127,12 +127,17 @@ class RemoteMonoFeedRepository implements MonoFeedRepository {
     if (kDebugMode) {
       debugPrint('RemoteMonoFeedRepository.fetchFeedPage: GET $uri');
     }
-    final resp = await _client.get(
-      uri,
-      headers: await _mergeOptionalAuth({
-        'Accept': 'application/json',
-      }),
-    );
+    final headers = await _mergeOptionalAuth({
+      'Accept': 'application/json',
+    });
+    final resp = await _client.get(uri, headers: headers);
+    if (kDebugMode) {
+      final authPresent = headers.containsKey('Authorization');
+      debugPrint(
+        'RemoteMonoFeedRepository.fetchFeedPage: status=${resp.statusCode} '
+        'auth=$authPresent',
+      );
+    }
     _throwIfNotOk(resp);
     final m = _jsonObjectFromResponse(resp);
     final rawItems = (m['items'] as List?) ?? const [];
@@ -146,6 +151,12 @@ class RemoteMonoFeedRepository implements MonoFeedRepository {
     }
     final nextCursor = _optStr(m['nextCursor']);
     final hasMore = m['hasMore'] is bool ? m['hasMore'] as bool : false;
+    if (kDebugMode) {
+      debugPrint(
+        'RemoteMonoFeedRepository.fetchFeedPage: items=${items.length} '
+        'hasMore=$hasMore nextCursor=${nextCursor != null}',
+      );
+    }
     return PageResult<MonoFeedSummaryDto>(
       items: items,
       nextCursor: nextCursor,

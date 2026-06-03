@@ -7,6 +7,7 @@ import 'package:nimon/features/auth/auth_providers.dart';
 import 'package:nimon/features/auth/auth_session_state.dart';
 import 'package:nimon/core/design_system/nimon_color_tokens.dart';
 import 'package:nimon/core/settings/content_community.dart';
+import 'package:nimon/core/settings/language_pair.dart';
 import 'package:nimon/features/settings/presentation/providers/user_preferences_notifier.dart';
 import 'package:nimon/ui/widgets/nimon_circle_nav_button.dart';
 import 'package:nimon/l10n/app_localizations.dart';
@@ -128,7 +129,12 @@ class _SettingsBody extends ConsumerWidget {
           trailing: const Icon(Icons.chevron_right_rounded),
           onTap: disabledWhileSaving
               ? null
-              : () => _pickContentLocale(context, ref, prefs.contentLocale),
+              : () => _pickContentLocale(
+                    context,
+                    ref,
+                    prefs.contentLocale,
+                    prefs.learningLanguage,
+                  ),
         ),
         ListTile(
           title: Text(l10n.settingsLearningLanguage),
@@ -253,6 +259,7 @@ class _SettingsBody extends ConsumerWidget {
     BuildContext context,
     WidgetRef ref,
     String current,
+    String learningLanguage,
   ) async {
     final l10n = AppLocalizations.of(context)!;
     final picked = await showDialog<String>(
@@ -267,12 +274,27 @@ class _SettingsBody extends ConsumerWidget {
             value: 'en',
             group: current,
           ),
-          _radio(ctx,
-              title: l10n.settingsJapanese, value: 'ja', group: current),
+          if (!isSameLanguagePair(
+            contentLocale: 'ja',
+            learningLanguage: learningLanguage,
+          ))
+            _radio(ctx,
+                title: l10n.settingsJapanese, value: 'ja', group: current),
         ],
       ),
     );
     if (picked == null || picked == current) return;
+    if (isSameLanguagePair(
+      contentLocale: picked,
+      learningLanguage: learningLanguage,
+    )) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(languagePairBlockedMessage())),
+        );
+      }
+      return;
+    }
     await ref
         .read(userPreferencesNotifierProvider.notifier)
         .updateContentLocale(picked);

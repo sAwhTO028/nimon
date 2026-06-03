@@ -16,8 +16,11 @@ import 'package:nimon/features/create/data/story_draft_repository_provider.dart'
 import 'package:nimon/features/profile/profile_processing_refresh.dart';
 import 'package:nimon/features/create/story_creator_draft_storage.dart'
     show CreatorDraftResumeMeta, CreatorLastActiveModule;
+import 'package:nimon/core/settings/content_community.dart';
 import 'package:nimon/features/create/story_creator_models.dart';
 import 'package:nimon/features/create/story_creator_public_audio_url.dart';
+import 'package:nimon/features/settings/data/user_preferences_repository.dart';
+import 'package:nimon/features/settings/presentation/providers/user_preferences_notifier.dart';
 import 'package:uuid/uuid.dart';
 
 StoryDraftRemotePublishIntent _remotePublishIntentForSaveReason(String reason) {
@@ -92,9 +95,17 @@ class StoryCreatorDraftState {
   /// Last published **full learn** snapshot. Updated on full-learn publish; cleared for RO-only.
   final String? publishedEditFullLearnBaselineSig;
 
-  factory StoryCreatorDraftState.initial({required String creatorOwnerId}) =>
+  factory StoryCreatorDraftState.initial({
+    required String creatorOwnerId,
+    String? contentLocale,
+    String? learningLanguage,
+  }) =>
       StoryCreatorDraftState(
-        draft: CreatorStoryV1.empty(creatorOwnerId: creatorOwnerId),
+        draft: CreatorStoryV1.empty(
+          creatorOwnerId: creatorOwnerId,
+          contentLocale: contentLocale,
+          learningLanguage: learningLanguage,
+        ),
         dirty: false,
         saveStatus: CreatorDraftSaveStatus.idle,
         lastSavedAt: null,
@@ -143,9 +154,22 @@ class StoryCreatorDraftNotifier extends StateNotifier<StoryCreatorDraftState> {
   StoryCreatorDraftNotifier(
     this._drafts,
     this._devOwnerId, {
+    required String defaultContentLocale,
+    required String defaultLearningLanguage,
     void Function()? onProfileCatalogSurfacesChanged,
-  })  : _onProfileCatalogSurfacesChanged = onProfileCatalogSurfacesChanged,
-        super(StoryCreatorDraftState.initial(creatorOwnerId: _devOwnerId));
+  })  : _defaultContentLocale = defaultContentLocale,
+        _defaultLearningLanguage = defaultLearningLanguage,
+        _onProfileCatalogSurfacesChanged = onProfileCatalogSurfacesChanged,
+        super(
+          StoryCreatorDraftState.initial(
+            creatorOwnerId: _devOwnerId,
+            contentLocale: defaultContentLocale,
+            learningLanguage: defaultLearningLanguage,
+          ),
+        );
+
+  final String _defaultContentLocale;
+  final String _defaultLearningLanguage;
 
   final StoryDraftRepository _drafts;
   final void Function()? _onProfileCatalogSurfacesChanged;
@@ -307,9 +331,23 @@ class StoryCreatorDraftNotifier extends StateNotifier<StoryCreatorDraftState> {
   }
 
   /// Start a brand-new local draft session (empty, new id) and persist immediately.
-  Future<CreatorStoryV1> startNewLocalDraft() async {
-    final next = CreatorStoryV1.empty(
-      creatorOwnerId: _effectiveCreatorOwnerId(),
+  CreatorStoryV1 _newEmptyDraft({
+    String? contentLocale,
+    String? learningLanguage,
+  }) =>
+      CreatorStoryV1.empty(
+        creatorOwnerId: _effectiveCreatorOwnerId(),
+        contentLocale: contentLocale ?? _defaultContentLocale,
+        learningLanguage: learningLanguage ?? _defaultLearningLanguage,
+      );
+
+  Future<CreatorStoryV1> startNewLocalDraft({
+    String? contentLocale,
+    String? learningLanguage,
+  }) async {
+    final next = _newEmptyDraft(
+      contentLocale: contentLocale,
+      learningLanguage: learningLanguage,
     );
     state = state.copyWith(
       draft: next,
@@ -644,9 +682,7 @@ class StoryCreatorDraftNotifier extends StateNotifier<StoryCreatorDraftState> {
   }
 
   void reset() => state = state.copyWith(
-        draft: CreatorStoryV1.empty(
-          creatorOwnerId: _effectiveCreatorOwnerId(),
-        ),
+        draft: _newEmptyDraft(),
         dirty: false,
         saveStatus: CreatorDraftSaveStatus.idle,
         lastSavedAt: null,
@@ -1523,9 +1559,18 @@ class StoryCreatorDraftNotifier extends StateNotifier<StoryCreatorDraftState> {
 final storyCreatorDraftProvider =
     StateNotifierProvider<StoryCreatorDraftNotifier, StoryCreatorDraftState>(
         (ref) {
+  final prefs = ref.watch(userPreferencesNotifierProvider).prefs;
+  final defaultContentLocale =
+      normalizeContentLocaleWireCode(prefs.contentLocale) ??
+          UserPreferences.defaults.contentLocale;
+  final defaultLearningLanguage = prefs.learningLanguage.trim().isEmpty
+      ? UserPreferences.defaults.learningLanguage
+      : prefs.learningLanguage.trim().toLowerCase();
   return StoryCreatorDraftNotifier(
     ref.watch(storyDraftRepositoryProvider),
     ref.watch(currentUserIdProvider),
+    defaultContentLocale: defaultContentLocale,
+    defaultLearningLanguage: defaultLearningLanguage,
     onProfileCatalogSurfacesChanged: () {
       final processing =
           ref.read(profileProcessingListRefreshProvider.notifier);
