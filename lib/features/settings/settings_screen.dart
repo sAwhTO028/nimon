@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import 'package:nimon/features/auth/auth_providers.dart';
 import 'package:nimon/features/auth/auth_session_state.dart';
 import 'package:nimon/core/design_system/nimon_color_tokens.dart';
+import 'package:nimon/core/settings/content_community.dart';
 import 'package:nimon/features/settings/presentation/providers/user_preferences_notifier.dart';
 import 'package:nimon/ui/widgets/nimon_circle_nav_button.dart';
 import 'package:nimon/l10n/app_localizations.dart';
@@ -79,11 +80,8 @@ class _SettingsBody extends ConsumerWidget {
         _ => 'System',
       };
 
-  static String _contentLocaleLabel(String code) => switch (code) {
-        'my' => 'Myanmar',
-        'ja' => 'Japanese',
-        _ => 'International / English',
-      };
+  static String _contentLocaleLabel(String code) =>
+      contentCommunityDisplayLabel(code);
 
   static String _learningLanguageLabel(String code) => switch (code) {
         'ja' => 'Japanese',

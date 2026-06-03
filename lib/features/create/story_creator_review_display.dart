@@ -34,16 +34,13 @@ const int kStoryReviewLearnModuleTotal = 4;
 /// Builds the publish readiness snapshot from the current draft using [computeReadOnlyReady] / [computeFullLearnReady]
 /// and module completion flags — no duplicate business rules.
 StoryReviewDisplayModel buildStoryReviewDisplayModel(CreatorStoryV1 draft) {
-  final t = resolveV1ThresholdsForDraft(draft);
   final readOnly = computeReadOnlyReady(draft);
   final fullLearn = computeFullLearnReady(draft);
   var n = 0;
-  if (t != null) {
-    if (computeVocabularyStatus(draft, thresholds: t).complete) n++;
-    if (computeGrammarStatus(draft, thresholds: t).complete) n++;
-    if (computeQuizStatus(draft, thresholds: t).complete) n++;
-    if (computeListeningStatus(draft, thresholds: t).complete) n++;
-  }
+  if (computeVocabularyStatus(draft).complete) n++;
+  if (computeGrammarStatus(draft).complete) n++;
+  if (computeQuizStatus(draft).complete) n++;
+  if (computeListeningStatus(draft).complete) n++;
 
   return StoryReviewDisplayModel(
     isStoryCoreReady: readOnly.ready,

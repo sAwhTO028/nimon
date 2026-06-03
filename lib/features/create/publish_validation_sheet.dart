@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:nimon/core/validation/localized_validation_messages.dart';
 import 'package:nimon/core/validation/validation_issue.dart';
@@ -111,6 +112,23 @@ class _PublishIssueTile extends StatelessWidget {
               fontWeight: FontWeight.w600,
             ),
           ),
+          if (kDebugMode) ...[
+            const SizedBox(height: 2),
+            Text(
+              'code: ${issue.code}',
+              style: theme.textTheme.labelSmall?.copyWith(
+                fontFamily: 'monospace',
+                color: theme.colorScheme.error,
+              ),
+            ),
+            Text(
+              'messageKey: ${issue.messageKey}',
+              style: theme.textTheme.labelSmall?.copyWith(
+                fontFamily: 'monospace',
+                color: theme.colorScheme.error,
+              ),
+            ),
+          ],
           const SizedBox(height: 2),
           Text(body, style: theme.textTheme.bodyMedium),
         ],

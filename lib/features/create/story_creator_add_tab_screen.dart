@@ -13,6 +13,7 @@ import 'package:nimon/core/validation/protected_action_guard.dart';
 import 'package:nimon/features/create/story_creator_provider.dart';
 import 'package:nimon/features/profile/profile_processing_refresh.dart';
 import 'package:nimon/features/profile/profile_navigation_helpers.dart';
+import 'package:nimon/features/create/import/nimon_hidden_json_import_flow.dart';
 import 'package:nimon/ui/widgets/nimon_circle_nav_button.dart';
 
 /// Add tab V1: lightweight creator hub for continuing local drafts or starting new.
@@ -42,11 +43,13 @@ class StoryCreatorAddTabScreen extends ConsumerWidget {
           icon: Icons.close_rounded,
           tooltip: 'Close',
         ),
-        title: Text(
-          'Create',
-          style: theme.textTheme.titleLarge?.copyWith(
-            fontWeight: FontWeight.w800,
-            letterSpacing: -0.2,
+        title: NimonHiddenJsonImportLongPress(
+          child: Text(
+            'Create',
+            style: theme.textTheme.titleLarge?.copyWith(
+              fontWeight: FontWeight.w800,
+              letterSpacing: -0.2,
+            ),
           ),
         ),
         centerTitle: true,
@@ -303,24 +306,25 @@ class _EmptyStateCard extends StatelessWidget {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
 
-    return Padding(
-      padding: const EdgeInsets.only(top: 10),
-      child: Card(
-        elevation: 0,
-        color: cs.surfaceContainerLow,
-        surfaceTintColor: Colors.transparent,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(18),
-          side: BorderSide(color: cs.outlineVariant.withValues(alpha: 0.7)),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(18, 18, 18, 18),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Align(
-                alignment: Alignment.centerLeft,
-                child: DecoratedBox(
+    return NimonHiddenJsonImportLongPress(
+      child: Padding(
+        padding: const EdgeInsets.only(top: 10),
+        child: Card(
+          elevation: 0,
+          color: cs.surfaceContainerLow,
+          surfaceTintColor: Colors.transparent,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18),
+            side: BorderSide(color: cs.outlineVariant.withValues(alpha: 0.7)),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(18, 18, 18, 18),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: DecoratedBox(
                   decoration: BoxDecoration(
                     color: cs.surface,
                     borderRadius: BorderRadius.circular(14),
@@ -364,6 +368,7 @@ class _EmptyStateCard extends StatelessWidget {
           ),
         ),
       ),
+    ),
     );
   }
 }

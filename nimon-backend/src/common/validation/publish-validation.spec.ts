@@ -3,9 +3,9 @@ import { ValidationMode } from './validation-mode';
 import { hasBlockingIssues } from './validation-result';
 
 describe('publish-validation', () => {
-  const minimalSentences = [
-    { content: { japaneseText: 'あ'.repeat(20) } },
-  ];
+  const sentences = Array.from({ length: 24 }, () => ({
+    content: { japaneseText: 'あ'.repeat(15) }, // 360 chars
+  }));
 
   it('read-only: missing title => blocking', () => {
     const r = validateStoryPublishInput(
@@ -13,8 +13,9 @@ describe('publish-validation', () => {
         title: '',
         description: null,
         levelRaw: 'n5',
-        targetDurationBandKey: null,
-        sentences: minimalSentences,
+        targetDurationBandKey: '3_5',
+        promptSourceNote: 'promptDataTab=Manual_mode',
+        sentences,
         vocabEntries: [],
         grammarEntries: [],
         quizEntries: [],
@@ -31,8 +32,9 @@ describe('publish-validation', () => {
         title: 'Valid story title',
         description: null,
         levelRaw: 'n5',
-        targetDurationBandKey: null,
-        sentences: minimalSentences,
+        targetDurationBandKey: '3_5',
+        promptSourceNote: 'promptDataTab=AI_mode',
+        sentences,
         vocabEntries: [],
         grammarEntries: [],
         quizEntries: [],
@@ -49,8 +51,9 @@ describe('publish-validation', () => {
         title: '<script>x</script>',
         description: null,
         levelRaw: 'n5',
-        targetDurationBandKey: null,
-        sentences: minimalSentences,
+        targetDurationBandKey: '3_5',
+        promptSourceNote: 'promptDataTab=Manual_mode',
+        sentences,
         vocabEntries: [],
         grammarEntries: [],
         quizEntries: [],
@@ -68,6 +71,7 @@ describe('publish-validation', () => {
         description: 'desc',
         levelRaw: 'n5',
         targetDurationBandKey: '5_7',
+        promptSourceNote: 'promptDataTab=AI_mode',
         sentences: [{ content: { japaneseText: '短い' } }],
         vocabEntries: [],
         grammarEntries: [],
@@ -85,8 +89,9 @@ describe('publish-validation', () => {
         title: 'Valid story title',
         description: 'd',
         levelRaw: 'n5',
-        targetDurationBandKey: null,
-        sentences: minimalSentences,
+        targetDurationBandKey: '3_5',
+        promptSourceNote: 'promptDataTab=AI_mode',
+        sentences,
         vocabEntries: [
           { content: { termJapanese: '猫', glosses: {}, type: 'vocabulary' } },
         ],
@@ -119,8 +124,9 @@ describe('publish-validation', () => {
         title: 'Valid story title',
         description: 'd',
         levelRaw: 'n5',
-        targetDurationBandKey: null,
-        sentences: minimalSentences,
+        targetDurationBandKey: '3_5',
+        promptSourceNote: 'promptDataTab=AI_mode',
+        sentences,
         vocabEntries: [
           {
             content: {
@@ -160,8 +166,9 @@ describe('publish-validation', () => {
         title: 'Valid story title',
         description: 'd',
         levelRaw: 'n5',
-        targetDurationBandKey: null,
-        sentences: minimalSentences,
+        targetDurationBandKey: '3_5',
+        promptSourceNote: 'promptDataTab=AI_mode',
+        sentences,
         vocabEntries: [
           {
             content: {
@@ -210,6 +217,7 @@ describe('publish-validation', () => {
         description: 'd',
         levelRaw: 'n5',
         targetDurationBandKey: '7_9',
+        promptSourceNote: 'promptDataTab=AI_mode',
         sentences: Array.from({ length: 30 }, () => ({
           content: { japaneseText: 'あ' },
         })),
@@ -237,14 +245,14 @@ describe('publish-validation', () => {
     expect(hasBlockingIssues(r)).toBe(true);
   });
 
-  it('warnings only do not set blocking flag', () => {
+  it('missing level/duration blocks under HTML rules', () => {
     const r = validateStoryPublishInput(
       {
         title: 'Valid story title',
         description: null,
         levelRaw: '',
         targetDurationBandKey: null,
-        sentences: minimalSentences,
+        sentences,
         vocabEntries: [],
         grammarEntries: [],
         quizEntries: [],
@@ -252,8 +260,7 @@ describe('publish-validation', () => {
       },
       ValidationMode.ReadOnlyPublish,
     );
-    expect(r.ok).toBe(true);
-    expect(r.issues.some((i) => i.severity === 'warning')).toBe(true);
+    expect(hasBlockingIssues(r)).toBe(true);
   });
 
   it('storyPublishInputFromDraftRow maps prisma-like draft', () => {
@@ -262,6 +269,7 @@ describe('publish-validation', () => {
       description: '',
       level: 'n4',
       targetDurationBandKey: null,
+      promptSourceNote: 'promptDataTab=AI_mode',
       moduleWorkflowStatuses: { vocabulary_kanji: 'completed' },
       sentences: [{ content: { japaneseText: 'テスト' } }],
       vocabEntries: [],
@@ -270,5 +278,6 @@ describe('publish-validation', () => {
     });
     expect(input.levelRaw).toBe('n4');
     expect(input.sentences).toHaveLength(1);
+    expect(input.promptSourceNote).toContain('AI_mode');
   });
 });

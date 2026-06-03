@@ -15,10 +15,80 @@ StoryPublishData _base({
     description: '',
     levelRaw: levelRaw,
     targetDurationBandKey: targetBand,
+    promptSourceNote: 'promptDataTab=Manual_mode',
     sentences: sentences ??
         [
           {
-            'content': {'japaneseText': 'こんにちは。'},
+            'content': {'japaneseText': 'あああああああああああああああ'},
+          },
+          {
+            'content': {'japaneseText': 'あああああああああああああああ'},
+          },
+          {
+            'content': {'japaneseText': 'あああああああああああああああ'},
+          },
+          {
+            'content': {'japaneseText': 'あああああああああああああああ'},
+          },
+          {
+            'content': {'japaneseText': 'あああああああああああああああ'},
+          },
+          {
+            'content': {'japaneseText': 'あああああああああああああああ'},
+          },
+          {
+            'content': {'japaneseText': 'あああああああああああああああ'},
+          },
+          {
+            'content': {'japaneseText': 'あああああああああああああああ'},
+          },
+          {
+            'content': {'japaneseText': 'あああああああああああああああ'},
+          },
+          {
+            'content': {'japaneseText': 'あああああああああああああああ'},
+          },
+          {
+            'content': {'japaneseText': 'あああああああああああああああ'},
+          },
+          {
+            'content': {'japaneseText': 'あああああああああああああああ'},
+          },
+          {
+            'content': {'japaneseText': 'あああああああああああああああ'},
+          },
+          {
+            'content': {'japaneseText': 'あああああああああああああああ'},
+          },
+          {
+            'content': {'japaneseText': 'あああああああああああああああ'},
+          },
+          {
+            'content': {'japaneseText': 'あああああああああああああああ'},
+          },
+          {
+            'content': {'japaneseText': 'あああああああああああああああ'},
+          },
+          {
+            'content': {'japaneseText': 'あああああああああああああああ'},
+          },
+          {
+            'content': {'japaneseText': 'あああああああああああああああ'},
+          },
+          {
+            'content': {'japaneseText': 'あああああああああああああああ'},
+          },
+          {
+            'content': {'japaneseText': 'あああああああああああああああ'},
+          },
+          {
+            'content': {'japaneseText': 'あああああああああああああああ'},
+          },
+          {
+            'content': {'japaneseText': 'あああああああああああああああ'},
+          },
+          {
+            'content': {'japaneseText': 'あああああああああああああああ'},
           },
         ],
     vocabEntries: vocab ?? const [],
@@ -40,7 +110,7 @@ void main() {
 
     test('ReadOnlyPublish missing learn layers is OK', () {
       final r = validateStoryPublishData(
-        _base(),
+        _base(levelRaw: 'N5', targetBand: '3_5'),
         ValidationMode.readOnlyPublish,
       );
       expect(hasBlockingIssues(r), false);
@@ -106,7 +176,7 @@ void main() {
 
     test('warning-only description empty does not block', () {
       final r = validateStoryPublishData(
-        _base(title: 'Hello title ok'),
+        _base(title: 'Hello title ok', levelRaw: 'N5', targetBand: '3_5'),
         ValidationMode.readOnlyPublish,
       );
       expect(hasBlockingIssues(r), false);

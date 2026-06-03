@@ -1,16 +1,11 @@
-import 'dart:math' as math;
-
+import 'package:nimon/core/limits/html_generator_limits.dart';
 import 'package:nimon/core/validation/learn_validators.dart'
     show
         FuriganaKind,
-        grammarPatternLimits,
-        quizGlobalHardMax,
-        quizLimits,
         validateFurigana,
         validateGrammarPatternTitle,
         validateQuizItem,
-        validateVocabularyMeaning,
-        vocabularyLimits;
+        validateVocabularyMeaning;
 import 'package:nimon/core/validation/story_duration_band.dart';
 import 'package:nimon/core/validation/story_validators.dart';
 import 'package:nimon/core/validation/text_normalization.dart';
@@ -27,6 +22,7 @@ class StoryPublishData {
     required this.levelRaw,
     required this.targetDurationBandKey,
     this.durationSeconds,
+    this.promptSourceNote,
     required this.sentences,
     required this.vocabEntries,
     required this.grammarEntries,
@@ -39,6 +35,7 @@ class StoryPublishData {
   final String? levelRaw;
   final String? targetDurationBandKey;
   final int? durationSeconds;
+  final String? promptSourceNote;
 
   /// Each `{ 'content': <map> }` matching backend Draft* rows.
   final List<Map<String, Object?>> sentences;
@@ -98,7 +95,7 @@ String extractJapanesePrimaryText(Object? content) {
     final t = extractJapanesePrimaryText(_contentOf(s));
     if (t.isNotEmpty) {
       validCount++;
-      totalJapaneseChars += charLength(t);
+      totalJapaneseChars += charLength(t.trim().replaceAll(RegExp(r'\s'), ''));
     }
   }
   return (validCount: validCount, totalJapaneseChars: totalJapaneseChars);
@@ -152,6 +149,36 @@ String mapQuizCategoryToValidatorCategory(String raw) {
   if (k == 'grammar') return 'Grammar';
   if (k == 'sample_sentence' || k == 'sentence') return 'Sentence';
   return 'Vocabulary';
+}
+
+({int total, int vocabulary, int grammar, int sentence}) _quizCountsForHtmlRules(
+  List<Map<String, Object?>> quizRows,
+) {
+  var total = 0;
+  var v = 0;
+  var g = 0;
+  var s = 0;
+  for (final row in quizRows) {
+    final parsed = parseQuizEntry(_contentOf(row));
+    if (parsed == null) continue;
+    total++;
+    final raw = (_contentOf(row) is Map)
+        ? ((Map<String, Object?>.from(_contentOf(row) as Map))['category'] ??
+                '')
+            .toString()
+        : '';
+    final k = raw.trim().toLowerCase();
+    if (k == 'grammar') {
+      g++;
+    } else if (k == 'sample_sentence' || k == 'sentence') {
+      s++;
+    } else if (k == 'vocabulary') {
+      v++;
+    } else {
+      // Kanji or unknown: counts towards total only.
+    }
+  }
+  return (total: total, vocabulary: v, grammar: g, sentence: s);
 }
 
 ({
@@ -218,24 +245,29 @@ ValidationResult validateStoryPublishData(
     validateStoryDescription(input.description, publishLikeMode),
   ];
 
-  final jlpt = normalizeJlptLevel(input.levelRaw);
-  final band = resolveStoryDurationBand(
+  final htmlLevel = normalizeHtmlLevel(input.levelRaw);
+  final bandKey = resolveStoryDurationBand(
     targetDurationBandKey: input.targetDurationBandKey,
     durationSeconds: input.durationSeconds,
   );
+  final htmlDuration = normalizeHtmlDuration(bandKey);
+  final htmlMode = resolveHtmlPromptModeFromSourceNote(input.promptSourceNote);
 
-  if (jlpt == null) {
+  if (htmlLevel == null) {
     pieces.add(resultFromIssues([
-      _warn('story.level', 'story.limits.skippedNoJlpt',
-          'story.limits.skippedNoJlpt'),
+      _block(
+        'story.level',
+        'publish.htmlRules.levelInvalid',
+        'publish.htmlRules.levelInvalid',
+      ),
     ]));
   }
-  if (band == null) {
+  if (htmlDuration == null) {
     pieces.add(resultFromIssues([
-      _warn(
+      _block(
         'story.duration',
-        'story.limits.skippedNoBand',
-        'story.limits.skippedNoBand',
+        'publish.htmlRules.durationInvalid',
+        'publish.htmlRules.durationInvalid',
       ),
     ]));
   }
@@ -251,37 +283,62 @@ ValidationResult validateStoryPublishData(
     ]));
   }
 
-  if (jlpt != null && band != null && metrics.validCount > 0) {
-    final limits = storySentenceLimits[jlpt]![band]!;
-    if (metrics.validCount < limits.minSentences) {
+  if (htmlLevel != null && htmlDuration != null && metrics.validCount > 0) {
+    final limits = HtmlGeneratorLimits.sentenceLimit(
+      mode: htmlMode,
+      language: HtmlLearningLanguage.jp,
+      duration: htmlDuration,
+      level: htmlLevel,
+    );
+    if (limits == null) {
       pieces.add(resultFromIssues([
         _block(
           'story.sentences',
-          'story.sentences.tooFew',
-          'story.sentences.tooFew',
-          {'min': limits.minSentences, 'actual': metrics.validCount},
+          'publish.htmlRules.promptModeInvalid',
+          'publish.htmlRules.promptModeInvalid',
         ),
       ]));
-    }
-    if (metrics.validCount > limits.maxSentences) {
-      pieces.add(resultFromIssues([
-        _block(
-          'story.sentences',
-          'story.sentences.tooMany',
-          'story.sentences.tooMany',
-          {'max': limits.maxSentences, 'actual': metrics.validCount},
-        ),
-      ]));
-    }
-    if (metrics.totalJapaneseChars > limits.maxChars) {
-      pieces.add(resultFromIssues([
-        _block(
-          'story.body',
-          'story.body.tooLong',
-          'story.body.tooLong',
-          {'max': limits.maxChars, 'actual': metrics.totalJapaneseChars},
-        ),
-      ]));
+    } else {
+      if (metrics.validCount < limits.minSentences) {
+        pieces.add(resultFromIssues([
+          _block(
+            'story.sentences',
+            'publish.htmlRules.storySentenceTooFew',
+            'publish.htmlRules.storySentenceTooFew',
+            {'min': limits.minSentences, 'actual': metrics.validCount},
+          ),
+        ]));
+      }
+      if (metrics.validCount > limits.maxSentences) {
+        pieces.add(resultFromIssues([
+          _block(
+            'story.sentences',
+            'publish.htmlRules.storySentenceTooMany',
+            'publish.htmlRules.storySentenceTooMany',
+            {'max': limits.maxSentences, 'actual': metrics.validCount},
+          ),
+        ]));
+      }
+      if (metrics.totalJapaneseChars < limits.minChars) {
+        pieces.add(resultFromIssues([
+          _block(
+            'story.body',
+            'publish.htmlRules.storyCharsTooFew',
+            'publish.htmlRules.storyCharsTooFew',
+            {'min': limits.minChars, 'actual': metrics.totalJapaneseChars},
+          ),
+        ]));
+      }
+      if (metrics.totalJapaneseChars > limits.maxChars) {
+        pieces.add(resultFromIssues([
+          _block(
+            'story.body',
+            'publish.htmlRules.storyCharsTooMany',
+            'publish.htmlRules.storyCharsTooMany',
+            {'max': limits.maxChars, 'actual': metrics.totalJapaneseChars},
+          ),
+        ]));
+      }
     }
   }
 
@@ -289,10 +346,17 @@ ValidationResult validateStoryPublishData(
     final mod = fullLearnModulesComplete(input.moduleWorkflowStatuses);
     if (mod != null) pieces.add(resultFromIssues([mod]));
 
-    if (jlpt != null && band != null) {
-      final vLimits = vocabularyLimits[jlpt]![band]!;
-      final gLimits = grammarPatternLimits[jlpt]![band]!;
-      final qLimits = quizLimits[jlpt]![band]!;
+    if (htmlLevel != null && htmlDuration != null) {
+      final vocabLimit = HtmlGeneratorLimits.vocabularyLimit(
+        language: HtmlLearningLanguage.jp,
+        duration: htmlDuration,
+        level: htmlLevel,
+      );
+      final grammarLimit = HtmlGeneratorLimits.grammarLimit(
+        language: HtmlLearningLanguage.jp,
+        duration: htmlDuration,
+        level: htmlLevel,
+      );
 
       final vocabCount = input.vocabEntries.where((e) {
         final p = parseVocabEntry(_contentOf(e));
@@ -301,47 +365,218 @@ ValidationResult validateStoryPublishData(
       final grammarCount = input.grammarEntries.where((e) {
         return parseGrammarEntry(_contentOf(e)).headline.trim().isNotEmpty;
       }).length;
-      final quizCount = input.quizEntries
-          .where((e) => parseQuizEntry(_contentOf(e)) != null)
-          .length;
 
-      if (vocabCount < vLimits.min || vocabCount > vLimits.max) {
-        pieces.add(resultFromIssues([
-          _block(
-            'learn.vocab.count',
-            'learn.count.vocab.range',
-            'learn.count.vocab.range',
-            {'min': vLimits.min, 'max': vLimits.max, 'actual': vocabCount},
-          ),
-        ]));
+      final quizCounts = _quizCountsForHtmlRules(input.quizEntries);
+
+      if (vocabLimit != null) {
+        final requiredV = htmlMode == HtmlPromptMode.ai
+            ? vocabLimit.defaultValue
+            : null;
+        if (htmlMode == HtmlPromptMode.ai) {
+          if (vocabCount != requiredV) {
+            pieces.add(resultFromIssues([
+              _block(
+                'learn.vocab.count',
+                'publish.htmlRules.vocabularyCountMismatch',
+                'publish.htmlRules.vocabularyCountMismatch',
+                {'expected': requiredV, 'actual': vocabCount},
+              ),
+            ]));
+          }
+        } else {
+          if (vocabCount < vocabLimit.manualMin || vocabCount > vocabLimit.manualMax) {
+            pieces.add(resultFromIssues([
+              _block(
+                'learn.vocab.count',
+                'publish.htmlRules.vocabularyCountMismatch',
+                'publish.htmlRules.vocabularyCountMismatch',
+                {
+                  'min': vocabLimit.manualMin,
+                  'max': vocabLimit.manualMax,
+                  'actual': vocabCount,
+                },
+              ),
+            ]));
+          }
+        }
       }
-      if (grammarCount < gLimits.min || grammarCount > gLimits.max) {
-        pieces.add(resultFromIssues([
-          _block(
-            'learn.grammar.count',
-            'learn.count.grammar.range',
-            'learn.count.grammar.range',
-            {'min': gLimits.min, 'max': gLimits.max, 'actual': grammarCount},
-          ),
-        ]));
+
+      if (grammarLimit != null) {
+        final requiredG = htmlMode == HtmlPromptMode.ai
+            ? grammarLimit.defaultValue
+            : null;
+        if (htmlMode == HtmlPromptMode.ai) {
+          if (grammarCount != requiredG) {
+            pieces.add(resultFromIssues([
+              _block(
+                'learn.grammar.count',
+                'publish.htmlRules.grammarCountMismatch',
+                'publish.htmlRules.grammarCountMismatch',
+                {'expected': requiredG, 'actual': grammarCount},
+              ),
+            ]));
+          }
+        } else {
+          if (grammarCount < grammarLimit.manualMin ||
+              grammarCount > grammarLimit.manualMax) {
+            pieces.add(resultFromIssues([
+              _block(
+                'learn.grammar.count',
+                'publish.htmlRules.grammarCountMismatch',
+                'publish.htmlRules.grammarCountMismatch',
+                {
+                  'min': grammarLimit.manualMin,
+                  'max': grammarLimit.manualMax,
+                  'actual': grammarCount,
+                },
+              ),
+            ]));
+          }
+        }
       }
-      final qMaxAllowed = math.min(
-        qLimits.absoluteMax,
-        math.min(quizGlobalHardMax, qLimits.max),
-      );
-      if (quizCount < qLimits.min || quizCount > qMaxAllowed) {
-        pieces.add(resultFromIssues([
-          _block(
-            'learn.quiz.count',
-            'learn.count.quiz.range',
-            'learn.count.quiz.range',
-            {
-              'min': qLimits.min,
-              'max': qMaxAllowed,
-              'actual': quizCount,
-            },
-          ),
-        ]));
+
+      final selected = htmlMode == HtmlPromptMode.ai
+          ? HtmlGeneratorLimits.selectedFullLearnLimits(
+              mode: HtmlPromptMode.ai,
+              language: HtmlLearningLanguage.jp,
+              duration: htmlDuration,
+              level: htmlLevel,
+              preset: HtmlLimitPreset.defaultValue,
+            )
+          : null;
+
+      if (htmlMode == HtmlPromptMode.ai && selected != null) {
+        if (quizCounts.total != selected.totalQuizCount) {
+          pieces.add(resultFromIssues([
+            _block(
+              'learn.quiz.count',
+              'publish.htmlRules.quizTotalMismatch',
+              'publish.htmlRules.quizTotalMismatch',
+              {'expected': selected.totalQuizCount, 'actual': quizCounts.total},
+            ),
+          ]));
+        }
+        if (quizCounts.vocabulary != selected.vocabularyQuizCount) {
+          pieces.add(resultFromIssues([
+            _block(
+              'learn.quiz.vocabulary',
+              'publish.htmlRules.quizVocabularyMismatch',
+              'publish.htmlRules.quizVocabularyMismatch',
+              {
+                'expected': selected.vocabularyQuizCount,
+                'actual': quizCounts.vocabulary
+              },
+            ),
+          ]));
+        }
+        if (quizCounts.grammar != selected.grammarQuizCount) {
+          pieces.add(resultFromIssues([
+            _block(
+              'learn.quiz.grammar',
+              'publish.htmlRules.quizGrammarMismatch',
+              'publish.htmlRules.quizGrammarMismatch',
+              {'expected': selected.grammarQuizCount, 'actual': quizCounts.grammar},
+            ),
+          ]));
+        }
+        if (quizCounts.sentence != selected.sentenceQuizCount) {
+          pieces.add(resultFromIssues([
+            _block(
+              'learn.quiz.sentence',
+              'publish.htmlRules.quizSentenceMismatch',
+              'publish.htmlRules.quizSentenceMismatch',
+              {
+                'expected': selected.sentenceQuizCount,
+                'actual': quizCounts.sentence
+              },
+            ),
+          ]));
+        }
+      } else if (htmlMode == HtmlPromptMode.manual) {
+        final totalLim = HtmlGeneratorLimits.quizLimit(
+          duration: htmlDuration,
+          level: htmlLevel,
+          quizCategory: 'Total Quiz',
+        );
+        final vLim = HtmlGeneratorLimits.quizLimit(
+          duration: htmlDuration,
+          level: htmlLevel,
+          quizCategory: 'Vocabulary Quiz',
+        );
+        final gLim = HtmlGeneratorLimits.quizLimit(
+          duration: htmlDuration,
+          level: htmlLevel,
+          quizCategory: 'Grammar Quiz',
+        );
+        final sLim = HtmlGeneratorLimits.quizLimit(
+          duration: htmlDuration,
+          level: htmlLevel,
+          quizCategory: 'Sentence Quiz',
+        );
+        if (totalLim != null &&
+            (quizCounts.total < totalLim.manualMin ||
+                quizCounts.total > totalLim.manualMax)) {
+          pieces.add(resultFromIssues([
+            _block(
+              'learn.quiz.count',
+              'publish.htmlRules.quizTotalMismatch',
+              'publish.htmlRules.quizTotalMismatch',
+              {
+                'min': totalLim.manualMin,
+                'max': totalLim.manualMax,
+                'actual': quizCounts.total,
+              },
+            ),
+          ]));
+        }
+        if (vLim != null &&
+            (quizCounts.vocabulary < vLim.manualMin ||
+                quizCounts.vocabulary > vLim.manualMax)) {
+          pieces.add(resultFromIssues([
+            _block(
+              'learn.quiz.vocabulary',
+              'publish.htmlRules.quizVocabularyMismatch',
+              'publish.htmlRules.quizVocabularyMismatch',
+              {
+                'min': vLim.manualMin,
+                'max': vLim.manualMax,
+                'actual': quizCounts.vocabulary,
+              },
+            ),
+          ]));
+        }
+        if (gLim != null &&
+            (quizCounts.grammar < gLim.manualMin ||
+                quizCounts.grammar > gLim.manualMax)) {
+          pieces.add(resultFromIssues([
+            _block(
+              'learn.quiz.grammar',
+              'publish.htmlRules.quizGrammarMismatch',
+              'publish.htmlRules.quizGrammarMismatch',
+              {
+                'min': gLim.manualMin,
+                'max': gLim.manualMax,
+                'actual': quizCounts.grammar,
+              },
+            ),
+          ]));
+        }
+        if (sLim != null &&
+            (quizCounts.sentence < sLim.manualMin ||
+                quizCounts.sentence > sLim.manualMax)) {
+          pieces.add(resultFromIssues([
+            _block(
+              'learn.quiz.sentence',
+              'publish.htmlRules.quizSentenceMismatch',
+              'publish.htmlRules.quizSentenceMismatch',
+              {
+                'min': sLim.manualMin,
+                'max': sLim.manualMax,
+                'actual': quizCounts.sentence,
+              },
+            ),
+          ]));
+        }
       }
     }
 

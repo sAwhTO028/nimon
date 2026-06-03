@@ -1,22 +1,28 @@
 import {
-  GRAMMAR_PATTERN_LIMITS,
-  QUIZ_GLOBAL_HARD_MAX,
-  QUIZ_LIMITS,
-  VOCABULARY_LIMITS,
   validateFuriganaReading,
   validateGrammarPatternTitle,
   validateQuizItem,
   validateVocabularyMeaning,
 } from './learn-validation';
 import type { FuriganaKind } from './learn-validation';
-import { normalizeJlptLevel, resolveStoryDurationBand } from './story-duration-band';
-import { STORY_SENTENCE_LIMITS, validateStoryDescription, validateStoryTitle } from './story-validation';
+import { resolveStoryDurationBand } from './story-duration-band';
+import { validateStoryDescription, validateStoryTitle } from './story-validation';
 import type { ValidationIssue } from './validation-issue';
 import { ValidationMode } from './validation-mode';
 import { ValidationSeverity } from './validation-severity';
 import { combine, resultFromIssues } from './validation-result';
 import type { ValidationResult } from './validation-result';
 import { charLength } from './text-normalization';
+import {
+  normalizeHtmlDuration,
+  normalizeHtmlLevel,
+  sentenceLimit,
+  selectedFullLearnLimits,
+  vocabularyLimit,
+  grammarLimit,
+  quizLimit,
+} from '../limits/html-generator-limits';
+import type { HtmlLearningLanguage, HtmlPromptMode, HtmlLimitPreset } from '../limits/html-generator-limits';
 
 export type StoryPublishValidationInput = {
   title: string | null;
@@ -25,6 +31,8 @@ export type StoryPublishValidationInput = {
   targetDurationBandKey: string | null;
   /** Optional; when not on draft row, omit — limits may be skipped. */
   durationSeconds?: number | null;
+  /** Optional; used to detect imported AI vs manual drafts (defaults to manual). */
+  promptSourceNote?: string | null;
   sentences: Array<{ content: unknown }>;
   vocabEntries: Array<{ content: unknown }>;
   grammarEntries: Array<{ content: unknown }>;
@@ -75,7 +83,7 @@ export function extractStorySentenceMetrics(sentences: Array<{ content: unknown 
     const t = extractJapanesePrimaryText(s.content);
     if (t.length > 0) {
       validCount++;
-      totalJapaneseChars += charLength(t);
+      totalJapaneseChars += charLength(t.trim().replace(/\s/g, ''));
     }
   }
   return { validCount, totalJapaneseChars };
@@ -126,6 +134,38 @@ function mapQuizCategoryToValidatorCategory(raw: string): string {
   if (k === 'sample_sentence' || k === 'sentence') return 'Sentence';
   if (k === 'kanji' || k === 'vocabulary') return 'Vocabulary';
   return 'Vocabulary';
+}
+
+function resolveHtmlPromptMode(input: StoryPublishValidationInput): HtmlPromptMode {
+  const raw = String(input.promptSourceNote ?? '').trim().toLowerCase();
+  if (raw.includes('promptdatatab=ai_mode') || raw.includes('ai_mode')) return 'ai';
+  if (raw.includes('promptdatatab=manual_mode') || raw.includes('manual_mode')) return 'manual';
+  return 'manual';
+}
+
+function quizCountsForHtmlRules(
+  quizEntries: Array<{ content: unknown }>,
+): { total: number; vocabulary: number; grammar: number; sentence: number } {
+  let total = 0;
+  let vocabulary = 0;
+  let grammar = 0;
+  let sentence = 0;
+  for (const row of quizEntries) {
+    const parsed = parseQuizEntry(row.content);
+    if (!parsed) continue;
+    total++;
+    const c = row.content;
+    const raw =
+      c && typeof c === 'object' && !Array.isArray(c) ? String((c as Record<string, unknown>).category ?? '') : '';
+    const k = raw.trim().toLowerCase();
+    if (k === 'vocabulary') vocabulary++;
+    else if (k === 'grammar') grammar++;
+    else if (k === 'sample_sentence' || k === 'sentence') sentence++;
+    else {
+      // kanji/unknown: count in total only
+    }
+  }
+  return { total, vocabulary, grammar, sentence };
 }
 
 function parseQuizEntry(content: unknown): {
@@ -189,30 +229,31 @@ export function validateStoryPublishInput(
   const descRes = validateStoryDescription(input.description, vm);
   pieces.push(descRes);
 
-  const jlpt = normalizeJlptLevel(input.levelRaw);
   const band = resolveStoryDurationBand({
     targetDurationBandKey: input.targetDurationBandKey,
     durationSeconds: input.durationSeconds ?? null,
   });
 
-  if (!jlpt) {
+  const htmlLevel = normalizeHtmlLevel(input.levelRaw);
+  const htmlDuration = normalizeHtmlDuration(band);
+  const promptMode = resolveHtmlPromptMode(input);
+  const language: HtmlLearningLanguage = 'jp';
+  const preset: HtmlLimitPreset = 'default';
+
+  if (!htmlLevel) {
     pieces.push(
       resultFromIssues([
-        warn(
-          'story.level',
-          'story.limits.skippedNoJlpt',
-          'story.limits.skippedNoJlpt',
-        ),
+        block('story.level', 'publish.htmlRules.levelInvalid', 'publish.htmlRules.levelInvalid'),
       ]),
     );
   }
-  if (!band) {
+  if (!htmlDuration) {
     pieces.push(
       resultFromIssues([
-        warn(
+        block(
           'story.duration',
-          'story.limits.skippedNoBand',
-          'story.limits.skippedNoBand',
+          'publish.htmlRules.durationInvalid',
+          'publish.htmlRules.durationInvalid',
         ),
       ]),
     );
@@ -231,45 +272,65 @@ export function validateStoryPublishInput(
     );
   }
 
-  if (jlpt && band && metrics.validCount > 0) {
-    const limits = STORY_SENTENCE_LIMITS[jlpt][band];
-    if (metrics.validCount < limits.minSentences) {
+  if (htmlLevel && htmlDuration && metrics.validCount > 0) {
+    const limits = sentenceLimit({
+      mode: promptMode,
+      language,
+      duration: htmlDuration,
+      level: htmlLevel,
+    });
+    if (!limits) {
       pieces.push(
         resultFromIssues([
           block(
             'story.sentences',
-            'story.sentences.tooFew',
-            'story.sentences.tooFew',
-            {
-              min: limits.minSentences,
-              actual: metrics.validCount,
-            },
+            'publish.htmlRules.promptModeInvalid',
+            'publish.htmlRules.promptModeInvalid',
           ),
         ]),
       );
-    }
-    if (metrics.validCount > limits.maxSentences) {
+    } else if (metrics.validCount < limits.minSentences) {
       pieces.push(
         resultFromIssues([
           block(
             'story.sentences',
-            'story.sentences.tooMany',
-            'story.sentences.tooMany',
-            {
-              max: limits.maxSentences,
-              actual: metrics.validCount,
-            },
+            'publish.htmlRules.storySentenceTooFew',
+            'publish.htmlRules.storySentenceTooFew',
+            { min: limits.minSentences, actual: metrics.validCount },
+          ),
+        ]),
+      );
+    } else if (metrics.validCount > limits.maxSentences) {
+      pieces.push(
+        resultFromIssues([
+          block(
+            'story.sentences',
+            'publish.htmlRules.storySentenceTooMany',
+            'publish.htmlRules.storySentenceTooMany',
+            { max: limits.maxSentences, actual: metrics.validCount },
           ),
         ]),
       );
     }
-    if (metrics.totalJapaneseChars > limits.maxChars) {
+    if (limits && metrics.totalJapaneseChars < limits.minChars) {
       pieces.push(
         resultFromIssues([
           block(
             'story.body',
-            'story.body.tooLong',
-            'story.body.tooLong',
+            'publish.htmlRules.storyCharsTooFew',
+            'publish.htmlRules.storyCharsTooFew',
+            { min: limits.minChars, actual: metrics.totalJapaneseChars },
+          ),
+        ]),
+      );
+    }
+    if (limits && metrics.totalJapaneseChars > limits.maxChars) {
+      pieces.push(
+        resultFromIssues([
+          block(
+            'story.body',
+            'publish.htmlRules.storyCharsTooMany',
+            'publish.htmlRules.storyCharsTooMany',
             { max: limits.maxChars, actual: metrics.totalJapaneseChars },
           ),
         ]),
@@ -290,10 +351,9 @@ export function validateStoryPublishInput(
       pieces.push(resultFromIssues([modIssue]));
     }
 
-    if (jlpt && band) {
-      const vLimits = VOCABULARY_LIMITS[jlpt][band];
-      const gLimits = GRAMMAR_PATTERN_LIMITS[jlpt][band];
-      const qLimits = QUIZ_LIMITS[jlpt][band];
+    if (htmlLevel && htmlDuration) {
+      const vLim = vocabularyLimit({ language, duration: htmlDuration, level: htmlLevel });
+      const gLim = grammarLimit({ language, duration: htmlDuration, level: htmlLevel });
 
       const vocabCount = input.vocabEntries.filter((e) => {
         const p = parseVocabEntry(e.content);
@@ -302,48 +362,180 @@ export function validateStoryPublishInput(
       const grammarCount = input.grammarEntries.filter((e) => {
         return parseGrammarEntry(e.content).headline.trim().length > 0;
       }).length;
-      const quizCount = input.quizEntries.filter((e) => parseQuizEntry(e.content) != null).length;
 
-      if (vocabCount < vLimits.min || vocabCount > vLimits.max) {
-        pieces.push(
-          resultFromIssues([
-            block(
-              'learn.vocab.count',
-              'learn.count.vocab.range',
-              'learn.count.vocab.range',
-              { min: vLimits.min, max: vLimits.max, actual: vocabCount },
-            ),
-          ]),
-        );
+      if (vLim) {
+        if (promptMode === 'ai') {
+          const expected = vLim.defaultValue;
+          if (vocabCount !== expected) {
+            pieces.push(
+              resultFromIssues([
+                block(
+                  'learn.vocab.count',
+                  'publish.htmlRules.vocabularyCountMismatch',
+                  'publish.htmlRules.vocabularyCountMismatch',
+                  { expected, actual: vocabCount },
+                ),
+              ]),
+            );
+          }
+        } else if (vocabCount < vLim.manualMin || vocabCount > vLim.manualMax) {
+          pieces.push(
+            resultFromIssues([
+              block(
+                'learn.vocab.count',
+                'publish.htmlRules.vocabularyCountMismatch',
+                'publish.htmlRules.vocabularyCountMismatch',
+                { min: vLim.manualMin, max: vLim.manualMax, actual: vocabCount },
+              ),
+            ]),
+          );
+        }
       }
-      if (grammarCount < gLimits.min || grammarCount > gLimits.max) {
-        pieces.push(
-          resultFromIssues([
-            block(
-              'learn.grammar.count',
-              'learn.count.grammar.range',
-              'learn.count.grammar.range',
-              { min: gLimits.min, max: gLimits.max, actual: grammarCount },
-            ),
-          ]),
-        );
+
+      if (gLim) {
+        if (promptMode === 'ai') {
+          const expected = gLim.defaultValue;
+          if (grammarCount !== expected) {
+            pieces.push(
+              resultFromIssues([
+                block(
+                  'learn.grammar.count',
+                  'publish.htmlRules.grammarCountMismatch',
+                  'publish.htmlRules.grammarCountMismatch',
+                  { expected, actual: grammarCount },
+                ),
+              ]),
+            );
+          }
+        } else if (grammarCount < gLim.manualMin || grammarCount > gLim.manualMax) {
+          pieces.push(
+            resultFromIssues([
+              block(
+                'learn.grammar.count',
+                'publish.htmlRules.grammarCountMismatch',
+                'publish.htmlRules.grammarCountMismatch',
+                { min: gLim.manualMin, max: gLim.manualMax, actual: grammarCount },
+              ),
+            ]),
+          );
+        }
       }
-      const qMaxAllowed = Math.min(qLimits.absoluteMax, QUIZ_GLOBAL_HARD_MAX, qLimits.max);
-      if (quizCount < qLimits.min || quizCount > qMaxAllowed) {
-        pieces.push(
-          resultFromIssues([
-            block(
-              'learn.quiz.count',
-              'learn.count.quiz.range',
-              'learn.count.quiz.range',
-              {
-                min: qLimits.min,
-                max: qMaxAllowed,
-                actual: quizCount,
-              },
-            ),
-          ]),
-        );
+
+      const quizCounts = quizCountsForHtmlRules(input.quizEntries);
+      const selected =
+        promptMode === 'ai'
+          ? selectedFullLearnLimits({
+              mode: 'ai',
+              language,
+              duration: htmlDuration,
+              level: htmlLevel,
+              preset,
+            })
+          : null;
+
+      if (promptMode === 'ai' && selected) {
+        if (quizCounts.total !== selected.totalQuizCount) {
+          pieces.push(
+            resultFromIssues([
+              block(
+                'learn.quiz.count',
+                'publish.htmlRules.quizTotalMismatch',
+                'publish.htmlRules.quizTotalMismatch',
+                { expected: selected.totalQuizCount, actual: quizCounts.total },
+              ),
+            ]),
+          );
+        }
+        if (quizCounts.vocabulary !== selected.vocabularyQuizCount) {
+          pieces.push(
+            resultFromIssues([
+              block(
+                'learn.quiz.vocabulary',
+                'publish.htmlRules.quizVocabularyMismatch',
+                'publish.htmlRules.quizVocabularyMismatch',
+                { expected: selected.vocabularyQuizCount, actual: quizCounts.vocabulary },
+              ),
+            ]),
+          );
+        }
+        if (quizCounts.grammar !== selected.grammarQuizCount) {
+          pieces.push(
+            resultFromIssues([
+              block(
+                'learn.quiz.grammar',
+                'publish.htmlRules.quizGrammarMismatch',
+                'publish.htmlRules.quizGrammarMismatch',
+                { expected: selected.grammarQuizCount, actual: quizCounts.grammar },
+              ),
+            ]),
+          );
+        }
+        if (quizCounts.sentence !== selected.sentenceQuizCount) {
+          pieces.push(
+            resultFromIssues([
+              block(
+                'learn.quiz.sentence',
+                'publish.htmlRules.quizSentenceMismatch',
+                'publish.htmlRules.quizSentenceMismatch',
+                { expected: selected.sentenceQuizCount, actual: quizCounts.sentence },
+              ),
+            ]),
+          );
+        }
+      } else if (promptMode === 'manual') {
+        const totalLim = quizLimit({ duration: htmlDuration, level: htmlLevel, quizCategory: 'Total Quiz' });
+        const vqLim = quizLimit({ duration: htmlDuration, level: htmlLevel, quizCategory: 'Vocabulary Quiz' });
+        const gqLim = quizLimit({ duration: htmlDuration, level: htmlLevel, quizCategory: 'Grammar Quiz' });
+        const sqLim = quizLimit({ duration: htmlDuration, level: htmlLevel, quizCategory: 'Sentence Quiz' });
+
+        if (totalLim && (quizCounts.total < totalLim.manualMin || quizCounts.total > totalLim.manualMax)) {
+          pieces.push(
+            resultFromIssues([
+              block(
+                'learn.quiz.count',
+                'publish.htmlRules.quizTotalMismatch',
+                'publish.htmlRules.quizTotalMismatch',
+                { min: totalLim.manualMin, max: totalLim.manualMax, actual: quizCounts.total },
+              ),
+            ]),
+          );
+        }
+        if (vqLim && (quizCounts.vocabulary < vqLim.manualMin || quizCounts.vocabulary > vqLim.manualMax)) {
+          pieces.push(
+            resultFromIssues([
+              block(
+                'learn.quiz.vocabulary',
+                'publish.htmlRules.quizVocabularyMismatch',
+                'publish.htmlRules.quizVocabularyMismatch',
+                { min: vqLim.manualMin, max: vqLim.manualMax, actual: quizCounts.vocabulary },
+              ),
+            ]),
+          );
+        }
+        if (gqLim && (quizCounts.grammar < gqLim.manualMin || quizCounts.grammar > gqLim.manualMax)) {
+          pieces.push(
+            resultFromIssues([
+              block(
+                'learn.quiz.grammar',
+                'publish.htmlRules.quizGrammarMismatch',
+                'publish.htmlRules.quizGrammarMismatch',
+                { min: gqLim.manualMin, max: gqLim.manualMax, actual: quizCounts.grammar },
+              ),
+            ]),
+          );
+        }
+        if (sqLim && (quizCounts.sentence < sqLim.manualMin || quizCounts.sentence > sqLim.manualMax)) {
+          pieces.push(
+            resultFromIssues([
+              block(
+                'learn.quiz.sentence',
+                'publish.htmlRules.quizSentenceMismatch',
+                'publish.htmlRules.quizSentenceMismatch',
+                { min: sqLim.manualMin, max: sqLim.manualMax, actual: quizCounts.sentence },
+              ),
+            ]),
+          );
+        }
       }
     }
 
@@ -393,6 +585,7 @@ export function storyPublishInputFromDraftRow(draft: {
   description?: string | null;
   level?: string | null;
   targetDurationBandKey?: string | null;
+  promptSourceNote?: string | null;
   moduleWorkflowStatuses?: unknown;
   sentences?: Array<{ content: unknown }>;
   vocabEntries?: Array<{ content: unknown }>;
@@ -416,6 +609,7 @@ export function storyPublishInputFromDraftRow(draft: {
     levelRaw: draft.level ?? null,
     targetDurationBandKey: draft.targetDurationBandKey ?? null,
     durationSeconds: null,
+    promptSourceNote: draft.promptSourceNote ?? null,
     sentences: draft.sentences ?? [],
     vocabEntries: draft.vocabEntries ?? [],
     grammarEntries: draft.grammarEntries ?? [],

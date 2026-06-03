@@ -1,4 +1,7 @@
 import 'package:flutter/foundation.dart' show kDebugMode, debugPrint;
+import 'package:nimon/core/limits/html_generator_limits.dart';
+import 'package:nimon/core/validation/text_normalization.dart' show charLength;
+import 'package:nimon/features/create/creator_prompt_source_note.dart';
 import 'package:nimon/features/create/creator_step_id.dart';
 import 'package:nimon/features/create/story_v1_model.dart';
 
@@ -82,6 +85,48 @@ class CreatorV1DurationThresholds {
   };
 }
 
+// -----------------------------------------------------------------------------
+// HTML generator readiness context (source of truth for creator readiness)
+// -----------------------------------------------------------------------------
+
+class HtmlCreatorReadinessContext {
+  const HtmlCreatorReadinessContext({
+    required this.mode,
+    required this.duration,
+    required this.level,
+    this.language = HtmlLearningLanguage.jp,
+    this.preset = HtmlLimitPreset.defaultValue,
+  });
+
+  final HtmlPromptMode mode;
+  final HtmlLearningLanguage language;
+  final String duration; // '3-5 mins' | '5-7 mins' | '7-9 mins'
+  final String level; // 'N5/A1' ... 'N1/C1'
+
+  /// AI slider preset (V1: default only; manual ignores).
+  final HtmlLimitPreset preset;
+}
+
+/// Canonical prompt-mode signal: [StoryBasics.promptSourceNote] (with import backfill).
+String creatorDraftPromptSourceNote(CreatorStoryV1 draft) =>
+    effectiveCreatorDraftPromptSourceNote(draft);
+
+HtmlPromptMode resolveHtmlPromptModeForDraft(CreatorStoryV1 d) =>
+    resolveHtmlPromptModeFromSourceNote(creatorDraftPromptSourceNote(d));
+
+HtmlCreatorReadinessContext? resolveHtmlCreatorReadinessContext(
+  CreatorStoryV1 draft,
+) {
+  final level = normalizeHtmlLevel(draft.level);
+  final duration = normalizeHtmlDuration(draft.basics.targetDurationBandKey);
+  if (level == null || duration == null) return null;
+  return HtmlCreatorReadinessContext(
+    mode: resolveHtmlPromptModeForDraft(draft),
+    duration: duration,
+    level: level,
+  );
+}
+
 class CreatorModuleCompletion {
   const CreatorModuleCompletion({
     required this.state,
@@ -141,6 +186,41 @@ int _validQuizCount(CreatorStoryV1 d) =>
 int _validAudioCount(CreatorStoryV1 d) =>
     (d.audio.storyAudio?.isValidV1 == true) ? 1 : 0;
 
+int _storyJapaneseCharCount(CreatorStoryV1 d) {
+  var n = 0;
+  for (final s in d.sentences) {
+    final t = s.japaneseText.trim();
+    if (t.isEmpty) continue;
+    n += charLength(t.replaceAll(RegExp(r'\s'), ''));
+  }
+  return n;
+}
+
+({int vocabulary, int grammar, int sentence}) _quizDistributionCounts(
+  CreatorStoryV1 d,
+) {
+  var v = 0;
+  var g = 0;
+  var s = 0;
+  for (final q in d.quiz.entries) {
+    if (!q.isValidV1) continue;
+    switch (q.category) {
+      case CreatorQuizCategory.vocabulary:
+        v++;
+      case CreatorQuizCategory.grammar:
+        g++;
+      case CreatorQuizCategory.sampleSentence:
+        s++;
+      case CreatorQuizCategory.kanji:
+        // Counted in total quiz only (HTML distribution tables ignore kanji).
+        break;
+    }
+  }
+  return (vocabulary: v, grammar: g, sentence: s);
+}
+
+int? _exactSelected(HtmlSelectedCount c) => c is HtmlCountExact ? c.value : null;
+
 // -----------------------------------------------------------------------------
 // Count-based task status (drawer chips + publish alignment)
 // -----------------------------------------------------------------------------
@@ -186,13 +266,11 @@ LearnModuleTaskStatus learnModuleTaskStatusFromStoryBasics(
 
 LearnModuleTaskStatus learnModuleTaskStatusFromStorySentences(
     CreatorStoryV1 draft) {
-  final count = _validSentencesCount(draft);
-  final resolved = resolveV1ThresholdsForDraft(draft);
-  final min = resolved?.minStorySentences;
-  return learnModuleTaskStatusFromCountThreshold(
-    current: count,
-    requiredCount: min,
-  );
+  final m = computeStorySentencesStatus(draft);
+  if (m.complete) return LearnModuleTaskStatus.completed;
+  final current = _validSentencesCount(draft);
+  if (current <= 0) return LearnModuleTaskStatus.notStarted;
+  return LearnModuleTaskStatus.inProgress;
 }
 
 /// True when valid entry count meets the duration-band minimum for [id].
@@ -201,20 +279,13 @@ bool creatorLearnModuleMeetsCountMinimum(
   LearnModuleId id, {
   CreatorV1DurationThresholds? thresholds,
 }) {
-  final t = thresholds ?? resolveV1ThresholdsForDraft(draft);
-  final min = switch (id) {
-    LearnModuleId.vocabularyKanji => t?.minVocabularyEntries,
-    LearnModuleId.grammar => t?.minGrammarEntries,
-    LearnModuleId.quiz => t?.minQuizEntries,
-    LearnModuleId.audio => t?.minListeningAudioItems,
+  final m = switch (id) {
+    LearnModuleId.vocabularyKanji => computeVocabularyStatus(draft),
+    LearnModuleId.grammar => computeGrammarStatus(draft),
+    LearnModuleId.quiz => computeQuizStatus(draft),
+    LearnModuleId.audio => computeListeningStatus(draft),
   };
-  final current = switch (id) {
-    LearnModuleId.vocabularyKanji => _validVocabCount(draft),
-    LearnModuleId.grammar => _validGrammarCount(draft),
-    LearnModuleId.quiz => _validQuizCount(draft),
-    LearnModuleId.audio => _validAudioCount(draft),
-  };
-  return min != null && min > 0 && current >= min;
+  return m.complete;
 }
 
 LearnModuleTaskStatus learnModuleProgressTaskStatus(
@@ -222,34 +293,34 @@ LearnModuleTaskStatus learnModuleProgressTaskStatus(
   LearnModuleId id, {
   CreatorV1DurationThresholds? thresholds,
 }) {
-  final t = thresholds ?? resolveV1ThresholdsForDraft(draft);
-  final min = switch (id) {
-    LearnModuleId.vocabularyKanji => t?.minVocabularyEntries,
-    LearnModuleId.grammar => t?.minGrammarEntries,
-    LearnModuleId.quiz => t?.minQuizEntries,
-    LearnModuleId.audio => t?.minListeningAudioItems,
+  final m = switch (id) {
+    LearnModuleId.vocabularyKanji => computeVocabularyStatus(draft),
+    LearnModuleId.grammar => computeGrammarStatus(draft),
+    LearnModuleId.quiz => computeQuizStatus(draft),
+    LearnModuleId.audio => computeListeningStatus(draft),
   };
+  if (m.complete) return LearnModuleTaskStatus.completed;
   final current = switch (id) {
     LearnModuleId.vocabularyKanji => _validVocabCount(draft),
     LearnModuleId.grammar => _validGrammarCount(draft),
     LearnModuleId.quiz => _validQuizCount(draft),
     LearnModuleId.audio => _validAudioCount(draft),
   };
-  return learnModuleTaskStatusFromCountThreshold(
-    current: current,
-    requiredCount: min,
-  );
+  if (current <= 0) return LearnModuleTaskStatus.notStarted;
+  return LearnModuleTaskStatus.inProgress;
 }
 
 extension CreatorStoryV1LearnModuleThresholds on CreatorStoryV1 {
-  /// V1: meets duration-band minimum valid-entry counts (aligned with [computeVocabularyStatus] / …).
-  bool moduleMeetsV1Completion(LearnModuleId id) =>
+  /// HTML rules: module completion is computed from HTML generator limits.
+  bool moduleMeetsHtmlCompletion(LearnModuleId id) =>
       creatorLearnModuleMeetsCountMinimum(this, id);
 
   bool get allLearnModulesDataComplete =>
-      LearnModuleId.values.every(moduleMeetsV1Completion);
+      LearnModuleId.values.every(moduleMeetsHtmlCompletion);
 
-  /// Full Learn publish: core + every module satisfies its V1 data bar.
+  /// Full Learn publish (creator readiness): story core + every module satisfies HTML rules.
+  ///
+  /// NOTE: backend/client publish validation is unchanged in Phase 3.
   bool get canPublishFullLearn =>
       isStoryCoreReadyForReading && allLearnModulesDataComplete;
 }
@@ -344,22 +415,63 @@ CreatorModuleCompletion computeStorySentencesStatus(
   CreatorV1DurationThresholds? thresholds,
 }) {
   final count = _validSentencesCount(draft);
-  final resolved = thresholds ?? resolveV1ThresholdsForDraft(draft);
-  final min = resolved?.minStorySentences;
-  final ok = min != null && count >= min;
-  final ratio = (min == null || min <= 0)
-      ? 0.0
-      : (count / min).clamp(0.0, 1.0).toDouble();
+  final ctx = resolveHtmlCreatorReadinessContext(draft);
+  if (ctx == null) {
+    return CreatorModuleCompletion(
+      state: CreatorCompletionState.open,
+      complete: false,
+      ratio: 0.0,
+      countLabel: '$count/—',
+      unmetMessage: 'Choose a target duration and level in Story basics',
+    );
+  }
+
+  final lim = HtmlGeneratorLimits.sentenceLimit(
+    mode: ctx.mode,
+    language: ctx.language,
+    duration: ctx.duration,
+    level: ctx.level,
+  );
+  if (lim == null) {
+    return CreatorModuleCompletion(
+      state: CreatorCompletionState.open,
+      complete: false,
+      ratio: 0.0,
+      countLabel: '$count/—',
+      unmetMessage: 'Story rules unavailable for this duration/level',
+    );
+  }
+
+  final chars = _storyJapaneseCharCount(draft);
+  final okCount = count >= lim.minSentences && count <= lim.maxSentences;
+  final okChars = chars >= lim.minChars && chars <= lim.maxChars;
+  final ok = okCount && okChars;
+
+  final ratio = (count / lim.minSentences).clamp(0.0, 1.0).toDouble();
+  final label =
+      '$count/${lim.minSentences}–${lim.maxSentences} · $chars/${lim.minChars}–${lim.maxChars} chars';
   return CreatorModuleCompletion(
     state: ok ? CreatorCompletionState.complete : CreatorCompletionState.open,
     complete: ok,
     ratio: ratio,
-    countLabel: min == null ? '$count/—' : '$count/$min',
+    countLabel: label,
     unmetMessage: ok
         ? null
-        : (min == null
-            ? 'Choose a target duration in Story basics'
-            : 'Add at least $min story sentences'),
+        : () {
+            if (count < lim.minSentences) {
+              return 'Need at least ${lim.minSentences} sentences';
+            }
+            if (count > lim.maxSentences) {
+              return 'Too many sentences (max ${lim.maxSentences})';
+            }
+            if (chars < lim.minChars) {
+              return 'Need at least ${lim.minChars} Japanese chars';
+            }
+            if (chars > lim.maxChars) {
+              return 'Too many Japanese chars (max ${lim.maxChars})';
+            }
+            return 'Story sentences incomplete';
+          }(),
   );
 }
 
@@ -368,22 +480,58 @@ CreatorModuleCompletion computeVocabularyStatus(
   CreatorV1DurationThresholds? thresholds,
 }) {
   final count = _validVocabCount(draft);
-  final resolved = thresholds ?? resolveV1ThresholdsForDraft(draft);
-  final min = resolved?.minVocabularyEntries;
-  final ok = min != null && count >= min;
-  final ratio = (min == null || min <= 0)
-      ? 0.0
-      : (count / min).clamp(0.0, 1.0).toDouble();
+  final ctx = resolveHtmlCreatorReadinessContext(draft);
+  if (ctx == null) {
+    return CreatorModuleCompletion(
+      state: CreatorCompletionState.open,
+      complete: false,
+      ratio: 0.0,
+      countLabel: '$count/—',
+      unmetMessage: 'Choose a target duration and level in Story basics',
+    );
+  }
+  final lim = HtmlGeneratorLimits.vocabularyLimit(
+    language: ctx.language,
+    duration: ctx.duration,
+    level: ctx.level,
+  );
+  if (lim == null) {
+    return CreatorModuleCompletion(
+      state: CreatorCompletionState.open,
+      complete: false,
+      ratio: 0.0,
+      countLabel: '$count/—',
+      unmetMessage: 'Vocabulary rules unavailable for this duration/level',
+    );
+  }
+
+  final requiredExact =
+      _exactSelected(lim.selectedFor(HtmlPromptMode.ai, ctx.preset));
+  final ok = ctx.mode == HtmlPromptMode.ai
+      ? (requiredExact != null && count == requiredExact)
+      : (count >= lim.manualMin && count <= lim.manualMax);
+
+  final requiredLabel = ctx.mode == HtmlPromptMode.ai
+      ? '${requiredExact ?? '—'}'
+      : '${lim.manualMin}–${lim.manualMax}';
+
+  final ratio = ctx.mode == HtmlPromptMode.ai
+      ? ((requiredExact == null || requiredExact <= 0)
+          ? 0.0
+          : (count / requiredExact).clamp(0.0, 1.0).toDouble())
+      : (count / lim.manualMin).clamp(0.0, 1.0).toDouble();
   return CreatorModuleCompletion(
     state: ok ? CreatorCompletionState.complete : CreatorCompletionState.open,
     complete: ok,
     ratio: ratio,
-    countLabel: min == null ? '$count/—' : '$count/$min',
+    countLabel: '$count/$requiredLabel',
     unmetMessage: ok
         ? null
-        : (min == null
-            ? 'Choose a target duration in Story basics'
-            : 'Add at least $min vocabulary items'),
+        : (ctx.mode == HtmlPromptMode.ai
+            ? 'Need exactly $requiredLabel vocab items'
+            : (count < lim.manualMin
+                ? 'Need at least ${lim.manualMin} vocab items'
+                : 'Too many vocab items (max ${lim.manualMax})')),
   );
 }
 
@@ -392,22 +540,58 @@ CreatorModuleCompletion computeGrammarStatus(
   CreatorV1DurationThresholds? thresholds,
 }) {
   final count = _validGrammarCount(draft);
-  final resolved = thresholds ?? resolveV1ThresholdsForDraft(draft);
-  final min = resolved?.minGrammarEntries;
-  final ok = min != null && count >= min;
-  final ratio = (min == null || min <= 0)
-      ? 0.0
-      : (count / min).clamp(0.0, 1.0).toDouble();
+  final ctx = resolveHtmlCreatorReadinessContext(draft);
+  if (ctx == null) {
+    return CreatorModuleCompletion(
+      state: CreatorCompletionState.open,
+      complete: false,
+      ratio: 0.0,
+      countLabel: '$count/—',
+      unmetMessage: 'Choose a target duration and level in Story basics',
+    );
+  }
+  final lim = HtmlGeneratorLimits.grammarLimit(
+    language: ctx.language,
+    duration: ctx.duration,
+    level: ctx.level,
+  );
+  if (lim == null) {
+    return CreatorModuleCompletion(
+      state: CreatorCompletionState.open,
+      complete: false,
+      ratio: 0.0,
+      countLabel: '$count/—',
+      unmetMessage: 'Grammar rules unavailable for this duration/level',
+    );
+  }
+
+  final requiredExact =
+      _exactSelected(lim.selectedFor(HtmlPromptMode.ai, ctx.preset));
+  final ok = ctx.mode == HtmlPromptMode.ai
+      ? (requiredExact != null && count == requiredExact)
+      : (count >= lim.manualMin && count <= lim.manualMax);
+
+  final requiredLabel = ctx.mode == HtmlPromptMode.ai
+      ? '${requiredExact ?? '—'}'
+      : '${lim.manualMin}–${lim.manualMax}';
+
+  final ratio = ctx.mode == HtmlPromptMode.ai
+      ? ((requiredExact == null || requiredExact <= 0)
+          ? 0.0
+          : (count / requiredExact).clamp(0.0, 1.0).toDouble())
+      : (count / lim.manualMin).clamp(0.0, 1.0).toDouble();
   return CreatorModuleCompletion(
     state: ok ? CreatorCompletionState.complete : CreatorCompletionState.open,
     complete: ok,
     ratio: ratio,
-    countLabel: min == null ? '$count/—' : '$count/$min',
+    countLabel: '$count/$requiredLabel',
     unmetMessage: ok
         ? null
-        : (min == null
-            ? 'Choose a target duration in Story basics'
-            : 'Add at least $min grammar items'),
+        : (ctx.mode == HtmlPromptMode.ai
+            ? 'Need exactly $requiredLabel grammar items'
+            : (count < lim.manualMin
+                ? 'Need at least ${lim.manualMin} grammar items'
+                : 'Too many grammar items (max ${lim.manualMax})')),
   );
 }
 
@@ -416,22 +600,115 @@ CreatorModuleCompletion computeQuizStatus(
   CreatorV1DurationThresholds? thresholds,
 }) {
   final count = _validQuizCount(draft);
-  final resolved = thresholds ?? resolveV1ThresholdsForDraft(draft);
-  final min = resolved?.minQuizEntries;
-  final ok = min != null && count >= min;
-  final ratio = (min == null || min <= 0)
-      ? 0.0
-      : (count / min).clamp(0.0, 1.0).toDouble();
+  final ctx = resolveHtmlCreatorReadinessContext(draft);
+  if (ctx == null) {
+    return CreatorModuleCompletion(
+      state: CreatorCompletionState.open,
+      complete: false,
+      ratio: 0.0,
+      countLabel: '$count/—',
+      unmetMessage: 'Choose a target duration and level in Story basics',
+    );
+  }
+
+  final dist = _quizDistributionCounts(draft);
+  final totalLim = HtmlGeneratorLimits.quizLimit(
+    duration: ctx.duration,
+    level: ctx.level,
+    quizCategory: 'Total Quiz',
+  );
+  final vLim = HtmlGeneratorLimits.quizLimit(
+    duration: ctx.duration,
+    level: ctx.level,
+    quizCategory: 'Vocabulary Quiz',
+  );
+  final gLim = HtmlGeneratorLimits.quizLimit(
+    duration: ctx.duration,
+    level: ctx.level,
+    quizCategory: 'Grammar Quiz',
+  );
+  final sLim = HtmlGeneratorLimits.quizLimit(
+    duration: ctx.duration,
+    level: ctx.level,
+    quizCategory: 'Sentence Quiz',
+  );
+
+  if (totalLim == null || vLim == null || gLim == null || sLim == null) {
+    return CreatorModuleCompletion(
+      state: CreatorCompletionState.open,
+      complete: false,
+      ratio: 0.0,
+      countLabel: '$count/—',
+      unmetMessage: 'Quiz rules unavailable for this duration/level',
+    );
+  }
+
+  final selected = ctx.mode == HtmlPromptMode.ai
+      ? HtmlGeneratorLimits.selectedFullLearnLimits(
+          mode: HtmlPromptMode.ai,
+          language: ctx.language,
+          duration: ctx.duration,
+          level: ctx.level,
+          preset: ctx.preset,
+        )
+      : null;
+
+  final ok = ctx.mode == HtmlPromptMode.ai
+      ? (selected != null &&
+          count == selected.totalQuizCount &&
+          dist.vocabulary == selected.vocabularyQuizCount &&
+          dist.grammar == selected.grammarQuizCount &&
+          dist.sentence == selected.sentenceQuizCount)
+      : (count >= totalLim.manualMin &&
+          count <= totalLim.manualMax &&
+          dist.vocabulary >= vLim.manualMin &&
+          dist.vocabulary <= vLim.manualMax &&
+          dist.grammar >= gLim.manualMin &&
+          dist.grammar <= gLim.manualMax &&
+          dist.sentence >= sLim.manualMin &&
+          dist.sentence <= sLim.manualMax);
+
+  final label = ctx.mode == HtmlPromptMode.ai && selected != null
+      ? '$count/${selected.totalQuizCount} · '
+          'v${dist.vocabulary}/${selected.vocabularyQuizCount} '
+          'g${dist.grammar}/${selected.grammarQuizCount} '
+          's${dist.sentence}/${selected.sentenceQuizCount}'
+      : '$count/${totalLim.manualMin}–${totalLim.manualMax} · '
+          'v${dist.vocabulary}/${vLim.manualMin}–${vLim.manualMax} '
+          'g${dist.grammar}/${gLim.manualMin}–${gLim.manualMax} '
+          's${dist.sentence}/${sLim.manualMin}–${sLim.manualMax}';
+
+  final ratio = ctx.mode == HtmlPromptMode.ai
+      ? ((selected == null || selected.totalQuizCount <= 0)
+          ? 0.0
+          : (count / selected.totalQuizCount).clamp(0.0, 1.0).toDouble())
+      : (count / totalLim.manualMin).clamp(0.0, 1.0).toDouble();
   return CreatorModuleCompletion(
     state: ok ? CreatorCompletionState.complete : CreatorCompletionState.open,
     complete: ok,
     ratio: ratio,
-    countLabel: min == null ? '$count/—' : '$count/$min',
+    countLabel: label,
     unmetMessage: ok
         ? null
-        : (min == null
-            ? 'Choose a target duration in Story basics'
-            : 'Add at least $min quizzes'),
+        : (ctx.mode == HtmlPromptMode.ai && selected != null
+            ? (count != selected.totalQuizCount
+                ? 'Need exactly ${selected.totalQuizCount} quizzes total'
+                : 'Need quiz distribution: '
+                    'vocabulary ${selected.vocabularyQuizCount}, '
+                    'grammar ${selected.grammarQuizCount}, '
+                    'sentence ${selected.sentenceQuizCount}')
+            : () {
+                if (count < totalLim.manualMin) {
+                  return 'Need at least ${totalLim.manualMin} quizzes total';
+                }
+                if (count > totalLim.manualMax) {
+                  return 'Too many quizzes (max ${totalLim.manualMax})';
+                }
+                return 'Need quiz distribution: '
+                    'vocabulary ${vLim.manualMin}–${vLim.manualMax}, '
+                    'grammar ${gLim.manualMin}–${gLim.manualMax}, '
+                    'sentence ${sLim.manualMin}–${sLim.manualMax}';
+              }()),
   );
 }
 
@@ -440,22 +717,14 @@ CreatorModuleCompletion computeListeningStatus(
   CreatorV1DurationThresholds? thresholds,
 }) {
   final count = _validAudioCount(draft);
-  final resolved = thresholds ?? resolveV1ThresholdsForDraft(draft);
-  final min = resolved?.minListeningAudioItems;
-  final ok = min != null && count >= min;
-  final ratio = (min == null || min <= 0)
-      ? 0.0
-      : (count / min).clamp(0.0, 1.0).toDouble();
+  final ok = count >= 1;
+  final ratio = (count / 1).clamp(0.0, 1.0).toDouble();
   return CreatorModuleCompletion(
     state: ok ? CreatorCompletionState.complete : CreatorCompletionState.open,
     complete: ok,
     ratio: ratio,
-    countLabel: min == null ? '$count/—' : '$count/$min',
-    unmetMessage: ok
-        ? null
-        : (min == null
-            ? 'Choose a target duration in Story basics'
-            : 'Attach 1 audio file'),
+    countLabel: '$count/1',
+    unmetMessage: ok ? null : 'Need audio for Full Learn',
   );
 }
 
@@ -473,37 +742,35 @@ CreatorProgressSnapshot computeCreatorProgressSnapshot(
     return base;
   }
 
-  final resolved = thresholds ?? resolveV1ThresholdsForDraft(draft);
-
   final basics = withCurrent(
-    computeStoryBasicsStatus(draft, thresholds: resolved),
+    computeStoryBasicsStatus(draft, thresholds: thresholds),
     CreatorStepId.basics,
   );
   final sentences = withCurrent(
-    computeStorySentencesStatus(draft, thresholds: resolved),
+    computeStorySentencesStatus(draft, thresholds: thresholds),
     CreatorStepId.sentences,
   );
   final vocab = withCurrent(
-    computeVocabularyStatus(draft, thresholds: resolved),
+    computeVocabularyStatus(draft, thresholds: thresholds),
     CreatorStepId.vocabulary,
   );
   final grammar = withCurrent(
-    computeGrammarStatus(draft, thresholds: resolved),
+    computeGrammarStatus(draft, thresholds: thresholds),
     CreatorStepId.grammar,
   );
   final quiz = withCurrent(
-    computeQuizStatus(draft, thresholds: resolved),
+    computeQuizStatus(draft, thresholds: thresholds),
     CreatorStepId.quiz,
   );
   final listening = withCurrent(
-    computeListeningStatus(draft, thresholds: resolved),
+    computeListeningStatus(draft, thresholds: thresholds),
     CreatorStepId.listening,
   );
 
   if (kDebugMode) {
-    final band = resolved?.band;
+    final ctx = resolveHtmlCreatorReadinessContext(draft);
     debugPrint(
-      '[creator_thresholds] duration=${band == null ? 'missing' : band.storageKey}',
+      '[creator_html_rules] ctx=${ctx == null ? 'missing' : '${ctx.duration} ${ctx.level} ${ctx.mode.name}'}',
     );
     debugPrint('[creator_status] activeModule=$activeStep');
     debugPrint('[creator_status] basics=${basics.state} ${basics.countLabel}');
@@ -535,7 +802,7 @@ CreatorStoryV1 syncModuleWorkflowWithContent(CreatorStoryV1 story) {
     story.moduleWorkflowStatuses,
   );
   for (final id in LearnModuleId.values) {
-    if (story.moduleMeetsV1Completion(id)) {
+    if (story.moduleMeetsHtmlCompletion(id)) {
       m[id] = LearnModuleTaskStatus.completed;
     }
   }

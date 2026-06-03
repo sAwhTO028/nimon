@@ -1,4 +1,5 @@
 import 'dart:async' show unawaited;
+import 'dart:developer' as developer;
 import 'dart:ui' show PlatformDispatcher;
 
 import 'package:flutter/foundation.dart';
@@ -57,7 +58,17 @@ import 'package:nimon/ui/app_messenger.dart';
 import 'package:nimon/ui/shell/floating_dock_tab_handler.dart';
 import 'package:nimon/widgets/floating_dock_nav_bar.dart';
 
+void _logM20gReleaseRemoteConfig() {
+  developer.log(
+    'apiBase=${RemoteBackendConfig.apiBaseUrl} '
+    'remoteDrafts=${RemoteBackendConfig.useRemoteDrafts} '
+    'remoteMonoFeed=${RemoteBackendConfig.useRemoteMonoFeed}',
+    name: 'M20G release-config',
+  );
+}
+
 void main() {
+  _logM20gReleaseRemoteConfig();
   if (kDebugMode || kProfileMode) {
     debugPrint('[M20D api-base] ${RemoteBackendConfig.apiBaseUrl}');
   }

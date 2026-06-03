@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart' show debugPrint, kDebugMode;
 import 'package:http/http.dart' as http;
 import 'package:nimon/features/auth/auth_strict_unauthorized.dart';
 import 'package:nimon/features/auth/authenticated_http.dart';
+import 'package:nimon/core/settings/content_community.dart';
 import 'package:nimon/features/create/data/remote_backend_config.dart';
 
 typedef PreferencesAuthHeaderBuilder = Future<Map<String, String>> Function();
@@ -96,10 +97,16 @@ UserPreferences _parsePreferences(Map<String, Object?> m) {
     return t.isEmpty ? fallback : t;
   }
 
+  final rawContentLocale = pick(
+    'contentLocale',
+    UserPreferences.defaults.contentLocale,
+  );
+  final contentLocale = normalizeContentLocaleWireCode(rawContentLocale) ??
+      UserPreferences.defaults.contentLocale;
+
   return UserPreferences(
     appLocale: pick('appLocale', UserPreferences.defaults.appLocale),
-    contentLocale:
-        pick('contentLocale', UserPreferences.defaults.contentLocale),
+    contentLocale: contentLocale,
     learningLanguage:
         pick('learningLanguage', UserPreferences.defaults.learningLanguage),
     themeMode: pick('themeMode', UserPreferences.defaults.themeMode),

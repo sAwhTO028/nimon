@@ -1,5 +1,7 @@
+import 'package:flutter/foundation.dart' show debugPrint, kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:nimon/core/limits/html_generator_limits.dart';
 import 'package:go_router/go_router.dart';
 import 'package:nimon/core/validation/app_quota_exceeded_exception.dart';
 import 'package:nimon/core/validation/protected_action.dart';
@@ -8,6 +10,8 @@ import 'package:nimon/core/validation/publish_validation.dart';
 import 'package:nimon/core/validation/validation_mode.dart';
 import 'package:nimon/core/validation/validation_result.dart';
 import 'package:nimon/features/create/creator_back_policy.dart';
+import 'package:nimon/features/create/creator_completion_rules.dart';
+import 'package:nimon/features/create/creator_prompt_source_note.dart';
 import 'package:nimon/features/create/creator_publish_preflight.dart';
 import 'package:nimon/features/create/creator_publish_status_provider.dart';
 import 'package:nimon/features/create/data/story_draft_remote_publish_errors.dart';
@@ -48,12 +52,57 @@ Future<bool> _preflightCreatorPublish({
   required BuildContext context,
   required StoryReviewPublishMode publishMode,
 }) async {
-  final draft = ref.read(storyCreatorDraftDataProvider);
-  final data = storyPublishDataFromCreator(draft);
   final vm = publishMode == StoryReviewPublishMode.readingOnly
       ? ValidationMode.readOnlyPublish
       : ValidationMode.fullLearnPublish;
-  final pre = validateStoryPublishData(data, vm);
+
+  ValidationResult pre;
+  if (vm == ValidationMode.fullLearnPublish) {
+    ref.read(storyCreatorDraftProvider.notifier).ensurePromptSourceBackfillForPublish();
+    final draft = ref.read(storyCreatorDraftDataProvider);
+    final fl = runFullLearnPublishPreflight(draft);
+    if (kDebugMode) {
+      final data = fl.publishData;
+      final level = normalizeHtmlLevel(data.levelRaw);
+      final duration = normalizeHtmlDuration(data.targetDurationBandKey);
+      final quizTotal = data.quizEntries.length;
+      final manualLim = (level != null && duration != null)
+          ? HtmlGeneratorLimits.quizLimit(
+              duration: duration,
+              level: level,
+              quizCategory: 'Total Quiz',
+            )
+          : null;
+      final aiSel = (fl.resolvedMode == HtmlPromptMode.ai &&
+              level != null &&
+              duration != null)
+          ? HtmlGeneratorLimits.selectedFullLearnLimits(
+              mode: HtmlPromptMode.ai,
+              language: HtmlLearningLanguage.jp,
+              duration: duration,
+              level: level,
+              preset: HtmlLimitPreset.defaultValue,
+            )
+          : null;
+      debugPrint(
+        '[publish_preflight] draftId=${draft.id} '
+        'storedNote="${creatorDraftPromptSourceNoteStored(draft)}" '
+        'creatorNote="${creatorDraftPromptSourceNote(draft)}" '
+        'snapshotNote="${data.promptSourceNote}" '
+        'mode=${fl.resolvedMode} quizTotal=$quizTotal '
+        'aiExpectedTotal=${aiSel?.totalQuizCount} '
+        'manualRange=${manualLim == null ? null : '${manualLim.manualMin}-${manualLim.manualMax}'} '
+        'issueCodes=${fl.validation.issues.map((i) => i.code).toList()} '
+        'messageKeys=${fl.validation.issues.map((i) => i.messageKey).toList()}',
+      );
+    }
+    pre = fl.validation;
+  } else {
+    final draft = ref.read(storyCreatorDraftDataProvider);
+    final data = storyPublishDataFromCreator(draft);
+    pre = validateStoryPublishData(data, vm);
+  }
+
   if (hasBlockingIssues(pre)) {
     if (context.mounted) {
       await showPublishValidationSheet(context, issues: pre.issues);
@@ -209,8 +258,12 @@ Future<void> performCreatorDrawerPublish({
         }
         if (validationErrFl != null) {
           if (context.mounted) {
-            await showPublishValidationSheet(context,
-                issues: validationErrFl.issues);
+            await showPublishValidationSheet(
+              context,
+              issues: withoutLegacyFullLearnQuizRangeIssues(
+                validationErrFl.issues,
+              ),
+            );
           }
           return;
         }

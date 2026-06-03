@@ -1,0 +1,2136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Prompt CSV Generator</title>
+<style>
+:root {
+    --primary-color:#3498db;
+    --border-color:#7f8c8d;
+    --bg-color:#f5f6fa;
+    --card-bg:#ffffff;
+    --text-color:#2c3e50;
+    --disabled-color:#bdc3c7;
+}
+* { box-sizing:border-box; margin:0; padding:0; font-family:'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+body {
+    background-color:var(--bg-color); color:var(--text-color); padding:20px;
+    display:flex; justify-content:center; align-items:flex-start; min-height:100vh;
+}
+.container {
+    background:var(--card-bg); border:4px solid var(--border-color); border-radius:12px;
+    width:100%; max-width:1180px; padding:30px; box-shadow:0 4px 15px rgba(0,0,0,0.1);
+}
+.main-title { font-size:24px; font-weight:bold; margin-bottom:25px; color:#000; }
+.grid-layout { display:grid; grid-template-columns:1.1fr 1fr; gap:30px; }
+.form-group { margin-bottom:18px; display:flex; flex-direction:row; align-items:center; }
+.form-group label { width:155px; font-weight:600; font-size:15px; padding-right:10px; }
+.form-control {
+    flex:1; padding:10px 12px; border:3px solid var(--border-color); border-radius:8px;
+    font-size:15px; outline:none; background-color:#fff; width:100%;
+}
+textarea.form-control { resize:vertical; min-height:80px; }
+select.form-control {
+    cursor:pointer; appearance:none;
+    background-image:url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%237f8c8d' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+    background-repeat:no-repeat; background-position:right 10px center; background-size:16px; padding-right:40px;
+}
+select.form-control option:disabled { color:var(--disabled-color); font-style:italic; }
+.right-column { display:flex; flex-direction:column; height:100%; }
+.tabs { display:flex; gap:20px; margin-bottom:15px; border-bottom:2px solid #ecf0f1; }
+.tab { font-weight:bold; font-size:15px; padding-bottom:8px; cursor:pointer; color:var(--text-color); border-bottom:3px solid transparent; }
+.tab.active { color:var(--primary-color); border-bottom:3px solid var(--primary-color); }
+.prompt-textarea {
+    flex:1; min-height:250px; border:3px solid var(--border-color); border-radius:8px; padding:15px; font-size:15px; outline:none;
+}
+.footer-section { margin-top:20px; display:grid; grid-template-columns:1.1fr 1fr; gap:30px; align-items:center; }
+.radio-group-container { display:flex; gap:20px; padding-left:155px; }
+.radio-label { display:flex; align-items:center; gap:8px; font-weight:bold; font-size:14px; cursor:pointer; }
+.radio-label input[type="radio"] { transform:scale(1.3); accent-color:var(--primary-color); }
+.slider-wrapper { display:flex; flex-direction:column; align-items:center; width:100%; padding:0 10px; }
+.slider-container { position:relative; width:100%; display:flex; justify-content:space-between; align-items:center; margin-bottom:5px; }
+.slider-line { position:absolute; top:50%; left:0; transform:translateY(-50%); width:100%; height:4px; background-color:var(--border-color); z-index:1; }
+.slider-node { width:16px; height:16px; border-radius:50%; background-color:#fff; border:3px solid var(--border-color); z-index:2; cursor:pointer; transition:all 0.2s ease; }
+.slider-node.active { background-color:var(--primary-color); border-color:var(--primary-color); transform:scale(1.2); }
+.slider-wrapper.disabled { opacity:0.45; pointer-events:none; }
+.slider-labels { display:flex; justify-content:space-between; width:100%; padding:0; }
+.slider-labels span { font-size:13px; font-weight:600; width:45px; text-align:center; }
+.action-row { display:flex; justify-content:flex-end; align-items:center; gap:15px; margin-top:25px; }
+.btn-reset { background:none; border:none; color:var(--border-color); cursor:pointer; padding:8px; display:flex; align-items:center; justify-content:center; border-radius:50%; transition:all 0.3s ease; }
+.btn-reset:hover { color:#e74c3c; background-color:#fadbd8; transform:rotate(-180deg); }
+.btn-generate { background-color:var(--primary-color); color:white; border:none; padding:12px 30px; font-size:16px; font-weight:bold; border-radius:6px; cursor:pointer; transition:background 0.2s; text-transform:uppercase; }
+.btn-generate:hover:not(:disabled) { background-color:#2980b9; }
+.btn-generate:disabled { background-color:var(--disabled-color); cursor:not-allowed; opacity:0.7; }
+.result-section { margin-top:28px; display:none; border-top:3px solid #ecf0f1; padding-top:22px; }
+.result-title { font-size:18px; font-weight:bold; margin-bottom:14px; }
+.result-grid { display:grid; grid-template-columns:repeat(4, 1fr); gap:12px; margin-bottom:18px; }
+.result-card { border:2px solid var(--border-color); border-radius:8px; padding:10px; background:#fff; }
+.result-card .label { font-size:12px; font-weight:bold; color:#666; margin-bottom:5px; }
+.result-card .value { font-size:14px; word-break:break-word; }
+.result-textarea { width:100%; min-height:220px; border:3px solid var(--border-color); border-radius:8px; padding:14px; font-size:13px; resize:vertical; margin-top:10px; white-space:pre; }
+.small-note { font-size:13px; margin-top:8px; color:#555; line-height:1.5; }
+.result-action-row { display:flex; justify-content:flex-end; align-items:center; gap:12px; margin:12px 0 18px; flex-wrap:wrap; }
+.btn-secondary { background:#fff; color:var(--text-color); border:2px solid var(--border-color); padding:10px 18px; font-size:14px; font-weight:bold; border-radius:6px; cursor:pointer; transition:all 0.2s; }
+.btn-secondary:hover:not(:disabled) { background:#ecf0f1; }
+.btn-secondary:disabled { color:var(--disabled-color); border-color:var(--disabled-color); cursor:not-allowed; opacity:0.7; }
+.export-status { font-size:13px; color:#555; min-height:18px; }
+.prompt-result-header { display:flex; justify-content:space-between; align-items:center; gap:10px; margin-top:8px; }
+.copy-icon-btn { background:#fff; color:var(--text-color); border:2px solid var(--border-color); border-radius:6px; padding:6px 10px; cursor:pointer; font-size:16px; line-height:1; }
+.copy-icon-btn:hover:not(:disabled) { background:#ecf0f1; }
+.copy-icon-btn:disabled { color:var(--disabled-color); border-color:var(--disabled-color); cursor:not-allowed; opacity:0.7; }
+
+.precheck-panel { margin-top:12px; border:2px solid var(--border-color); border-radius:10px; padding:12px; background:#fff; }
+.precheck-panel.hidden { display:none; }
+.precheck-panel.error { border-color:#e74c3c; background:#fff6f6; }
+.precheck-panel.ok { border-color:#27ae60; background:#f3fff6; }
+.precheck-title { font-weight:800; margin-bottom:8px; }
+.precheck-grid { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:10px; }
+.precheck-item { border:1px solid var(--border-color); border-radius:8px; padding:10px; background:#fff; }
+.precheck-item .k { font-size:12px; color:#555; }
+.precheck-item .v { font-weight:700; margin-top:4px; }
+.precheck-item .bad { color:#c0392b; }
+.precheck-item .good { color:#1e8449; }
+.precheck-errors { margin-top:10px; }
+.precheck-errors ul { margin:8px 0 0 18px; }
+.precheck-actions { display:flex; gap:10px; flex-wrap:wrap; margin-top:10px; }
+.btn-danger { background:#e74c3c; color:#fff; border:none; padding:10px 14px; border-radius:6px; cursor:pointer; font-weight:800; }
+.btn-danger:disabled { background-color:var(--disabled-color); cursor:not-allowed; opacity:0.7; }
+.btn-danger:hover:not(:disabled) { background:#c0392b; }
+.toast { position:fixed; left:50%; bottom:28px; transform:translateX(-50%); background:#fff; border:2px solid var(--border-color); border-radius:8px; padding:10px 16px; font-size:14px; font-weight:600; box-shadow:0 4px 15px rgba(0,0,0,0.12); opacity:0; pointer-events:none; transition:opacity 0.2s ease; z-index:9999; }
+.toast.show { opacity:1; }
+
+.limit-preview-section { margin:4px 0 18px; }
+.limit-section-title { font-size:15px; font-weight:600; margin:14px 0 10px; color:#222; }
+.learn-limit-grid { display:grid; grid-template-columns:repeat(2, 1fr); gap:12px; margin-bottom:16px; }
+.quiz-limit-grid { display:grid; grid-template-columns:repeat(4, 1fr); gap:12px; margin-bottom:18px; }
+.limit-card { border:2px solid var(--border-color); border-radius:10px; background:#fff; padding:12px; min-height:92px; }
+.limit-card.total { border-width:3px; }
+.limit-card .limit-name { font-size:13px; font-weight:500; color:#222; margin-bottom:8px; }
+.limit-card .limit-count { font-size:22px; font-weight:500; line-height:1.1; margin-bottom:6px; }
+.limit-card .limit-meta { font-size:12px; color:#555; line-height:1.45; }
+.limit-chip-row { display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; }
+.limit-chip { border:1px solid var(--border-color); border-radius:999px; padding:3px 8px; font-size:11px; font-weight:500; background:#fff; }
+@media (max-width:768px) {
+    .learn-limit-grid,.quiz-limit-grid { grid-template-columns:1fr; }
+}
+@media (max-width:768px) {
+    .grid-layout,.footer-section,.result-grid { grid-template-columns:1fr; gap:20px; }
+    .form-group { flex-direction:column; align-items:flex-start; }
+    .form-group label { width:100%; margin-bottom:5px; padding-right:0; }
+    .radio-group-container { padding-left:0; }
+    .prompt-textarea { min-height:180px; }
+    .action-row { justify-content:center; }
+}
+</style>
+</head>
+<body>
+<div class="container">
+    <div class="main-title">Prompt csv Generator</div>
+    <form id="generatorForm" onsubmit="event.preventDefault();">
+        <div class="grid-layout">
+            <div class="left-column">
+                <div class="form-group"><label for="storyTitle">story title:</label><input type="text" id="storyTitle" class="form-control required-field"></div>
+                <div class="form-group"><label for="description">Description:</label><textarea id="description" class="form-control required-field"></textarea></div>
+                <div class="form-group">
+                    <label for="level">Level:</label>
+                    <select id="level" class="form-control required-field">
+                        <option value="" disabled selected></option>
+                        <option value="1.N5/A1">1.N5/A1</option>
+                        <option value="2.N4/A2">2.N4/A2</option>
+                        <option value="3.N3/B1">3.N3/B1</option>
+                        <option value="4.N2/B2">4.N2/B2</option>
+                        <option value="5.N1/C1">5.N1/C1</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="category">Category:</label>
+                    <select id="category" class="form-control required-field">
+                        <option value="" disabled selected></option>
+                        <option value="1.Love">1.Love</option><option value="2.Comedy">2.Comedy</option><option value="3.Horror">3.Horror</option>
+                        <option value="4.Cultural">4.Cultural</option><option value="5.Adventure">5.Adventure</option><option value="6.Fantasy">6.Fantasy</option>
+                        <option value="7.Drama">7.Drama</option><option value="8.Business">8.Business</option><option value="9.Sci-Fi">9.Sci-Fi</option><option value="10.Mystery">10.Mystery</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="duration">Duration:</label>
+                    <select id="duration" class="form-control required-field">
+                        <option value="" disabled selected></option>
+                        <option value="1. 3-5 mins">1. 3-5 mins</option>
+                        <option value="2. 5-7 mins">2. 5-7 mins</option>
+                        <option value="3. 7-9 mins">3. 7-9 mins</option>
+                    </select>
+                </div>
+                <div class="form-group"><label for="email">Email:</label><input type="email" id="email" class="form-control required-field"></div>
+                <div class="form-group">
+                    <label for="learningLanguage">Learning Language:</label>
+                    <select id="learningLanguage" class="form-control required-field" onchange="updateContentCommunity()">
+                        <option value="" disabled selected></option>
+                        <option value="1. Jp (Japanese)">1. Jp (Japanese)</option>
+                        <option value="2. En (English)">2. En (English)</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="contentCommunity">Content Community:</label>
+                    <select id="contentCommunity" class="form-control required-field"><option value="" disabled selected></option></select>
+                </div>
+            </div>
+            <div class="right-column">
+                <div class="tabs">
+                    <div class="tab active" id="manualTab" onclick="switchTab('Manual', this)">Manual mode :</div>
+                    <div class="tab" id="aiTab" onclick="switchTab('AI', this)">AI mode :</div>
+                </div>
+                <textarea id="promptArea" class="prompt-textarea required-field" placeholder="Manual mode: paste the actual story text / sentence paragraphs here. AI mode: write story generation instructions."></textarea>
+            </div>
+        </div>
+        <div class="footer-section">
+            <div class="radio-group-container">
+                <label class="radio-label"><input type="radio" name="learnMode" value="1. READ_ONLY" checked onchange="updateModeState()"> : READ ONLY</label>
+                <label class="radio-label"><input type="radio" name="learnMode" value="2. FULL" onchange="updateModeState()"> : FULL LEARN</label>
+            </div>
+            <div class="slider-wrapper" id="sliderWrapper">
+                <div class="slider-container">
+                    <div class="slider-line"></div>
+                    <div class="slider-node" data-index="0" onclick="setSlider(0)"></div>
+                    <div class="slider-node active" data-index="1" onclick="setSlider(1)"></div>
+                    <div class="slider-node" data-index="2" onclick="setSlider(2)"></div>
+                    <div class="slider-node" data-index="3" onclick="setSlider(3)"></div>
+                </div>
+                <div class="slider-labels"><span>min</span><span>def</span><span>opt</span><span>max</span></div>
+            </div>
+        </div>
+        <div class="action-row">
+            <button type="button" class="btn-reset" onclick="resetForm()" title="Reset Form">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><path d="M3 3v5h5"></path></svg>
+            </button>
+            <button id="generateBtn" class="btn-generate" onclick="handleGenerate()" disabled>GENERATE</button>
+        </div>
+    </form>
+    <div class="result-section" id="resultSection">
+        <div class="result-title">Generated Result Preview</div>
+        <div class="result-grid" id="resultCards"></div>
+        <div class="limit-preview-section" id="limitPreviewSection" style="display:none;">
+            <div class="limit-section-title">Learn module limits</div>
+            <div class="learn-limit-grid" id="learnLimitCards"></div>
+            <div class="limit-section-title">Quiz limits / distribution</div>
+            <div class="quiz-limit-grid" id="quizLimitCards"></div>
+        </div>
+        <div class="result-action-row">
+            <button type="button" id="copyCsvBtn" class="btn-secondary" onclick="copyCsvToClipboard()" disabled>COPY CSV</button>
+            <button type="button" id="downloadCsvBtn" class="btn-generate" onclick="downloadCsvFile()" disabled>DOWNLOAD CSV</button>
+            <span id="exportStatus" class="export-status"></span>
+        </div>
+        <label class="result-title" for="csvPreview">CSV row preview</label>
+        <textarea id="csvPreview" class="result-textarea" readonly></textarea>
+        <div class="prompt-result-header">
+            <label class="result-title" for="promptResult">Prompt format result</label>
+            <button type="button" id="copyPromptBtn" class="copy-icon-btn" onclick="copyPromptResultToClipboard()" title="Copy all prompt" disabled>📋</button>
+        </div>
+        <textarea id="promptResult" class="result-textarea" readonly></textarea>
+        <label class="result-title" for="aiJsonInput">AI result JSON → Nimon import JSON</label>
+        <textarea id="aiJsonInput" class="result-textarea" placeholder="AI က run ပြီးထွက်လာတဲ့ JSON ကိုဒီမှာ paste လုပ်ပါ။ ReadOnly / FullLearn import-ready JSON အဖြစ်ပြောင်းပေးမယ်။"></textarea>
+        <div class="result-action-row">
+            <button type="button" id="convertImportJsonBtn" class="btn-secondary" onclick="event.preventDefault(); convertAiJsonToReadonlyImport(); return false;">CONVERT TO IMPORT JSON</button>
+            <button type="button" id="copyImportJsonBtn" class="btn-secondary" onclick="event.preventDefault(); copyImportJsonToClipboard(); return false;" disabled>COPY IMPORT JSON</button>
+            <button type="button" id="downloadImportJsonBtn" class="btn-generate" onclick="return downloadImportJsonFile(event)" disabled>DOWNLOAD IMPORT JSON</button>
+        </div>
+        <textarea id="importJsonResult" class="result-textarea" readonly placeholder="Nimon import-ready JSON preview"></textarea>
+        <div id="importPrecheckPanel" class="precheck-panel hidden" aria-live="polite">
+            <div id="importPrecheckTitle" class="precheck-title"></div>
+            <div id="importPrecheckGrid" class="precheck-grid"></div>
+            <div id="importPrecheckErrors" class="precheck-errors"></div>
+            <div class="precheck-actions">
+                <button type="button" id="copyFixPromptBtn" class="btn-danger" onclick="event.preventDefault(); copyFixPromptToClipboard(); return false;" disabled>COPY FIX PROMPT</button>
+                <button type="button" id="copyErrorListBtn" class="btn-secondary" onclick="event.preventDefault(); copyPrecheckErrorsToClipboard(); return false;" disabled>COPY ERROR LIST</button>
+            </div>
+        </div>
+        <div class="small-note">V6 flow: Generate → prompt ကို AI မှာ run → AI JSON ကို paste → Convert → import-ready JSON ကို nimon local Flutter app မှာ import. ReadOnly / FullLearn နှစ်ခုလုံး support လုပ်ထားပါတယ်။</div>
+    </div>
+</div>
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
+<script>
+const communities = [
+    { id: 1, name: "Indonesian" }, { id: 2, name: "Vietnamese" }, { id: 3, name: "Filipino" },
+    { id: 4, name: "Japanese" }, { id: 5, name: "Hindi" }, { id: 6, name: "Thai" },
+    { id: 7, name: "Burmese" }, { id: 8, name: "English" }, { id: 9, name: "Mandarin-Chinese" },
+    { id: 10, name: "Portuguese" }
+];
+
+const learnLimits = [{"Key": "3-5 mins|N5/A1|JP|Vocabulary", "Duration": "3-5 mins", "Level": "N5/A1", "Language": "JP", "Module": "Vocabulary", "Manual_Min": 6, "Manual_Max": 12, "minimum": 6, "default": 8, "optimal": 10, "maximum": 12}, {"Key": "3-5 mins|N5/A1|JP|Grammar", "Duration": "3-5 mins", "Level": "N5/A1", "Language": "JP", "Module": "Grammar", "Manual_Min": 2, "Manual_Max": 5, "minimum": 2, "default": 3, "optimal": 4, "maximum": 5}, {"Key": "3-5 mins|N5/A1|EN|Vocabulary", "Duration": "3-5 mins", "Level": "N5/A1", "Language": "EN", "Module": "Vocabulary", "Manual_Min": 6, "Manual_Max": 13, "minimum": 6, "default": 8, "optimal": 10, "maximum": 13}, {"Key": "3-5 mins|N5/A1|EN|Grammar", "Duration": "3-5 mins", "Level": "N5/A1", "Language": "EN", "Module": "Grammar", "Manual_Min": 2, "Manual_Max": 5, "minimum": 2, "default": 3, "optimal": 4, "maximum": 5}, {"Key": "3-5 mins|N4/A2|JP|Vocabulary", "Duration": "3-5 mins", "Level": "N4/A2", "Language": "JP", "Module": "Vocabulary", "Manual_Min": 8, "Manual_Max": 16, "minimum": 8, "default": 11, "optimal": 13, "maximum": 16}, {"Key": "3-5 mins|N4/A2|JP|Grammar", "Duration": "3-5 mins", "Level": "N4/A2", "Language": "JP", "Module": "Grammar", "Manual_Min": 3, "Manual_Max": 7, "minimum": 3, "default": 4, "optimal": 5, "maximum": 7}, {"Key": "3-5 mins|N4/A2|EN|Vocabulary", "Duration": "3-5 mins", "Level": "N4/A2", "Language": "EN", "Module": "Vocabulary", "Manual_Min": 8, "Manual_Max": 17, "minimum": 8, "default": 11, "optimal": 13, "maximum": 17}, {"Key": "3-5 mins|N4/A2|EN|Grammar", "Duration": "3-5 mins", "Level": "N4/A2", "Language": "EN", "Module": "Grammar", "Manual_Min": 3, "Manual_Max": 7, "minimum": 3, "default": 4, "optimal": 5, "maximum": 7}, {"Key": "3-5 mins|N3/B1|JP|Vocabulary", "Duration": "3-5 mins", "Level": "N3/B1", "Language": "JP", "Module": "Vocabulary", "Manual_Min": 10, "Manual_Max": 22, "minimum": 10, "default": 14, "optimal": 17, "maximum": 22}, {"Key": "3-5 mins|N3/B1|JP|Grammar", "Duration": "3-5 mins", "Level": "N3/B1", "Language": "JP", "Module": "Grammar", "Manual_Min": 4, "Manual_Max": 10, "minimum": 4, "default": 6, "optimal": 8, "maximum": 10}, {"Key": "3-5 mins|N3/B1|EN|Vocabulary", "Duration": "3-5 mins", "Level": "N3/B1", "Language": "EN", "Module": "Vocabulary", "Manual_Min": 11, "Manual_Max": 24, "minimum": 11, "default": 16, "optimal": 19, "maximum": 24}, {"Key": "3-5 mins|N3/B1|EN|Grammar", "Duration": "3-5 mins", "Level": "N3/B1", "Language": "EN", "Module": "Grammar", "Manual_Min": 4, "Manual_Max": 10, "minimum": 4, "default": 6, "optimal": 8, "maximum": 10}, {"Key": "3-5 mins|N2/B2|JP|Vocabulary", "Duration": "3-5 mins", "Level": "N2/B2", "Language": "JP", "Module": "Vocabulary", "Manual_Min": 12, "Manual_Max": 28, "minimum": 12, "default": 18, "optimal": 22, "maximum": 28}, {"Key": "3-5 mins|N2/B2|JP|Grammar", "Duration": "3-5 mins", "Level": "N2/B2", "Language": "JP", "Module": "Grammar", "Manual_Min": 5, "Manual_Max": 13, "minimum": 5, "default": 8, "optimal": 10, "maximum": 13}, {"Key": "3-5 mins|N2/B2|EN|Vocabulary", "Duration": "3-5 mins", "Level": "N2/B2", "Language": "EN", "Module": "Vocabulary", "Manual_Min": 15, "Manual_Max": 32, "minimum": 15, "default": 21, "optimal": 25, "maximum": 32}, {"Key": "3-5 mins|N2/B2|EN|Grammar", "Duration": "3-5 mins", "Level": "N2/B2", "Language": "EN", "Module": "Grammar", "Manual_Min": 5, "Manual_Max": 13, "minimum": 5, "default": 8, "optimal": 10, "maximum": 13}, {"Key": "3-5 mins|N1/C1|JP|Vocabulary", "Duration": "3-5 mins", "Level": "N1/C1", "Language": "JP", "Module": "Vocabulary", "Manual_Min": 15, "Manual_Max": 36, "minimum": 15, "default": 22, "optimal": 28, "maximum": 36}, {"Key": "3-5 mins|N1/C1|JP|Grammar", "Duration": "3-5 mins", "Level": "N1/C1", "Language": "JP", "Module": "Grammar", "Manual_Min": 6, "Manual_Max": 16, "minimum": 6, "default": 10, "optimal": 12, "maximum": 16}, {"Key": "3-5 mins|N1/C1|EN|Vocabulary", "Duration": "3-5 mins", "Level": "N1/C1", "Language": "EN", "Module": "Vocabulary", "Manual_Min": 20, "Manual_Max": 42, "minimum": 20, "default": 28, "optimal": 33, "maximum": 42}, {"Key": "3-5 mins|N1/C1|EN|Grammar", "Duration": "3-5 mins", "Level": "N1/C1", "Language": "EN", "Module": "Grammar", "Manual_Min": 6, "Manual_Max": 16, "minimum": 6, "default": 10, "optimal": 12, "maximum": 16}, {"Key": "5-7 mins|N5/A1|JP|Vocabulary", "Duration": "5-7 mins", "Level": "N5/A1", "Language": "JP", "Module": "Vocabulary", "Manual_Min": 9, "Manual_Max": 18, "minimum": 9, "default": 12, "optimal": 14, "maximum": 18}, {"Key": "5-7 mins|N5/A1|JP|Grammar", "Duration": "5-7 mins", "Level": "N5/A1", "Language": "JP", "Module": "Grammar", "Manual_Min": 3, "Manual_Max": 7, "minimum": 3, "default": 4, "optimal": 5, "maximum": 7}, {"Key": "5-7 mins|N5/A1|EN|Vocabulary", "Duration": "5-7 mins", "Level": "N5/A1", "Language": "EN", "Module": "Vocabulary", "Manual_Min": 10, "Manual_Max": 20, "minimum": 10, "default": 14, "optimal": 16, "maximum": 20}, {"Key": "5-7 mins|N5/A1|EN|Grammar", "Duration": "5-7 mins", "Level": "N5/A1", "Language": "EN", "Module": "Grammar", "Manual_Min": 3, "Manual_Max": 7, "minimum": 3, "default": 4, "optimal": 5, "maximum": 7}, {"Key": "5-7 mins|N4/A2|JP|Vocabulary", "Duration": "5-7 mins", "Level": "N4/A2", "Language": "JP", "Module": "Vocabulary", "Manual_Min": 12, "Manual_Max": 24, "minimum": 12, "default": 16, "optimal": 19, "maximum": 24}, {"Key": "5-7 mins|N4/A2|JP|Grammar", "Duration": "5-7 mins", "Level": "N4/A2", "Language": "JP", "Module": "Grammar", "Manual_Min": 4, "Manual_Max": 10, "minimum": 4, "default": 6, "optimal": 8, "maximum": 10}, {"Key": "5-7 mins|N4/A2|EN|Vocabulary", "Duration": "5-7 mins", "Level": "N4/A2", "Language": "EN", "Module": "Vocabulary", "Manual_Min": 13, "Manual_Max": 26, "minimum": 13, "default": 18, "optimal": 21, "maximum": 26}, {"Key": "5-7 mins|N4/A2|EN|Grammar", "Duration": "5-7 mins", "Level": "N4/A2", "Language": "EN", "Module": "Grammar", "Manual_Min": 4, "Manual_Max": 10, "minimum": 4, "default": 6, "optimal": 8, "maximum": 10}, {"Key": "5-7 mins|N3/B1|JP|Vocabulary", "Duration": "5-7 mins", "Level": "N3/B1", "Language": "JP", "Module": "Vocabulary", "Manual_Min": 16, "Manual_Max": 32, "minimum": 16, "default": 22, "optimal": 26, "maximum": 32}, {"Key": "5-7 mins|N3/B1|JP|Grammar", "Duration": "5-7 mins", "Level": "N3/B1", "Language": "JP", "Module": "Grammar", "Manual_Min": 5, "Manual_Max": 14, "minimum": 5, "default": 8, "optimal": 10, "maximum": 14}, {"Key": "5-7 mins|N3/B1|EN|Vocabulary", "Duration": "5-7 mins", "Level": "N3/B1", "Language": "EN", "Module": "Vocabulary", "Manual_Min": 18, "Manual_Max": 36, "minimum": 18, "default": 24, "optimal": 29, "maximum": 36}, {"Key": "5-7 mins|N3/B1|EN|Grammar", "Duration": "5-7 mins", "Level": "N3/B1", "Language": "EN", "Module": "Grammar", "Manual_Min": 5, "Manual_Max": 14, "minimum": 5, "default": 8, "optimal": 10, "maximum": 14}, {"Key": "5-7 mins|N2/B2|JP|Vocabulary", "Duration": "5-7 mins", "Level": "N2/B2", "Language": "JP", "Module": "Vocabulary", "Manual_Min": 20, "Manual_Max": 42, "minimum": 20, "default": 28, "optimal": 33, "maximum": 42}, {"Key": "5-7 mins|N2/B2|JP|Grammar", "Duration": "5-7 mins", "Level": "N2/B2", "Language": "JP", "Module": "Grammar", "Manual_Min": 7, "Manual_Max": 18, "minimum": 7, "default": 11, "optimal": 14, "maximum": 18}, {"Key": "5-7 mins|N2/B2|EN|Vocabulary", "Duration": "5-7 mins", "Level": "N2/B2", "Language": "EN", "Module": "Vocabulary", "Manual_Min": 24, "Manual_Max": 48, "minimum": 24, "default": 32, "optimal": 38, "maximum": 48}, {"Key": "5-7 mins|N2/B2|EN|Grammar", "Duration": "5-7 mins", "Level": "N2/B2", "Language": "EN", "Module": "Grammar", "Manual_Min": 7, "Manual_Max": 18, "minimum": 7, "default": 11, "optimal": 14, "maximum": 18}, {"Key": "5-7 mins|N1/C1|JP|Vocabulary", "Duration": "5-7 mins", "Level": "N1/C1", "Language": "JP", "Module": "Vocabulary", "Manual_Min": 26, "Manual_Max": 55, "minimum": 26, "default": 36, "optimal": 43, "maximum": 55}, {"Key": "5-7 mins|N1/C1|JP|Grammar", "Duration": "5-7 mins", "Level": "N1/C1", "Language": "JP", "Module": "Grammar", "Manual_Min": 9, "Manual_Max": 22, "minimum": 9, "default": 14, "optimal": 17, "maximum": 22}, {"Key": "5-7 mins|N1/C1|EN|Vocabulary", "Duration": "5-7 mins", "Level": "N1/C1", "Language": "EN", "Module": "Vocabulary", "Manual_Min": 32, "Manual_Max": 64, "minimum": 32, "default": 43, "optimal": 51, "maximum": 64}, {"Key": "5-7 mins|N1/C1|EN|Grammar", "Duration": "5-7 mins", "Level": "N1/C1", "Language": "EN", "Module": "Grammar", "Manual_Min": 9, "Manual_Max": 22, "minimum": 9, "default": 14, "optimal": 17, "maximum": 22}, {"Key": "7-9 mins|N5/A1|JP|Vocabulary", "Duration": "7-9 mins", "Level": "N5/A1", "Language": "JP", "Module": "Vocabulary", "Manual_Min": 12, "Manual_Max": 24, "minimum": 12, "default": 16, "optimal": 19, "maximum": 24}, {"Key": "7-9 mins|N5/A1|JP|Grammar", "Duration": "7-9 mins", "Level": "N5/A1", "Language": "JP", "Module": "Grammar", "Manual_Min": 4, "Manual_Max": 9, "minimum": 4, "default": 6, "optimal": 7, "maximum": 9}, {"Key": "7-9 mins|N5/A1|EN|Vocabulary", "Duration": "7-9 mins", "Level": "N5/A1", "Language": "EN", "Module": "Vocabulary", "Manual_Min": 14, "Manual_Max": 28, "minimum": 14, "default": 19, "optimal": 22, "maximum": 28}, {"Key": "7-9 mins|N5/A1|EN|Grammar", "Duration": "7-9 mins", "Level": "N5/A1", "Language": "EN", "Module": "Grammar", "Manual_Min": 4, "Manual_Max": 9, "minimum": 4, "default": 6, "optimal": 7, "maximum": 9}, {"Key": "7-9 mins|N4/A2|JP|Vocabulary", "Duration": "7-9 mins", "Level": "N4/A2", "Language": "JP", "Module": "Vocabulary", "Manual_Min": 16, "Manual_Max": 32, "minimum": 16, "default": 22, "optimal": 26, "maximum": 32}, {"Key": "7-9 mins|N4/A2|JP|Grammar", "Duration": "7-9 mins", "Level": "N4/A2", "Language": "JP", "Module": "Grammar", "Manual_Min": 5, "Manual_Max": 13, "minimum": 5, "default": 8, "optimal": 10, "maximum": 13}, {"Key": "7-9 mins|N4/A2|EN|Vocabulary", "Duration": "7-9 mins", "Level": "N4/A2", "Language": "EN", "Module": "Vocabulary", "Manual_Min": 18, "Manual_Max": 36, "minimum": 18, "default": 24, "optimal": 29, "maximum": 36}, {"Key": "7-9 mins|N4/A2|EN|Grammar", "Duration": "7-9 mins", "Level": "N4/A2", "Language": "EN", "Module": "Grammar", "Manual_Min": 5, "Manual_Max": 13, "minimum": 5, "default": 8, "optimal": 10, "maximum": 13}, {"Key": "7-9 mins|N3/B1|JP|Vocabulary", "Duration": "7-9 mins", "Level": "N3/B1", "Language": "JP", "Module": "Vocabulary", "Manual_Min": 22, "Manual_Max": 42, "minimum": 22, "default": 29, "optimal": 34, "maximum": 42}, {"Key": "7-9 mins|N3/B1|JP|Grammar", "Duration": "7-9 mins", "Level": "N3/B1", "Language": "JP", "Module": "Grammar", "Manual_Min": 7, "Manual_Max": 18, "minimum": 7, "default": 11, "optimal": 14, "maximum": 18}, {"Key": "7-9 mins|N3/B1|EN|Vocabulary", "Duration": "7-9 mins", "Level": "N3/B1", "Language": "EN", "Module": "Vocabulary", "Manual_Min": 25, "Manual_Max": 50, "minimum": 25, "default": 34, "optimal": 40, "maximum": 50}, {"Key": "7-9 mins|N3/B1|EN|Grammar", "Duration": "7-9 mins", "Level": "N3/B1", "Language": "EN", "Module": "Grammar", "Manual_Min": 7, "Manual_Max": 18, "minimum": 7, "default": 11, "optimal": 14, "maximum": 18}, {"Key": "7-9 mins|N2/B2|JP|Vocabulary", "Duration": "7-9 mins", "Level": "N2/B2", "Language": "JP", "Module": "Vocabulary", "Manual_Min": 28, "Manual_Max": 55, "minimum": 28, "default": 37, "optimal": 44, "maximum": 55}, {"Key": "7-9 mins|N2/B2|JP|Grammar", "Duration": "7-9 mins", "Level": "N2/B2", "Language": "JP", "Module": "Grammar", "Manual_Min": 9, "Manual_Max": 24, "minimum": 9, "default": 14, "optimal": 18, "maximum": 24}, {"Key": "7-9 mins|N2/B2|EN|Vocabulary", "Duration": "7-9 mins", "Level": "N2/B2", "Language": "EN", "Module": "Vocabulary", "Manual_Min": 34, "Manual_Max": 66, "minimum": 34, "default": 45, "optimal": 53, "maximum": 66}, {"Key": "7-9 mins|N2/B2|EN|Grammar", "Duration": "7-9 mins", "Level": "N2/B2", "Language": "EN", "Module": "Grammar", "Manual_Min": 9, "Manual_Max": 24, "minimum": 9, "default": 14, "optimal": 18, "maximum": 24}, {"Key": "7-9 mins|N1/C1|JP|Vocabulary", "Duration": "7-9 mins", "Level": "N1/C1", "Language": "JP", "Module": "Vocabulary", "Manual_Min": 36, "Manual_Max": 70, "minimum": 36, "default": 48, "optimal": 56, "maximum": 70}, {"Key": "7-9 mins|N1/C1|JP|Grammar", "Duration": "7-9 mins", "Level": "N1/C1", "Language": "JP", "Module": "Grammar", "Manual_Min": 12, "Manual_Max": 30, "minimum": 12, "default": 18, "optimal": 23, "maximum": 30}, {"Key": "7-9 mins|N1/C1|EN|Vocabulary", "Duration": "7-9 mins", "Level": "N1/C1", "Language": "EN", "Module": "Vocabulary", "Manual_Min": 45, "Manual_Max": 85, "minimum": 45, "default": 59, "optimal": 69, "maximum": 85}, {"Key": "7-9 mins|N1/C1|EN|Grammar", "Duration": "7-9 mins", "Level": "N1/C1", "Language": "EN", "Module": "Grammar", "Manual_Min": 12, "Manual_Max": 30, "minimum": 12, "default": 18, "optimal": 23, "maximum": 30}];
+const quizLimits = [{"key": "3-5 mins|N5/A1|Vocabulary Quiz", "duration": "3-5 mins", "level": "N5/A1", "quiz_category": "Vocabulary Quiz", "manual_min": 3, "manual_max": 6, "minimum": 4, "default": 5, "optimal": 6, "maximum": 8}, {"key": "3-5 mins|N5/A1|Grammar Quiz", "duration": "3-5 mins", "level": "N5/A1", "quiz_category": "Grammar Quiz", "manual_min": 1, "manual_max": 3, "minimum": 2, "default": 3, "optimal": 3, "maximum": 4}, {"key": "3-5 mins|N5/A1|Sentence Quiz", "duration": "3-5 mins", "level": "N5/A1", "quiz_category": "Sentence Quiz", "manual_min": 1, "manual_max": 3, "minimum": 2, "default": 3, "optimal": 3, "maximum": 4}, {"key": "3-5 mins|N5/A1|Total Quiz", "duration": "3-5 mins", "level": "N5/A1", "quiz_category": "Total Quiz", "manual_min": 5, "manual_max": 12, "minimum": 8, "default": 11, "optimal": 13, "maximum": 16}, {"key": "3-5 mins|N4/A2|Vocabulary Quiz", "duration": "3-5 mins", "level": "N4/A2", "quiz_category": "Vocabulary Quiz", "manual_min": 4, "manual_max": 8, "minimum": 5, "default": 7, "optimal": 8, "maximum": 10}, {"key": "3-5 mins|N4/A2|Grammar Quiz", "duration": "3-5 mins", "level": "N4/A2", "quiz_category": "Grammar Quiz", "manual_min": 2, "manual_max": 4, "minimum": 2, "default": 3, "optimal": 4, "maximum": 5}, {"key": "3-5 mins|N4/A2|Sentence Quiz", "duration": "3-5 mins", "level": "N4/A2", "quiz_category": "Sentence Quiz", "manual_min": 2, "manual_max": 4, "minimum": 2, "default": 3, "optimal": 4, "maximum": 5}, {"key": "3-5 mins|N4/A2|Total Quiz", "duration": "3-5 mins", "level": "N4/A2", "quiz_category": "Total Quiz", "manual_min": 8, "manual_max": 16, "minimum": 9, "default": 13, "optimal": 16, "maximum": 20}, {"key": "3-5 mins|N3/B1|Vocabulary Quiz", "duration": "3-5 mins", "level": "N3/B1", "quiz_category": "Vocabulary Quiz", "manual_min": 5, "manual_max": 10, "minimum": 6, "default": 8, "optimal": 10, "maximum": 13}, {"key": "3-5 mins|N3/B1|Grammar Quiz", "duration": "3-5 mins", "level": "N3/B1", "quiz_category": "Grammar Quiz", "manual_min": 2, "manual_max": 5, "minimum": 3, "default": 4, "optimal": 5, "maximum": 6}, {"key": "3-5 mins|N3/B1|Sentence Quiz", "duration": "3-5 mins", "level": "N3/B1", "quiz_category": "Sentence Quiz", "manual_min": 2, "manual_max": 5, "minimum": 3, "default": 4, "optimal": 5, "maximum": 6}, {"key": "3-5 mins|N3/B1|Total Quiz", "duration": "3-5 mins", "level": "N3/B1", "quiz_category": "Total Quiz", "manual_min": 9, "manual_max": 20, "minimum": 12, "default": 17, "optimal": 20, "maximum": 25}, {"key": "3-5 mins|N2/B2|Vocabulary Quiz", "duration": "3-5 mins", "level": "N2/B2", "quiz_category": "Vocabulary Quiz", "manual_min": 6, "manual_max": 12, "minimum": 8, "default": 11, "optimal": 13, "maximum": 16}, {"key": "3-5 mins|N2/B2|Grammar Quiz", "duration": "3-5 mins", "level": "N2/B2", "quiz_category": "Grammar Quiz", "manual_min": 3, "manual_max": 6, "minimum": 4, "default": 5, "optimal": 6, "maximum": 8}, {"key": "3-5 mins|N2/B2|Sentence Quiz", "duration": "3-5 mins", "level": "N2/B2", "quiz_category": "Sentence Quiz", "manual_min": 3, "manual_max": 6, "minimum": 3, "default": 4, "optimal": 5, "maximum": 7}, {"key": "3-5 mins|N2/B2|Total Quiz", "duration": "3-5 mins", "level": "N2/B2", "quiz_category": "Total Quiz", "manual_min": 12, "manual_max": 24, "minimum": 15, "default": 21, "optimal": 25, "maximum": 31}, {"key": "3-5 mins|N1/C1|Vocabulary Quiz", "duration": "3-5 mins", "level": "N1/C1", "quiz_category": "Vocabulary Quiz", "manual_min": 7, "manual_max": 14, "minimum": 10, "default": 14, "optimal": 16, "maximum": 20}, {"key": "3-5 mins|N1/C1|Grammar Quiz", "duration": "3-5 mins", "level": "N1/C1", "quiz_category": "Grammar Quiz", "manual_min": 3, "manual_max": 7, "minimum": 5, "default": 7, "optimal": 8, "maximum": 10}, {"key": "3-5 mins|N1/C1|Sentence Quiz", "duration": "3-5 mins", "level": "N1/C1", "quiz_category": "Sentence Quiz", "manual_min": 3, "manual_max": 7, "minimum": 4, "default": 5, "optimal": 6, "maximum": 8}, {"key": "3-5 mins|N1/C1|Total Quiz", "duration": "3-5 mins", "level": "N1/C1", "quiz_category": "Total Quiz", "manual_min": 13, "manual_max": 28, "minimum": 19, "default": 26, "optimal": 30, "maximum": 38}, {"key": "5-7 mins|N5/A1|Vocabulary Quiz", "duration": "5-7 mins", "level": "N5/A1", "quiz_category": "Vocabulary Quiz", "manual_min": 5, "manual_max": 9, "minimum": 6, "default": 8, "optimal": 10, "maximum": 12}, {"key": "5-7 mins|N5/A1|Grammar Quiz", "duration": "5-7 mins", "level": "N5/A1", "quiz_category": "Grammar Quiz", "manual_min": 2, "manual_max": 4, "minimum": 3, "default": 4, "optimal": 5, "maximum": 6}, {"key": "5-7 mins|N5/A1|Sentence Quiz", "duration": "5-7 mins", "level": "N5/A1", "quiz_category": "Sentence Quiz", "manual_min": 2, "manual_max": 4, "minimum": 3, "default": 4, "optimal": 5, "maximum": 6}, {"key": "5-7 mins|N5/A1|Total Quiz", "duration": "5-7 mins", "level": "N5/A1", "quiz_category": "Total Quiz", "manual_min": 9, "manual_max": 17, "minimum": 12, "default": 16, "optimal": 19, "maximum": 24}, {"key": "5-7 mins|N4/A2|Vocabulary Quiz", "duration": "5-7 mins", "level": "N4/A2", "quiz_category": "Vocabulary Quiz", "manual_min": 6, "manual_max": 12, "minimum": 8, "default": 11, "optimal": 13, "maximum": 16}, {"key": "5-7 mins|N4/A2|Grammar Quiz", "duration": "5-7 mins", "level": "N4/A2", "quiz_category": "Grammar Quiz", "manual_min": 2, "manual_max": 5, "minimum": 4, "default": 5, "optimal": 6, "maximum": 8}, {"key": "5-7 mins|N4/A2|Sentence Quiz", "duration": "5-7 mins", "level": "N4/A2", "quiz_category": "Sentence Quiz", "manual_min": 3, "manual_max": 5, "minimum": 3, "default": 4, "optimal": 5, "maximum": 7}, {"key": "5-7 mins|N4/A2|Total Quiz", "duration": "5-7 mins", "level": "N4/A2", "quiz_category": "Total Quiz", "manual_min": 11, "manual_max": 22, "minimum": 15, "default": 21, "optimal": 25, "maximum": 31}, {"key": "5-7 mins|N3/B1|Vocabulary Quiz", "duration": "5-7 mins", "level": "N3/B1", "quiz_category": "Vocabulary Quiz", "manual_min": 8, "manual_max": 16, "minimum": 10, "default": 14, "optimal": 16, "maximum": 20}, {"key": "5-7 mins|N3/B1|Grammar Quiz", "duration": "5-7 mins", "level": "N3/B1", "quiz_category": "Grammar Quiz", "manual_min": 3, "manual_max": 7, "minimum": 5, "default": 7, "optimal": 8, "maximum": 10}, {"key": "5-7 mins|N3/B1|Sentence Quiz", "duration": "5-7 mins", "level": "N3/B1", "quiz_category": "Sentence Quiz", "manual_min": 3, "manual_max": 7, "minimum": 4, "default": 5, "optimal": 6, "maximum": 8}, {"key": "5-7 mins|N3/B1|Total Quiz", "duration": "5-7 mins", "level": "N3/B1", "quiz_category": "Total Quiz", "manual_min": 14, "manual_max": 30, "minimum": 19, "default": 26, "optimal": 30, "maximum": 38}, {"key": "5-7 mins|N2/B2|Vocabulary Quiz", "duration": "5-7 mins", "level": "N2/B2", "quiz_category": "Vocabulary Quiz", "manual_min": 10, "manual_max": 20, "minimum": 13, "default": 18, "optimal": 21, "maximum": 26}, {"key": "5-7 mins|N2/B2|Grammar Quiz", "duration": "5-7 mins", "level": "N2/B2", "quiz_category": "Grammar Quiz", "manual_min": 4, "manual_max": 9, "minimum": 6, "default": 8, "optimal": 10, "maximum": 13}, {"key": "5-7 mins|N2/B2|Sentence Quiz", "duration": "5-7 mins", "level": "N2/B2", "quiz_category": "Sentence Quiz", "manual_min": 4, "manual_max": 8, "minimum": 5, "default": 7, "optimal": 8, "maximum": 10}, {"key": "5-7 mins|N2/B2|Total Quiz", "duration": "5-7 mins", "level": "N2/B2", "quiz_category": "Total Quiz", "manual_min": 18, "manual_max": 37, "minimum": 24, "default": 33, "optimal": 39, "maximum": 49}, {"key": "5-7 mins|N1/C1|Vocabulary Quiz", "duration": "5-7 mins", "level": "N1/C1", "quiz_category": "Vocabulary Quiz", "manual_min": 12, "manual_max": 24, "minimum": 16, "default": 22, "optimal": 26, "maximum": 32}, {"key": "5-7 mins|N1/C1|Grammar Quiz", "duration": "5-7 mins", "level": "N1/C1", "quiz_category": "Grammar Quiz", "manual_min": 5, "manual_max": 11, "minimum": 8, "default": 11, "optimal": 13, "maximum": 16}, {"key": "5-7 mins|N1/C1|Sentence Quiz", "duration": "5-7 mins", "level": "N1/C1", "quiz_category": "Sentence Quiz", "manual_min": 5, "manual_max": 10, "minimum": 6, "default": 8, "optimal": 10, "maximum": 12}, {"key": "5-7 mins|N1/C1|Total Quiz", "duration": "5-7 mins", "level": "N1/C1", "quiz_category": "Total Quiz", "manual_min": 22, "manual_max": 45, "minimum": 30, "default": 41, "optimal": 48, "maximum": 60}, {"key": "7-9 mins|N5/A1|Vocabulary Quiz", "duration": "7-9 mins", "level": "N5/A1", "quiz_category": "Vocabulary Quiz", "manual_min": 6, "manual_max": 12, "minimum": 8, "default": 11, "optimal": 13, "maximum": 16}, {"key": "7-9 mins|N5/A1|Grammar Quiz", "duration": "7-9 mins", "level": "N5/A1", "quiz_category": "Grammar Quiz", "manual_min": 2, "manual_max": 5, "minimum": 4, "default": 5, "optimal": 6, "maximum": 8}, {"key": "7-9 mins|N5/A1|Sentence Quiz", "duration": "7-9 mins", "level": "N5/A1", "quiz_category": "Sentence Quiz", "manual_min": 3, "manual_max": 5, "minimum": 4, "default": 5, "optimal": 6, "maximum": 8}, {"key": "7-9 mins|N5/A1|Total Quiz", "duration": "7-9 mins", "level": "N5/A1", "quiz_category": "Total Quiz", "manual_min": 11, "manual_max": 22, "minimum": 16, "default": 22, "optimal": 26, "maximum": 32}, {"key": "7-9 mins|N4/A2|Vocabulary Quiz", "duration": "7-9 mins", "level": "N4/A2", "quiz_category": "Vocabulary Quiz", "manual_min": 8, "manual_max": 16, "minimum": 10, "default": 14, "optimal": 16, "maximum": 20}, {"key": "7-9 mins|N4/A2|Grammar Quiz", "duration": "7-9 mins", "level": "N4/A2", "quiz_category": "Grammar Quiz", "manual_min": 3, "manual_max": 6, "minimum": 5, "default": 7, "optimal": 8, "maximum": 10}, {"key": "7-9 mins|N4/A2|Sentence Quiz", "duration": "7-9 mins", "level": "N4/A2", "quiz_category": "Sentence Quiz", "manual_min": 3, "manual_max": 7, "minimum": 5, "default": 7, "optimal": 8, "maximum": 10}, {"key": "7-9 mins|N4/A2|Total Quiz", "duration": "7-9 mins", "level": "N4/A2", "quiz_category": "Total Quiz", "manual_min": 14, "manual_max": 29, "minimum": 20, "default": 27, "optimal": 32, "maximum": 40}, {"key": "7-9 mins|N3/B1|Vocabulary Quiz", "duration": "7-9 mins", "level": "N3/B1", "quiz_category": "Vocabulary Quiz", "manual_min": 10, "manual_max": 20, "minimum": 13, "default": 18, "optimal": 21, "maximum": 26}, {"key": "7-9 mins|N3/B1|Grammar Quiz", "duration": "7-9 mins", "level": "N3/B1", "quiz_category": "Grammar Quiz", "manual_min": 4, "manual_max": 9, "minimum": 6, "default": 8, "optimal": 10, "maximum": 13}, {"key": "7-9 mins|N3/B1|Sentence Quiz", "duration": "7-9 mins", "level": "N3/B1", "quiz_category": "Sentence Quiz", "manual_min": 4, "manual_max": 9, "minimum": 6, "default": 8, "optimal": 10, "maximum": 12}, {"key": "7-9 mins|N3/B1|Total Quiz", "duration": "7-9 mins", "level": "N3/B1", "quiz_category": "Total Quiz", "manual_min": 18, "manual_max": 38, "minimum": 25, "default": 34, "optimal": 41, "maximum": 51}, {"key": "7-9 mins|N2/B2|Vocabulary Quiz", "duration": "7-9 mins", "level": "N2/B2", "quiz_category": "Vocabulary Quiz", "manual_min": 13, "manual_max": 26, "minimum": 17, "default": 23, "optimal": 27, "maximum": 34}, {"key": "7-9 mins|N2/B2|Grammar Quiz", "duration": "7-9 mins", "level": "N2/B2", "quiz_category": "Grammar Quiz", "manual_min": 5, "manual_max": 12, "minimum": 8, "default": 11, "optimal": 13, "maximum": 17}, {"key": "7-9 mins|N2/B2|Sentence Quiz", "duration": "7-9 mins", "level": "N2/B2", "quiz_category": "Sentence Quiz", "manual_min": 5, "manual_max": 11, "minimum": 7, "default": 9, "optimal": 11, "maximum": 14}, {"key": "7-9 mins|N2/B2|Total Quiz", "duration": "7-9 mins", "level": "N2/B2", "quiz_category": "Total Quiz", "manual_min": 23, "manual_max": 49, "minimum": 32, "default": 44, "optimal": 52, "maximum": 65}, {"key": "7-9 mins|N1/C1|Vocabulary Quiz", "duration": "7-9 mins", "level": "N1/C1", "quiz_category": "Vocabulary Quiz", "manual_min": 16, "manual_max": 32, "minimum": 22, "default": 29, "optimal": 34, "maximum": 42}, {"key": "7-9 mins|N1/C1|Grammar Quiz", "duration": "7-9 mins", "level": "N1/C1", "quiz_category": "Grammar Quiz", "manual_min": 6, "manual_max": 15, "minimum": 10, "default": 14, "optimal": 17, "maximum": 21}, {"key": "7-9 mins|N1/C1|Sentence Quiz", "duration": "7-9 mins", "level": "N1/C1", "quiz_category": "Sentence Quiz", "manual_min": 6, "manual_max": 13, "minimum": 8, "default": 11, "optimal": 13, "maximum": 16}, {"key": "7-9 mins|N1/C1|Total Quiz", "duration": "7-9 mins", "level": "N1/C1", "quiz_category": "Total Quiz", "manual_min": 28, "manual_max": 60, "minimum": 40, "default": 54, "optimal": 63, "maximum": 79}];
+
+const sentenceLimits = {
+  "Manual": {
+    "JP": {
+      "3-5 mins": {"N5/A1":[18,30,250,450],"N4/A2":[20,34,350,600],"N3/B1":[22,36,500,800],"N2/B2":[20,34,650,1050],"N1/C1":[18,32,800,1300]},
+      "5-7 mins": {"N5/A1":[28,45,400,650],"N4/A2":[32,50,550,900],"N3/B1":[34,55,750,1150],"N2/B2":[32,52,1000,1550],"N1/C1":[30,50,1250,1900]},
+      "7-9 mins": {"N5/A1":[40,60,600,900],"N4/A2":[45,65,800,1200],"N3/B1":[48,70,1050,1550],"N2/B2":[45,68,1350,2050],"N1/C1":[42,65,1650,2500]}
+    },
+    "EN": {
+      "3-5 mins": {"N5/A1":[18,30,900,1600],"N4/A2":[20,34,1200,2200],"N3/B1":[22,36,1600,2800],"N2/B2":[20,34,2000,3400],"N1/C1":[18,32,2400,4200]},
+      "5-7 mins": {"N5/A1":[28,45,1400,2400],"N4/A2":[32,50,1900,3300],"N3/B1":[34,55,2500,4200],"N2/B2":[32,52,3300,5400],"N1/C1":[30,50,4200,6800]},
+      "7-9 mins": {"N5/A1":[40,60,2200,3500],"N4/A2":[45,65,3000,4800],"N3/B1":[48,70,4000,6200],"N2/B2":[45,68,5200,7800],"N1/C1":[42,65,6500,9500]}
+    }
+  },
+  "AI": {
+    "JP": {
+      "3-5 mins": {"N5/A1":[24,38,350,550],"N4/A2":[28,42,500,750],"N3/B1":[30,45,650,950],"N2/B2":[28,42,850,1250],"N1/C1":[26,40,1050,1550]},
+      "5-7 mins": {"N5/A1":[38,55,550,800],"N4/A2":[42,60,750,1100],"N3/B1":[45,65,950,1400],"N2/B2":[42,62,1250,1800],"N1/C1":[40,60,1550,2250]},
+      "7-9 mins": {"N5/A1":[55,75,800,1100],"N4/A2":[60,82,1050,1500],"N3/B1":[62,88,1350,1900],"N2/B2":[58,84,1700,2450],"N1/C1":[55,80,2100,3000]}
+    },
+    "EN": {
+      "3-5 mins": {"N5/A1":[24,38,1200,2100],"N4/A2":[28,42,1600,2800],"N3/B1":[30,45,2200,3600],"N2/B2":[28,42,2800,4400],"N1/C1":[26,40,3400,5400]},
+      "5-7 mins": {"N5/A1":[38,55,2000,3200],"N4/A2":[42,60,2600,4200],"N3/B1":[45,65,3400,5200],"N2/B2":[42,62,4400,6600],"N1/C1":[40,60,5600,8200]},
+      "7-9 mins": {"N5/A1":[55,75,3000,4500],"N4/A2":[60,82,4000,6000],"N3/B1":[62,88,5200,7600],"N2/B2":[58,84,6800,9500],"N1/C1":[55,80,8500,12000]}
+    }
+  }
+};
+
+let currentMode = "Manual";
+let currentSliderIndex = 1;
+const sliderKeys = ["minimum","default","optimal","maximum"];
+
+function normalizeLevel(v) { return (v || "").replace(/^\d+\./, "").trim(); }
+function normalizeDuration(v) {
+    if ((v || "").includes("3-5")) return "3-5 mins";
+    if ((v || "").includes("5-7")) return "5-7 mins";
+    if ((v || "").includes("7-9")) return "7-9 mins";
+    return "";
+}
+function normalizeLanguage(v) { return (v || "").includes("En") ? "EN" : "JP"; }
+function cleanCategory(v) { return (v || "").replace(/^\d+\./, "").trim(); }
+function cleanModeForCsv() { return currentMode === "AI" ? "AI_mode" : "Manual_mode"; }
+function cleanUploadType() { return document.querySelector('input[name="learnMode"]:checked').value.includes("FULL") ? "FULL" : "READ_ONLY"; }
+
+function normalizeImportMetaValue(v) {
+    return String(v || "").trim();
+}
+function normalizeQuizCategoryForRules(category) {
+    const c = String(category || "").trim();
+    if (!c) return "";
+    if (c === "sentence") return "sample_sentence";
+    return c;
+}
+function countGraphemesLikeApp(value) {
+    // Match app counting style: trim, remove whitespace, then count graphemes as safely as possible.
+    const normalized = String(value || "").trim().replace(/\s/g, "");
+    if (!normalized) return 0;
+    try {
+        if (typeof Intl !== "undefined" && Intl.Segmenter) {
+            const seg = new Intl.Segmenter(undefined, { granularity: "grapheme" });
+            let n = 0;
+            for (const _ of seg.segment(normalized)) n += 1;
+            return n;
+        }
+    } catch (_) {}
+    return Array.from(normalized).length;
+}
+function getCurrentState() {
+    const levelRaw = document.getElementById("level").value;
+    const durationRaw = document.getElementById("duration").value;
+    const langRaw = document.getElementById("learningLanguage").value;
+    const uploadRaw = document.querySelector('input[name="learnMode"]:checked').value;
+    const level = normalizeLevel(levelRaw);
+    const duration = normalizeDuration(durationRaw);
+    const language = normalizeLanguage(langRaw);
+    const mode = currentMode;
+    const aiLimit = sliderKeys[currentSliderIndex];
+    const sentence = sentenceLimits[mode]?.[language]?.[duration]?.[level] || ["-","-","-","-"];
+    const templateName = getTemplateName(langRaw, uploadRaw, mode);
+    const combinationSummary = uploadRaw.includes("READ_ONLY")
+        ? `${langRaw} | ${uploadRaw} | 1.Manual_mode / 2.AI_mode`
+        : `${langRaw} | ${uploadRaw} | ${mode === "AI" ? "2.AI_mode" : "1.Manual_mode"}`;
+    return {levelRaw,durationRaw,langRaw,uploadRaw,level,duration,language,mode,aiLimit,sentence,templateName,combinationSummary};
+}
+function getTemplateName(langRaw, uploadRaw, mode) {
+    const isJp = (langRaw || "").includes("Jp");
+    const isEn = (langRaw || "").includes("En");
+    const isReadonly = (uploadRaw || "").includes("READ_ONLY");
+    if (isReadonly && isJp) return "jp_readonly";
+    if (isReadonly && isEn) return "en_readonly";
+    if (mode === "Manual" && isJp) return "manual_full_jp";
+    if (mode === "Manual" && isEn) return "manual_full_en";
+    if (mode === "AI" && isJp) return "ai_full_jp";
+    if (mode === "AI" && isEn) return "ai_full_en";
+    return "";
+}
+function findLearnLimit(moduleName) {
+    const s = getCurrentState();
+    const row = learnLimits.find(r => r.Duration === s.duration && r.Level === s.level && r.Language === s.language && r.Module === moduleName);
+    if (!row) return {"manual_min":"-","manual_max":"-","ai_selected":"-"};
+    return s.mode === "Manual"
+        ? {"manual_min":row.Manual_Min, "manual_max":row.Manual_Max, "ai_selected":"-"}
+        : {"manual_min":"-", "manual_max":"-", "ai_selected":row[s.aiLimit]};
+}
+function findQuizLimit(categoryName) {
+    const s = getCurrentState();
+    const row = quizLimits.find(r => r.duration === s.duration && r.level === s.level && r.quiz_category === categoryName);
+    if (!row) return {"manual_min":"-","manual_max":"-","ai_selected":"-"};
+    return s.mode === "Manual"
+        ? {"manual_min":row.manual_min, "manual_max":row.manual_max, "ai_selected":"-"}
+        : {"manual_min":"-", "manual_max":"-", "ai_selected":row[s.aiLimit]};
+}
+
+function computeRequiredCounts() {
+    const s = getCurrentState();
+    const required = {
+        selected: {
+            learningLanguage: document.getElementById("learningLanguage").value.includes("En") ? "English" : "Japanese",
+            contentCommunity: document.getElementById("contentCommunity").value.replace(/^\d+\./, ""),
+            publishKind: cleanUploadType() === "FULL" ? "full_learn_v1" : "read_only_v1",
+            promptDataTab: cleanModeForCsv(),
+            duration: s.duration,
+            level: s.level,
+            mode: s.mode,
+            aiPreset: s.aiLimit
+        },
+        story: {
+            minSentences: Number(s.sentence[0]),
+            maxSentences: Number(s.sentence[1]),
+            minChars: Number(s.sentence[2]),
+            maxChars: Number(s.sentence[3])
+        },
+        fullLearn: null
+    };
+
+    if (cleanUploadType() !== "FULL") return required;
+
+    const vocabRow = learnLimits.find(r => r.Duration === s.duration && r.Level === s.level && r.Language === s.language && r.Module === "Vocabulary");
+    const grammarRow = learnLimits.find(r => r.Duration === s.duration && r.Level === s.level && r.Language === s.language && r.Module === "Grammar");
+    const vQuizRow = quizLimits.find(r => r.duration === s.duration && r.level === s.level && r.quiz_category === "Vocabulary Quiz");
+    const gQuizRow = quizLimits.find(r => r.duration === s.duration && r.level === s.level && r.quiz_category === "Grammar Quiz");
+    const sQuizRow = quizLimits.find(r => r.duration === s.duration && r.level === s.level && r.quiz_category === "Sentence Quiz");
+    const tQuizRow = quizLimits.find(r => r.duration === s.duration && r.level === s.level && r.quiz_category === "Total Quiz");
+
+    const requiredFull = {
+        vocabulary: s.mode === "AI"
+            ? { exact: Number(vocabRow?.[s.aiLimit] ?? NaN), range: null }
+            : { exact: null, range: { min: Number(vocabRow?.Manual_Min ?? NaN), max: Number(vocabRow?.Manual_Max ?? NaN) } },
+        grammar: s.mode === "AI"
+            ? { exact: Number(grammarRow?.[s.aiLimit] ?? NaN), range: null }
+            : { exact: null, range: { min: Number(grammarRow?.Manual_Min ?? NaN), max: Number(grammarRow?.Manual_Max ?? NaN) } },
+        quizTotal: s.mode === "AI"
+            ? { exact: Number(tQuizRow?.[s.aiLimit] ?? NaN), range: null }
+            : { exact: null, range: { min: Number(tQuizRow?.manual_min ?? NaN), max: Number(tQuizRow?.manual_max ?? NaN) } },
+        quizVocabulary: s.mode === "AI"
+            ? { exact: Number(vQuizRow?.[s.aiLimit] ?? NaN), range: null }
+            : { exact: null, range: { min: Number(vQuizRow?.manual_min ?? NaN), max: Number(vQuizRow?.manual_max ?? NaN) } },
+        quizGrammar: s.mode === "AI"
+            ? { exact: Number(gQuizRow?.[s.aiLimit] ?? NaN), range: null }
+            : { exact: null, range: { min: Number(gQuizRow?.manual_min ?? NaN), max: Number(gQuizRow?.manual_max ?? NaN) } },
+        quizSentence: s.mode === "AI"
+            ? { exact: Number(sQuizRow?.[s.aiLimit] ?? NaN), range: null }
+            : { exact: null, range: { min: Number(sQuizRow?.manual_min ?? NaN), max: Number(sQuizRow?.manual_max ?? NaN) } },
+        audio: { requiredLaterForPublish: true }
+    };
+    required.fullLearn = requiredFull;
+    return required;
+}
+
+function computeActualCounts(importJson) {
+    const coreSentences = Array.isArray(importJson?.core?.sentences) ? importJson.core.sentences : [];
+    const vocabEntries = Array.isArray(importJson?.learn?.vocabularyKanji?.entries) ? importJson.learn.vocabularyKanji.entries : [];
+    const grammarEntries = Array.isArray(importJson?.learn?.grammar?.entries) ? importJson.learn.grammar.entries : [];
+    const quizEntries = Array.isArray(importJson?.learn?.quiz?.entries) ? importJson.learn.quiz.entries : [];
+
+    const storyText = coreSentences
+        .map(row => String(row?.content?.japaneseText || "").trim())
+        .join("");
+    const storyChars = countGraphemesLikeApp(storyText);
+
+    const quizCats = { vocabulary: 0, grammar: 0, sample_sentence: 0, kanji: 0, other: 0 };
+    for (const q of quizEntries) {
+        const cat = normalizeQuizCategoryForRules(q?.category);
+        if (!cat) continue;
+        if (cat === "vocabulary") quizCats.vocabulary += 1;
+        else if (cat === "grammar") quizCats.grammar += 1;
+        else if (cat === "sample_sentence") quizCats.sample_sentence += 1;
+        else if (cat === "kanji") quizCats.kanji += 1;
+        else quizCats.other += 1;
+    }
+
+    const meta = importJson?.nimonImportMeta || {};
+    return {
+        meta: {
+            learningLanguage: normalizeImportMetaValue(meta.learningLanguage),
+            contentCommunity: normalizeImportMetaValue(meta.contentCommunity),
+            promptDataTab: normalizeImportMetaValue(meta.promptDataTab),
+            publishKind: normalizeImportMetaValue(meta.publishKind)
+        },
+        story: { sentences: coreSentences.length, chars: storyChars },
+        fullLearn: {
+            vocabulary: vocabEntries.length,
+            grammar: grammarEntries.length,
+            quizTotal: quizEntries.length,
+            quizVocabulary: quizCats.vocabulary,
+            quizGrammar: quizCats.grammar,
+            quizSentence: quizCats.sample_sentence
+        }
+    };
+}
+
+function formatExpectedRangeOrExact(spec) {
+    if (!spec) return "-";
+    if (spec.exact != null && Number.isFinite(spec.exact)) return String(spec.exact);
+    if (spec.range && Number.isFinite(spec.range.min) && Number.isFinite(spec.range.max)) return `${spec.range.min}–${spec.range.max}`;
+    return "-";
+}
+
+function validateImportJsonAgainstHtmlRules(importJson) {
+    const required = computeRequiredCounts();
+    const actual = computeActualCounts(importJson);
+    const errors = [];
+    const warnings = [];
+
+    // Context/meta checks
+    if (actual.meta.contentCommunity !== required.selected.contentCommunity) {
+        errors.push({ rule: "Content community", expected: required.selected.contentCommunity, actual: actual.meta.contentCommunity });
+    }
+    if (actual.meta.learningLanguage !== required.selected.learningLanguage) {
+        errors.push({ rule: "Learning language", expected: required.selected.learningLanguage, actual: actual.meta.learningLanguage });
+    }
+    if (actual.meta.promptDataTab !== required.selected.promptDataTab) {
+        errors.push({ rule: "Prompt mode (promptDataTab)", expected: required.selected.promptDataTab, actual: actual.meta.promptDataTab });
+    }
+    if (actual.meta.publishKind !== required.selected.publishKind) {
+        errors.push({ rule: "Publish kind", expected: required.selected.publishKind, actual: actual.meta.publishKind });
+    }
+
+    // Story limits
+    if (actual.story.sentences < required.story.minSentences || actual.story.sentences > required.story.maxSentences) {
+        errors.push({ rule: "Story sentences", expected: `${required.story.minSentences}–${required.story.maxSentences}`, actual: String(actual.story.sentences) });
+    }
+    if (actual.story.chars < required.story.minChars || actual.story.chars > required.story.maxChars) {
+        errors.push({ rule: "Story chars (trim + remove whitespace + grapheme count)", expected: `${required.story.minChars}–${required.story.maxChars}`, actual: String(actual.story.chars) });
+    }
+
+    if (required.selected.publishKind === "read_only_v1") {
+        return { ok: errors.length === 0, errors, warnings, required, actual };
+    }
+
+    // FullLearn limits (audio is warning only for download)
+    const f = required.fullLearn;
+    if (f) {
+        const checks = [
+            { rule: "Vocabulary count", spec: f.vocabulary, actual: actual.fullLearn.vocabulary },
+            { rule: "Grammar count", spec: f.grammar, actual: actual.fullLearn.grammar },
+            { rule: "Total quiz", spec: f.quizTotal, actual: actual.fullLearn.quizTotal },
+            { rule: "Vocabulary quiz", spec: f.quizVocabulary, actual: actual.fullLearn.quizVocabulary },
+            { rule: "Grammar quiz", spec: f.quizGrammar, actual: actual.fullLearn.quizGrammar },
+            { rule: "Sentence quiz", spec: f.quizSentence, actual: actual.fullLearn.quizSentence }
+        ];
+        for (const c of checks) {
+            if (c.spec.exact != null && Number.isFinite(c.spec.exact)) {
+                if (c.actual !== c.spec.exact) errors.push({ rule: c.rule, expected: String(c.spec.exact), actual: String(c.actual) });
+            } else if (c.spec.range && Number.isFinite(c.spec.range.min) && Number.isFinite(c.spec.range.max)) {
+                if (c.actual < c.spec.range.min || c.actual > c.spec.range.max) {
+                    errors.push({ rule: c.rule, expected: `${c.spec.range.min}–${c.spec.range.max}`, actual: String(c.actual) });
+                }
+            }
+        }
+    }
+
+    // Audio: must not block download
+    const audioObj = importJson?.learn?.audio?.storyAudio;
+    const hasAudio = Boolean(audioObj && (audioObj.sourceUrl || audioObj.localPath));
+    if (!hasAudio) {
+        warnings.push("Audio is required later before publish. (Download is allowed.)");
+    }
+
+    return { ok: errors.length === 0, errors, warnings, required, actual };
+}
+function updateContentCommunity() {
+    const langSelect = document.getElementById("learningLanguage").value;
+    const communitySelect = document.getElementById("contentCommunity");
+    communitySelect.innerHTML = '<option value="" disabled selected></option>';
+    communities.forEach(item => {
+        const option = document.createElement("option");
+        option.value = `${item.id}.${item.name}`;
+        option.textContent = `${item.id}.${item.name}`;
+        if (langSelect.includes("Jp") && item.name === "Japanese") option.disabled = true;
+        if (langSelect.includes("En") && item.name === "English") option.disabled = true;
+        communitySelect.appendChild(option);
+    });
+    checkFormValidity();
+}
+function switchTab(mode, element) {
+    currentMode = mode;
+    document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+    element.classList.add("active");
+    const promptArea = document.getElementById("promptArea");
+    promptArea.placeholder = mode === "Manual" ? "Paste the actual story text here. This is NOT an AI instruction. It must match the selected sentence and character limits." : "Tell AI what prompts you to participate in the story you want to create.";
+    updateModeState();
+    enableExportButtons(false);
+    setImportExportButtons(false);
+    checkFormValidity();
+}
+function isSliderEnabled() {
+    return cleanUploadType() === "FULL" && currentMode === "AI";
+}
+function updateModeState() {
+    const sliderWrapper = document.getElementById("sliderWrapper");
+    if (isSliderEnabled()) {
+        sliderWrapper.classList.remove("disabled");
+    } else {
+        sliderWrapper.classList.add("disabled");
+        setSlider(1, true);
+    }
+    checkFormValidity();
+}
+function setSlider(index, force = false) {
+    if (!force && !isSliderEnabled()) return;
+    currentSliderIndex = index;
+    document.querySelectorAll(".slider-node").forEach((node, idx) => node.classList.toggle("active", idx === index));
+}
+function checkFormValidity() {
+    const requiredFields = document.querySelectorAll(".required-field");
+    let isValid = true;
+    requiredFields.forEach(field => { if (!field.value.trim()) isValid = false; });
+    document.getElementById("generateBtn").disabled = !isValid;
+}
+function resetForm() {
+    document.getElementById("generatorForm").reset();
+    document.getElementById("promptArea").value = "";
+    document.getElementById("contentCommunity").innerHTML = '<option value="" disabled selected></option>';
+    const manualTab = document.getElementById("manualTab");
+    switchTab("Manual", manualTab);
+    setSlider(1, true);
+    document.getElementById("resultSection").style.display = "none";
+    const limitSection = document.getElementById("limitPreviewSection");
+    if (limitSection) limitSection.style.display = "none";
+    enableExportButtons(false);
+    setExportStatus("");
+    checkFormValidity();
+}
+function csvEscape(value) {
+    const s = String(value ?? "");
+    return `"${s.replace(/"/g, '""')}"`;
+}
+
+function getManualStoryStats(text) {
+    const raw = String(text || "").trim();
+    if (!raw) return { sentenceCount: 0, charCount: 0, sentences: [] };
+    const sentences = [];
+    const re = /[^。！？!?．.\n]+[。！？!?．.]?/g;
+    let match;
+    while ((match = re.exec(raw)) !== null) {
+        const sentence = match[0].trim();
+        if (sentence) sentences.push(sentence);
+    }
+    if (!sentences.length) {
+        raw.split(/\n+/).map(x => x.trim()).filter(Boolean).forEach(x => sentences.push(x));
+    }
+    const textForCount = sentences.join("");
+    const charCount = countGraphemesLikeApp(textForCount);
+    return { sentenceCount: sentences.length, charCount, sentences };
+}
+function validateManualStoryInput(showAlert = true) {
+    const s = getCurrentState();
+    if (currentMode !== "Manual") return { ok: true, stats: getManualStoryStats(document.getElementById("promptArea").value), errors: [] };
+    const stats = getManualStoryStats(document.getElementById("promptArea").value);
+    const minSent = Number(s.sentence[0]);
+    const maxSent = Number(s.sentence[1]);
+    const minChar = Number(s.sentence[2]);
+    const maxChar = Number(s.sentence[3]);
+    const errors = [];
+    if (!stats.sentenceCount) {
+        errors.push("Manual mode မှာ prompt မဟုတ်ဘဲ တကယ် story sentence / paragraph text ကိုထည့်ရပါမယ်။");
+    }
+    if (Number.isFinite(minSent) && Number.isFinite(maxSent) && (stats.sentenceCount < minSent || stats.sentenceCount > maxSent)) {
+        errors.push(`Sentence count မကိုက်ပါ။ လက်ရှိ ${stats.sentenceCount} sentences / လိုအပ်တာ ${minSent}–${maxSent} sentences ဖြစ်ရပါမယ်။`);
+    }
+    if (Number.isFinite(minChar) && Number.isFinite(maxChar) && (stats.charCount < minChar || stats.charCount > maxChar)) {
+        errors.push(`Character count မကိုက်ပါ။ လက်ရှိ ${stats.charCount} chars / လိုအပ်တာ ${minChar}–${maxChar} chars ဖြစ်ရပါမယ်။`);
+    }
+    if (errors.length && showAlert) {
+        alert("Manual story input limitation error:\n\n" + errors.join("\n"));
+    }
+    return { ok: errors.length === 0, stats, errors };
+}
+function buildCsvPreview() {
+    const s = getCurrentState();
+    const headers = ["story_title","description","level","category","duration","email","learning_language","content_community","upload_type","prompt_data_tab","plot_prompt","limitation_for_AI"];
+    const values = [
+        document.getElementById("storyTitle").value,
+        document.getElementById("description").value,
+        s.level,
+        cleanCategory(document.getElementById("category").value),
+        s.duration.replace("-", "_").replace(" mins", ""),
+        document.getElementById("email").value,
+        document.getElementById("learningLanguage").value.includes("Jp") ? "Japanese" : "English",
+        document.getElementById("contentCommunity").value.replace(/^\d+\./, ""),
+        cleanUploadType(),
+        cleanModeForCsv(),
+        document.getElementById("promptArea").value,
+        s.mode === "AI" ? s.aiLimit : "-"
+    ];
+    return headers.join(",") + "\n" + values.map(csvEscape).join(",");
+}
+function jlptOnly(level) {
+    const lv = normalizeLevel(level || "");
+    return (lv.split("/")[0] || lv).trim();
+}
+function durationBandKey(duration) {
+    return normalizeDuration(duration).replace("-", "_").replace(" mins", "");
+}
+function limitText(limit, label) {
+    return `${label}: manual_min=${limit.manual_min}, manual_max=${limit.manual_max}, ai_selected=${limit.ai_selected}`;
+}
+function getSelectedCounts() {
+    const vocab = findLearnLimit("Vocabulary");
+    const grammar = findLearnLimit("Grammar");
+    const vQuiz = findQuizLimit("Vocabulary Quiz");
+    const gQuiz = findQuizLimit("Grammar Quiz");
+    const sentQuiz = findQuizLimit("Sentence Quiz");
+    const totalQuiz = findQuizLimit("Total Quiz");
+    const pick = (obj, type) => {
+        if (type === "learn") return currentMode === "AI" ? obj.ai_selected : `${obj.manual_min}-${obj.manual_max}`;
+        return currentMode === "AI" ? obj.ai_selected : `${obj.manual_min}-${obj.manual_max}`;
+    };
+    return { vocab, grammar, vQuiz, gQuiz, sentQuiz, totalQuiz,
+        vocabCount: pick(vocab, "learn"), grammarCount: pick(grammar, "learn"),
+        vQuizCount: pick(vQuiz, "quiz"), gQuizCount: pick(gQuiz, "quiz"), sentQuizCount: pick(sentQuiz, "quiz"), totalQuizCount: pick(totalQuiz, "quiz") };
+}
+function buildReadonlyPrompt(s, common) {
+    const translationStorageRule = common.contentCommunity === "Burmese"
+        ? '- Put the natural Burmese translation into meanings.my / content.meanings.my and keep meanings.byLanguage as {}.'
+        : `- Put the natural ${common.contentCommunity} translation into meanings.byLanguage["${common.contentCommunity}"] and set meanings.my to null.`;
+    return `You are an expert Nimon import JSON generator.
+
+TASK: Generate a Nimon ReadOnly import-ready JSON object that can be saved directly as a .json file and imported into the Nimon Flutter app.
+
+### REQUIRED COUNTS (must match, otherwise REWRITE until it matches)
+- learningLanguage: ${common.learningLanguageLabel}
+- contentCommunity: ${common.contentCommunity}
+- publishKind: read_only_v1
+- promptDataTab: ${cleanModeForCsv()}
+- duration: ${s.duration}
+- level_with_cefr_reference: ${s.level}
+- story sentence count: ${s.sentence[0]}–${s.sentence[1]}
+- story char count: ${s.sentence[2]}–${s.sentence[3]}
+Character count rule: trim each japaneseText, remove ALL whitespace, then count graphemes (Unicode user-perceived characters).
+
+CRITICAL OUTPUT RULE:
+- Output ONLY the raw JSON object.
+- Do NOT include markdown fences such as \`\`\`json.
+- Do NOT include explanations, comments, or notes outside the JSON.
+- The JSON must be import-ready directly. It must NOT require the HTML converter.
+- The output MUST be strict valid JSON parsable by JSON.parse().
+- Do NOT use raw straight double quotes (") inside any JSON string value. If a translation or dialogue needs quotation marks, use Japanese corner quotes 「」 or single quotes, or escape double quotes as \\".
+- Especially in Burmese/English translations, names/dialogue must NOT be written like "လင်းလက်" inside a JSON string unless the quotes are escaped.
+- No trailing commas. No comments. No undefined values. No placeholder text outside strings.
+- Before final output, silently check that the full response can be copied into JSON.parse() without error.
+
+
+### 1. INPUT DATA
+- schemaVersion: 1
+- generatorVersion: Json_Generator_V10_AccurateFuriganaAnchors
+- learningLanguage: ${common.learningLanguageLabel}
+- contentCommunity: ${common.contentCommunity}
+- createdForEmail: ${common.email}
+- publishKind: read_only_v1
+- level: ${common.levelForApp}
+- level_with_cefr_reference: ${s.level}
+- title: ${common.title}
+- category: ${common.category}
+- description: ${common.desc}
+- duration: ${s.duration}
+- targetDurationBandKey: ${common.durationKey}
+- Prompt Data Tab: ${cleanModeForCsv()}
+- Source Mode: ${common.sourceModeValue}
+- plot_and_characters: ${common.plot}
+
+### 2. LIMITATION RULES FROM CSV_Prompt
+- Upload Type: READ_ONLY
+- Template Name: ${s.templateName}
+- Sentence Count: ${s.sentence[0]}–${s.sentence[1]}
+- ${common.charLabel}: ${s.sentence[2]}–${s.sentence[3]}
+
+### 3. IMPORT-COMPATIBILITY CONTRACT
+- The root JSON MUST include nimonImportMeta.
+- nimonImportMeta.schemaVersion MUST be 1.
+- nimonImportMeta.learningLanguage MUST be exactly "${common.learningLanguageLabel}".
+- nimonImportMeta.contentCommunity MUST be exactly "${common.contentCommunity}".
+- nimonImportMeta.createdForEmail MUST be exactly "${common.email}".
+- nimonImportMeta.publishKind MUST be exactly "read_only_v1".
+- core.category MUST be exactly "${common.category}". Do NOT replace it with labels like "Daily Life" unless the selected category is exactly that.
+- core.level MUST be exactly "${common.levelForApp}".
+- core.targetDurationBandKey MUST be exactly "${common.durationKey}".
+- Use the current Nimon compatibility key content.japaneseText for every story sentence.
+- ${translationStorageRule}
+
+### 4. READONLY STRUCTURE RULES
+- Generate one valid UUIDv4 storyId and reuse it as sourceDraftId and every sentence content.storyId.
+- core.sentences must be an array of wrapper objects: { "order": number, "content": { ... } }.
+- Use sequential order values from 0 to sentence_count - 1.
+- content.orderIndex must equal the outer order.
+- Generate one unique UUIDv4 for every sentence content.id.
+- content.reading, content.audioStartMs, and content.audioEndMs must be null.
+- content.provenance.sourceMode must be "${common.sourceModeValue}".
+- content.provenance.lastReviewedByCreator must be true.
+- content.furiganaSpans must be an array. For Japanese, include kanji mappings when kanji appears.
+- For maximum accuracy, do NOT guess numeric offsets unless you have self-checked them.
+- Preferred AI-result furigana anchor shape for this HTML converter: { "text": "exact substring copied from the final trimmed japaneseText", "reading": "hiragana reading" }.
+- The converter will turn {text, reading} anchors into Nimon app spans {start,end,reading} using the final trimmed japaneseText.
+- If you output direct numeric Nimon spans instead, each span MUST use only { "start": number, "end": number, "reading": string }.
+- start is inclusive and end is exclusive, counted on the final TRIMMED content.japaneseText character positions.
+- Self-check rule: content.japaneseText.substring(start,end) must exactly equal the kanji/kana surface you meant to annotate.
+- Furigana spans must be listed in left-to-right sentence order. If the same kanji appears twice, list each occurrence in order.
+- Do not output old flat keys such as sentence_id, sentence_order, meaning_translate, meaning_my, sourceMode, or lastReviewedByCreator at the root sentence row level.
+
+### 5. REQUIRED JSON SHAPE
+{
+  "nimonImportMeta": {
+    "schemaVersion": 1,
+    "generatorVersion": "Json_Generator_V10_AccurateFuriganaAnchors",
+    "learningLanguage": "${common.learningLanguageLabel}",
+    "contentCommunity": "${common.contentCommunity}",
+    "promptDataTab": "${cleanModeForCsv()}",
+    "publishKind": "read_only_v1",
+    "createdForEmail": "${common.email}"
+  },
+  "sourceDraftId": "[Same UUID as storyId]",
+  "updatedAt": "[Current ISO-8601 timestamp]",
+  "publishKind": "read_only_v1",
+  "core": {
+    "level": "${common.levelForApp}",
+    "title": "${common.title}",
+    "category": "${common.category}",
+    "sentences": [
+      {
+        "order": 0,
+        "content": {
+          "id": "[Unique UUIDv4]",
+          "reading": null,
+          "storyId": "[Same UUID as sourceDraftId]",
+          "meanings": {
+            "en": ${common.meaningEnTemplateValue},
+            "my": ${common.contentCommunity === "Burmese" ? '"[Natural Burmese translation]"' : 'null'},
+            "byLanguage": ${common.contentCommunity === "Burmese" ? '{}' : `{ "${common.contentCommunity}": "[Natural ${common.contentCommunity} translation]" }`}
+          },
+          "audioEndMs": null,
+          "orderIndex": 0,
+          "provenance": { "sourceMode": "${common.sourceModeValue}", "lastReviewedByCreator": true },
+          "audioStartMs": null,
+          "japaneseText": "[Generated sentence]",
+          "furiganaSpans": [
+            { "text": "[Exact kanji substring copied from japaneseText]", "reading": "[hiragana reading]" }
+          ]
+        }
+      }
+    ],
+    "description": "${common.desc}",
+    "coverImageUrl": null,
+    "targetDurationBandKey": "${common.durationKey}"
+  }
+}
+
+### 6. FINAL SELF-CHECK BEFORE OUTPUT
+Before returning JSON, silently verify:
+1. nimonImportMeta exists and has schemaVersion 1.
+2. nimonImportMeta.createdForEmail is exactly "${common.email}".
+3. nimonImportMeta.learningLanguage is exactly "${common.learningLanguageLabel}".
+4. nimonImportMeta.contentCommunity is exactly "${common.contentCommunity}".
+5. publishKind is exactly "read_only_v1".
+6. core.category is exactly "${common.category}".
+7. core.sentences.length is between ${s.sentence[0]} and ${s.sentence[1]}.
+8. Story char count (trim + remove whitespace + grapheme count) is between ${s.sentence[2]} and ${s.sentence[3]}.
+9. The JSON is strict valid JSON.parse-compatible text and can be saved directly as a .json file. No unescaped double quotes appear inside string values.`;
+}
+function buildFullLearnPrompt(s, common, counts) {
+    const targetTextRule = s.language === "JP"
+        ? '- Generate Japanese story sentences in content.japaneseText. For furigana accuracy, DO NOT guess numeric start/end offsets in the AI result. Instead, put furiganaSpans in converter-anchor shape: { \"text\": \"exact kanji/kana substring copied from the final trimmed japaneseText\", \"reading\": \"hiragana reading\" }. The HTML converter will calculate exact Nimon {start,end,reading} spans from the final trimmed sentence. If you choose to output numeric {start,end,reading}, you must self-check that japaneseText.substring(start,end) exactly matches the intended surface text.'
+        : '- Generate English-learning story sentences, but keep the database key name content.japaneseText for current Nimon import compatibility. furiganaSpans should be an empty array unless Japanese kanji appears.';
+    const translationStorageRule = common.contentCommunity === "Burmese"
+        ? '- Put the natural Burmese translation into meanings.my and keep meanings.byLanguage as {}.'
+        : `- Put the natural ${common.contentCommunity} translation into meanings.byLanguage["${common.contentCommunity}"] and set meanings.my to null.`;
+    const manualStoryRule = s.mode === "Manual"
+        ? `
+### 1.1 MANUAL STORY TEXT CONTRACT
+The field "plot_and_characters / creator instruction" below is NOT a prompt for generating a new story. It is the actual story text supplied by the creator.
+- Do NOT rewrite, expand, shorten, or change the story content.
+- Split the provided story text into sequential core.sentences.
+- Preserve the original order and meaning.
+- You may only normalize sentence boundaries and add translations/furigana.
+- Generate vocabulary, grammar, and quizzes from this provided story text only.
+`
+        : '';
+    const hardCountContract = s.mode === "AI"
+        ? `HARD COUNT CONTRACT — DO NOT APPROXIMATE OR SUMMARIZE:
+- core.sentences.length must be between ${s.sentence[0]} and ${s.sentence[1]}.
+- Story char count (trim + remove whitespace + grapheme count) must be between ${s.sentence[2]} and ${s.sentence[3]}.
+- learn.vocabularyKanji.entries.length must be EXACTLY ${counts.vocabCount}.
+- learn.grammar.entries.length must be EXACTLY ${counts.grammarCount}.
+- learn.quiz.entries.length must be EXACTLY ${counts.totalQuizCount}.
+- Quiz category counts must be EXACTLY:
+  - vocabulary: ${counts.vQuizCount}
+  - grammar: ${counts.gQuizCount}
+  - sample_sentence: ${counts.sentQuizCount}
+- If you generate fewer OR more entries than these numbers, the JSON is INVALID and cannot be imported into Nimon.
+- If you cannot satisfy the counts, rewrite the story and regenerate everything until it matches EXACTLY.
+- Do not write "etc.", "repeat", "continue similarly", abbreviated objects, placeholder arrays, or shortened arrays. Every required item must be fully written as a real JSON object.`
+        : `HARD COUNT CONTRACT — DO NOT SUMMARIZE:
+- core.sentences.length must be between ${s.sentence[0]} and ${s.sentence[1]}.
+- Story char count (trim + remove whitespace + grapheme count) must be between ${s.sentence[2]} and ${s.sentence[3]}.
+- learn.vocabularyKanji.entries.length must be inside ${counts.vocabCount}.
+- learn.grammar.entries.length must be inside ${counts.grammarCount}.
+- learn.quiz.entries.length must be inside ${counts.totalQuizCount}.
+- Quiz category counts must be inside:
+  - vocabulary: ${counts.vQuizCount}
+  - grammar: ${counts.gQuizCount}
+  - sample_sentence: ${counts.sentQuizCount}
+- Do not write "etc.", "repeat", "continue similarly", abbreviated objects, placeholder arrays, or shortened arrays.`;
+    const finalSelfCheck = s.mode === "AI"
+        ? `1. nimonImportMeta exists and has schemaVersion 1.
+2. nimonImportMeta.createdForEmail is exactly "${common.email}".
+3. nimonImportMeta.learningLanguage is exactly "${common.learningLanguageLabel}".
+4. nimonImportMeta.contentCommunity is exactly "${common.contentCommunity}".
+5. publishKind and nimonImportMeta.publishKind are exactly "full_learn_v1".
+6. core.category is exactly "${common.category}".
+7. core.sentences.length is ${s.sentence[0]}–${s.sentence[1]}.
+8. vocabularyKanji.entries.length === ${counts.vocabCount}.
+9. grammar.entries.length === ${counts.grammarCount}.
+10. quiz.entries.length === ${counts.totalQuizCount}.
+11. quiz vocabulary count === ${counts.vQuizCount}.
+12. quiz grammar count === ${counts.gQuizCount}.
+13. quiz sample_sentence count === ${counts.sentQuizCount}.
+14. vocabularyKanji.entries has 0 null exampleSentence and 0 null exampleMeanings.
+15. grammar.entries has 0 null relatedNote, 0 null mistakeWrong, and 0 null mistakeCorrect.
+16. quiz.entries has 0 null sourceNote.
+17. Every quiz has exactly 4 unique options.
+18. For every quiz, options[correctIndex] equals the answer in sourceNote.
+19. correctIndex values are distributed across 0,1,2,3 as evenly as possible.
+20. audio.storyAudio exists with sourceUrl null and localPath null so the app can import it as Ready to Preview, then user uploads audio later.
+21. The final output is strict valid JSON.parse-compatible text. No string value contains raw unescaped double quotes.`
+        : `1. nimonImportMeta exists and has schemaVersion 1.
+2. nimonImportMeta.createdForEmail is exactly "${common.email}".
+3. nimonImportMeta.learningLanguage is exactly "${common.learningLanguageLabel}".
+4. nimonImportMeta.contentCommunity is exactly "${common.contentCommunity}".
+5. publishKind and nimonImportMeta.publishKind are exactly "full_learn_v1".
+6. core.category is exactly "${common.category}".
+7. core.sentences.length is inside the required range.
+8. No rich learning fields are null: vocab exampleSentence/exampleMeanings, grammar relatedNote/mistakeWrong/mistakeCorrect, quiz sourceNote.
+9. audio.storyAudio exists with sourceUrl null and localPath null.
+10. The final output is strict valid JSON.parse-compatible text. No string value contains raw unescaped double quotes.`;
+
+    return `You are an expert Nimon import JSON generator and curriculum designer.
+
+TASK: Generate a Nimon FullLearn import-ready JSON object that can be saved directly as a .json file and imported into the Nimon Flutter app.
+
+### REQUIRED COUNTS (must match, otherwise REWRITE until it matches)
+- learningLanguage: ${common.learningLanguageLabel}
+- contentCommunity: ${common.contentCommunity}
+- publishKind: full_learn_v1
+- promptDataTab: ${cleanModeForCsv()}
+- duration: ${s.duration}
+- level_with_cefr_reference: ${s.level}
+- story sentence count: ${s.sentence[0]}–${s.sentence[1]}
+- story char count: ${s.sentence[2]}–${s.sentence[3]}
+- vocabulary count: ${counts.vocabCount}
+- grammar count: ${counts.grammarCount}
+- quiz total count: ${counts.totalQuizCount}
+- vocabulary quiz count: ${counts.vQuizCount}
+- grammar quiz count: ${counts.gQuizCount}
+- sentence quiz count: ${counts.sentQuizCount}
+Character count rule: trim each japaneseText, remove ALL whitespace, then count graphemes (Unicode user-perceived characters).
+
+CRITICAL OUTPUT RULE:
+- Output ONLY the raw JSON object.
+- Do NOT include markdown fences such as \`\`\`json.
+- Do NOT include explanations, comments, or notes outside the JSON.
+- The JSON must be import-ready directly. It must NOT require the HTML converter.
+- The output MUST be strict valid JSON parsable by JSON.parse().
+- Do NOT use raw straight double quotes (") inside any JSON string value. If a translation or dialogue needs quotation marks, use Japanese corner quotes 「」 or single quotes, or escape double quotes as \\".
+- Especially in Burmese/English translations, names/dialogue must NOT be written like "လင်းလက်" inside a JSON string unless the quotes are escaped.
+- No trailing commas. No comments. No undefined values. No placeholder text outside strings.
+- Before final output, silently check that the full response can be copied into JSON.parse() without error.
+
+
+### 1. INPUT DATA
+- schemaVersion: 1
+- generatorVersion: Json_Generator_V10_AccurateFuriganaAnchors
+- learningLanguage: ${common.learningLanguageLabel}
+- contentCommunity: ${common.contentCommunity}
+- createdForEmail: ${common.email}
+- publishKind: full_learn_v1
+- level: ${common.levelForApp}
+- level_with_cefr_reference: ${s.level}
+- title: ${common.title}
+- category: ${common.category}
+- description: ${common.desc}
+- duration: ${s.duration}
+- targetDurationBandKey: ${common.durationKey}
+- Prompt Data Tab: ${cleanModeForCsv()}
+- Source Mode: ${common.sourceModeValue}
+- plot_and_characters / creator instruction: ${common.plot}
+${manualStoryRule}
+
+### 2. LIMITATION RULES FROM CSV_Prompt
+- Upload Type: FULL_LEARN
+- Template Name: ${s.templateName}
+- Source Mode: ${common.sourceModeValue}
+- Sentence Count: ${s.sentence[0]}–${s.sentence[1]}
+- ${common.charLabel}: ${s.sentence[2]}–${s.sentence[3]}
+- Vocabulary count: ${counts.vocabCount}
+- Grammar count: ${counts.grammarCount}
+- Vocabulary quiz count: ${counts.vQuizCount}
+- Grammar quiz count: ${counts.gQuizCount}
+- Sentence quiz count: ${counts.sentQuizCount}
+- Total quiz count: ${counts.totalQuizCount}
+
+### 3. IMPORT-COMPATIBILITY CONTRACT
+- The root JSON MUST include nimonImportMeta.
+- nimonImportMeta.schemaVersion MUST be 1.
+- nimonImportMeta.learningLanguage MUST be exactly "${common.learningLanguageLabel}".
+- nimonImportMeta.contentCommunity MUST be exactly "${common.contentCommunity}".
+- nimonImportMeta.createdForEmail MUST be exactly "${common.email}".
+- nimonImportMeta.publishKind MUST be exactly "full_learn_v1".
+- core.category MUST be exactly "${common.category}". Do NOT replace it with labels like "Daily Life" unless the selected category is exactly that.
+- core.level MUST be exactly "${common.levelForApp}".
+- core.targetDurationBandKey MUST be exactly "${common.durationKey}".
+- ${targetTextRule}
+- ${translationStorageRule}
+
+### 3.1 FURIGANA ACCURACY CONTRACT — VERY IMPORTANT
+- AI models are unreliable at counting Japanese string indexes. Therefore, for AI output, prefer furigana anchor objects instead of numeric offsets.
+- For every sentence, first finalize and trim content.japaneseText. Do not add or remove characters after creating furiganaSpans.
+- In each furigana span, use: { "text": "exact surface substring from the final trimmed japaneseText", "reading": "hiragana reading" }.
+- The "text" value MUST be copied exactly from content.japaneseText. No extra spaces, no normalized variant, no missing okurigana if the selected surface includes it.
+- List spans in the same left-to-right order as they appear in the sentence.
+- If the same surface appears multiple times, output each occurrence in order. The converter will match occurrences sequentially from the previous span.
+- Prefer meaningful contiguous compounds when possible, e.g. {"text":"平和","reading":"へいわ"}, {"text":"魔法","reading":"まほう"}, {"text":"暗闇","reading":"くらやみ"}.
+- For verbs/adjectives with okurigana, choose the kanji stem only when natural, e.g. {"text":"使","reading":"つか"} for 使って, {"text":"戻","reading":"もど"} for 戻す.
+- Do NOT use guessed {start,end,reading} offsets unless you can verify substring(start,end) exactly. Wrong numeric offsets cause furigana to display in the wrong place in Nimon storytelling.
+- The final downloaded import JSON generated by this HTML converter will contain only Nimon app spans: {"start":number,"end":number,"reading":string}.
+
+- FullLearn audio may be null for import. Keep learn.audio.storyAudio present with sourceUrl null and localPath null. The Nimon app will import it as Ready to Preview and the user will upload audio later.
+
+### 4. HARD COUNT CONTRACT
+${hardCountContract}
+
+### 5. RICH LEARNING DATA CONTRACT
+Vocabulary/Kanji entries:
+- Every entry must have termJapanese, reading when applicable, glosses, examplePairs, exampleSentence, and exampleMeanings.
+- examplePairs.length must be at least 1.
+- exampleSentence MUST NOT be null.
+- exampleMeanings MUST NOT be null.
+- exampleSentence must equal examplePairs[0].japanese.
+- exampleMeanings must equal examplePairs[0].meanings.
+
+Grammar entries:
+- Every entry must have headline, form, meanings, usage, examples, relatedNote, mistakeWrong, and mistakeCorrect.
+- relatedNote MUST NOT be null.
+- mistakeWrong MUST NOT be null.
+- mistakeCorrect MUST NOT be null.
+- mistakeWrong and mistakeCorrect must be different strings.
+
+Quiz entries:
+- Every quiz must have prompt, category, options, correctIndex, sourceNote, and explanations.
+- options.length must be exactly 4.
+- options must be unique after trimming/lowercasing.
+- correctIndex must be an integer 0–3.
+- sourceNote MUST NOT be null.
+- sourceNote format: subtype=<blank_question|meaning_question|scrambled_sentence|paraphrase>;answer=<exact correct option text>;target=<target term or grammar form>
+- options[correctIndex] must exactly equal the answer in sourceNote.
+- Do NOT always put the answer first. Distribute correctIndex values 0,1,2,3 as evenly as possible.
+- Quiz category mapping: Vocabulary Quizzes => "vocabulary", Grammar Quizzes => "grammar", Sentence Quizzes => "sample_sentence".
+
+### 6. REQUIRED JSON SHAPE
+{
+  "nimonImportMeta": {
+    "schemaVersion": 1,
+    "generatorVersion": "Json_Generator_V10_AccurateFuriganaAnchors",
+    "learningLanguage": "${common.learningLanguageLabel}",
+    "contentCommunity": "${common.contentCommunity}",
+    "promptDataTab": "${cleanModeForCsv()}",
+    "publishKind": "full_learn_v1",
+    "createdForEmail": "${common.email}"
+  },
+  "sourceDraftId": "[Same UUID as storyId]",
+  "updatedAt": "[Current ISO-8601 timestamp]",
+  "publishKind": "full_learn_v1",
+  "core": {
+    "level": "${common.levelForApp}",
+    "title": "${common.title}",
+    "category": "${common.category}",
+    "sentences": [
+      {
+        "order": 0,
+        "content": {
+          "id": "[Unique UUIDv4]",
+          "reading": null,
+          "storyId": "[Same UUID as sourceDraftId]",
+          "meanings": {
+            "en": ${common.meaningEnTemplateValue},
+            "my": ${common.contentCommunity === "Burmese" ? '"[Natural Burmese translation]"' : 'null'},
+            "byLanguage": ${common.contentCommunity === "Burmese" ? '{}' : `{ "${common.contentCommunity}": "[Natural ${common.contentCommunity} translation]" }`}
+          },
+          "audioEndMs": null,
+          "orderIndex": 0,
+          "provenance": { "sourceMode": "${common.sourceModeValue}", "lastReviewedByCreator": true },
+          "audioStartMs": null,
+          "japaneseText": "[Generated sentence]",
+          "furiganaSpans": [
+            { "text": "[Exact kanji substring copied from japaneseText]", "reading": "[hiragana reading]" }
+          ]
+        }
+      }
+    ],
+    "description": "${common.desc}",
+    "coverImageUrl": null,
+    "targetDurationBandKey": "${common.durationKey}"
+  },
+  "learn": {
+    "schemaVersion": 1,
+    "vocabularyKanji": {
+      "entries": [
+        {
+          "id": "[Unique UUIDv4]",
+          "type": "vocabulary or kanji",
+          "glosses": { "en": ${common.meaningEnTemplateValue}, "my": ${common.contentCommunity === "Burmese" ? '"[Natural Burmese gloss]"' : 'null'}, "byLanguage": ${common.contentCommunity === "Burmese" ? '{}' : `{ "${common.contentCommunity}": "[Natural ${common.contentCommunity} gloss]" }`} },
+          "reading": "[Reading or null]",
+          "provenance": { "sourceMode": "${common.sourceModeValue}", "lastReviewedByCreator": true },
+          "examplePairs": [
+            { "japanese": "[Example sentence from or related to the story]", "meanings": { "en": ${common.meaningEnTemplateValue}, "my": ${common.contentCommunity === "Burmese" ? '"[Natural Burmese translation]"' : 'null'}, "byLanguage": ${common.contentCommunity === "Burmese" ? '{}' : `{ "${common.contentCommunity}": "[Natural ${common.contentCommunity} translation]" }`} } }
+          ],
+          "termJapanese": "[Vocabulary/Kanji term]",
+          "exampleMeanings": { "en": ${common.meaningEnTemplateValue}, "my": ${common.contentCommunity === "Burmese" ? '"[Natural Burmese translation of exampleSentence]"' : 'null'}, "byLanguage": ${common.contentCommunity === "Burmese" ? '{}' : `{ "${common.contentCommunity}": "[Natural ${common.contentCommunity} translation of exampleSentence]" }`} },
+          "exampleSentence": "[Same value as examplePairs[0].japanese]"
+        }
+      ]
+    },
+    "grammar": {
+      "entries": [
+        {
+          "id": "[Unique UUIDv4]",
+          "form": "[Grammar form]",
+          "usage": { "en": ${common.meaningEnTemplateValue}, "my": ${common.contentCommunity === "Burmese" ? '"[Natural Burmese usage]"' : 'null'}, "byLanguage": ${common.contentCommunity === "Burmese" ? '{}' : `{ "${common.contentCommunity}": "[Natural ${common.contentCommunity} usage]" }`} },
+          "examples": [
+            { "japanese": "[Example sentence]", "meanings": { "en": ${common.meaningEnTemplateValue}, "my": ${common.contentCommunity === "Burmese" ? '"[Natural Burmese translation]"' : 'null'}, "byLanguage": ${common.contentCommunity === "Burmese" ? '{}' : `{ "${common.contentCommunity}": "[Natural ${common.contentCommunity} translation]" }`} } }
+          ],
+          "headline": "[Display headline]",
+          "meanings": { "en": ${common.meaningEnTemplateValue}, "my": ${common.contentCommunity === "Burmese" ? '"[Natural Burmese meaning]"' : 'null'}, "byLanguage": ${common.contentCommunity === "Burmese" ? '{}' : `{ "${common.contentCommunity}": "[Natural ${common.contentCommunity} meaning]" }`} },
+          "provenance": { "sourceMode": "${common.sourceModeValue}", "lastReviewedByCreator": true },
+          "relatedNote": { "en": ${common.meaningEnTemplateValue}, "my": ${common.contentCommunity === "Burmese" ? '"[Natural Burmese note about nuance or common confusion]"' : 'null'}, "byLanguage": ${common.contentCommunity === "Burmese" ? '{}' : `{ "${common.contentCommunity}": "[Natural ${common.contentCommunity} note about nuance or common confusion]" }`} },
+          "mistakeWrong": "[Plausible learner mistake using this grammar]",
+          "mistakeCorrect": "[Corrected version of mistakeWrong]"
+        }
+      ]
+    },
+    "quiz": {
+      "entries": [
+        {
+          "id": "[Unique UUIDv4]",
+          "prompt": "[Quiz prompt]",
+          "options": ["[Option A]", "[Option B]", "[Option C]", "[Option D]"],
+          "category": "vocabulary or grammar or sample_sentence",
+          "provenance": { "sourceMode": "${common.sourceModeValue}", "lastReviewedByCreator": true },
+          "sourceNote": "subtype=<blank_question|meaning_question|scrambled_sentence|paraphrase>;answer=<exact correct option text>;target=<target term or grammar form>",
+          "correctIndex": 1,
+          "explanations": { "en": ${common.meaningEnTemplateValue}, "my": ${common.contentCommunity === "Burmese" ? '"[Natural Burmese explanation]"' : 'null'}, "byLanguage": ${common.contentCommunity === "Burmese" ? '{}' : `{ "${common.contentCommunity}": "[Natural ${common.contentCommunity} explanation]" }`} }
+        }
+      ]
+    },
+    "audio": {
+      "storyAudio": {
+        "id": "[Unique UUIDv4]",
+        "localPath": null,
+        "sourceUrl": null,
+        "provenance": { "sourceMode": "${common.sourceModeValue}", "lastReviewedByCreator": true },
+        "displayName": null,
+        "localFileName": null,
+        "localExtension": null,
+        "localSizeBytes": null,
+        "durationSeconds": null
+      }
+    }
+  }
+}
+
+### 7. FINAL SELF-CHECK BEFORE OUTPUT
+${finalSelfCheck}`;
+}
+function buildPromptText() {
+    const s = getCurrentState();
+    const counts = getSelectedCounts();
+    const title = document.getElementById("storyTitle").value;
+    const desc = document.getElementById("description").value;
+    const category = cleanCategory(document.getElementById("category").value);
+    const contentCommunity = document.getElementById("contentCommunity").value.replace(/^\d+\./, "");
+    const email = document.getElementById("email").value.trim();
+    const learningLanguageLabel = document.getElementById("learningLanguage").value.includes("En") ? "English" : "Japanese";
+    const plot = document.getElementById("promptArea").value;
+    const charLabel = s.language === "JP" ? "Japanese Char Count" : "English Char Count";
+    const sourceModeValue = s.mode === "AI" ? "ai" : "manual";
+    const meaningEnTemplateValue = s.mode === "AI" ? '"[Natural English translation]"' : "null";
+    const common = { title, desc, category, contentCommunity, email, learningLanguageLabel, plot, charLabel, sourceModeValue, meaningEnTemplateValue, levelForApp: jlptOnly(s.level), durationKey: durationBandKey(s.duration) };
+
+    if (cleanUploadType() === "READ_ONLY") {
+        return buildReadonlyPrompt(s, common);
+    }
+    return buildFullLearnPrompt(s, common, counts);
+}
+
+function buildExportFileName() {
+    const s = getCurrentState();
+    const now = new Date();
+    const pad = n => String(n).padStart(2, "0");
+    const stamp = `${now.getFullYear()}${pad(now.getMonth()+1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+    const template = (s.templateName || "template").replace(/[^a-z0-9_\-]/gi, "_");
+    return `nimon_${template}_${stamp}.csv`;
+}
+function enableExportButtons(enabled) {
+    document.getElementById("copyCsvBtn").disabled = !enabled;
+    document.getElementById("downloadCsvBtn").disabled = !enabled;
+    const copyPromptBtn = document.getElementById("copyPromptBtn");
+    if (copyPromptBtn) copyPromptBtn.disabled = !enabled;
+}
+function setExportStatus(message) {
+    const el = document.getElementById("exportStatus");
+    if (!el) return;
+    el.textContent = message || "";
+    if (message) {
+        window.clearTimeout(setExportStatus._timer);
+        setExportStatus._timer = window.setTimeout(() => { el.textContent = ""; }, 3500);
+    }
+}
+function getCurrentCsvText() {
+    const csv = document.getElementById("csvPreview").value;
+    return csv && csv.trim() ? csv : buildCsvPreview();
+}
+function downloadCsvFile() {
+    const csv = getCurrentCsvText();
+    if (!csv.trim()) {
+        setExportStatus("CSV data မရှိသေးပါ။ အရင် Generate နှိပ်ပါ။");
+        return;
+    }
+    // BOM ထည့်ထားလို့ Excel / Japanese / Burmese text တွေ မပျက်ဘဲဖွင့်နိုင်ပါတယ်။
+    const blob = new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = buildExportFileName();
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    setExportStatus("CSV downloaded successfully.");
+}
+async function copyCsvToClipboard() {
+    const csv = getCurrentCsvText();
+    if (!csv.trim()) {
+        setExportStatus("CSV data မရှိသေးပါ။ အရင် Generate နှိပ်ပါ။");
+        return;
+    }
+    try {
+        await navigator.clipboard.writeText(csv);
+        setExportStatus("CSV copied.");
+        showToast("CSV copied.");
+    } catch (e) {
+        const textarea = document.getElementById("csvPreview");
+        textarea.focus();
+        textarea.select();
+        document.execCommand("copy");
+        setExportStatus("CSV copied.");
+        showToast("CSV copied.");
+    }
+}
+
+
+
+function formatJsonParseError(input, error) {
+    const message = error && error.message ? error.message : String(error);
+    const posMatch = message.match(/position\s+(\d+)/i);
+    let detail = message;
+    if (posMatch) {
+        const pos = Number(posMatch[1]);
+        const before = input.slice(0, pos);
+        const line = before.split(/\r?\n/).length;
+        const lastNewline = Math.max(before.lastIndexOf("\n"), before.lastIndexOf("\r"));
+        const col = pos - lastNewline;
+        const snippet = input.slice(Math.max(0, pos - 80), Math.min(input.length, pos + 120)).replace(/\s+/g, " ");
+        detail += ` (line ${line}, column ${col}). Nearby: ${snippet}`;
+    }
+    return "JSON parse error: " + detail + "။ များသောအားဖြင့် AI output ထဲမှာ string value အတွင်း raw double quote (\") မ escape လုပ်ဘဲ ပါသွားလို့ ဖြစ်တတ်ပါတယ်။ Prompt ကိုပြန် run လုပ်ပြီး dialogue/name quotes တွေကို 「」 သို့မဟုတ် escaped \\\\\" အဖြစ်ထုတ်ခိုင်းပါ။";
+}
+
+function normalizeMaybeWrappedJsonText(text) {
+    return String(text || "")
+        .trim()
+        .replace(/^```(?:json)?\s*/i, "")
+        .replace(/```$/i, "")
+        .trim();
+}
+function makeMeanings(enValue, translation, contentCommunity) {
+    return {
+        en: enValue ?? null,
+        my: contentCommunity === "Burmese" ? (translation ?? null) : null,
+        byLanguage: contentCommunity === "Burmese" ? {} : { [contentCommunity]: translation ?? null }
+    };
+}
+function normalizeProvenance(input, fallbackSourceMode) {
+    const p = input && typeof input === "object" ? input : {};
+    return {
+        sourceMode: p.sourceMode || fallbackSourceMode,
+        lastReviewedByCreator: p.lastReviewedByCreator === false ? false : true
+    };
+}
+function getTranslationForImport(sentence, contentCommunity) {
+    if (!sentence || typeof sentence !== "object") return "";
+    if (sentence.meaning_translate != null) return sentence.meaning_translate;
+    if (sentence.meaning_my != null) return sentence.meaning_my;
+    if (sentence.translation != null) return sentence.translation;
+    if (sentence.meanings) {
+        if (contentCommunity === "Burmese" && sentence.meanings.my != null) return sentence.meanings.my;
+        if (sentence.meanings.byLanguage && sentence.meanings.byLanguage[contentCommunity] != null) return sentence.meanings.byLanguage[contentCommunity];
+    }
+    return "";
+}
+
+function normalizeFuriganaSpansForImport(japaneseText, rawSpans) {
+    if (!Array.isArray(rawSpans)) return [];
+    const text = String(japaneseText || "").trim();
+    if (!text) return [];
+    const usedRanges = [];
+    const result = [];
+    let cursor = 0;
+
+    function overlaps(start, end) {
+        return usedRanges.some(r => start < r.end && end > r.start);
+    }
+    function containsJapaneseKanjiOrKana(value) {
+        return /[\u3040-\u30ff\u3400-\u9fff]/.test(String(value || ""));
+    }
+    function addSpan(start, end, reading) {
+        if (!Number.isInteger(start) || !Number.isInteger(end)) return false;
+        if (start < 0 || end <= start || end > text.length) return false;
+        const r = String(reading || "").trim();
+        if (!r) return false;
+        if (!containsJapaneseKanjiOrKana(text.slice(start, end))) return false;
+        if (overlaps(start, end)) return false;
+        usedRanges.push({ start, end });
+        result.push({ start, end, reading: r });
+        cursor = Math.max(cursor, end);
+        return true;
+    }
+    function findSurfaceRange(surface, occurrenceHint) {
+        const needle = String(surface || "").trim();
+        if (!needle) return null;
+        // Primary path: sequential search from the previous matched span.
+        let found = text.indexOf(needle, cursor);
+        while (found !== -1) {
+            const start = found;
+            const end = found + needle.length;
+            if (!overlaps(start, end)) return { start, end };
+            found = text.indexOf(needle, end);
+        }
+        // Optional explicit occurrence support: 1-based occurrence in the sentence.
+        const occ = Number.isInteger(occurrenceHint) ? occurrenceHint : null;
+        if (occ && occ > 0) {
+            let count = 0;
+            let from = 0;
+            while ((found = text.indexOf(needle, from)) !== -1) {
+                count += 1;
+                const start = found;
+                const end = found + needle.length;
+                if (count === occ && !overlaps(start, end)) return { start, end };
+                from = found + Math.max(needle.length, 1);
+            }
+        }
+        // Last fallback: first non-overlapping occurrence anywhere.
+        let from = 0;
+        while ((found = text.indexOf(needle, from)) !== -1) {
+            const start = found;
+            const end = found + needle.length;
+            if (!overlaps(start, end)) return { start, end };
+            from = found + Math.max(needle.length, 1);
+        }
+        return null;
+    }
+
+    for (const span of rawSpans) {
+        if (!span || typeof span !== "object") continue;
+
+        const surface = String(span.text || span.surface || span.kanji || span.word || span.targetText || "").trim();
+        const reading = span.reading ?? span.furigana ?? span.ruby;
+
+        // Most accurate path: AI supplies exact surface text; converter computes exact offsets.
+        if (surface && reading != null) {
+            const range = findSurfaceRange(surface, span.occurrence || span.occurrenceIndex);
+            if (range && addSpan(range.start, range.end, reading)) continue;
+        }
+
+        // Accept numeric spans only when they point to a valid Japanese substring.
+        if (Number.isInteger(span.start) && Number.isInteger(span.end) && reading != null) {
+            // If surface is present, numeric span must match it; otherwise we ignore and recompute above.
+            if (surface) continue;
+            addSpan(span.start, span.end, reading);
+        }
+    }
+
+    return result.sort((a, b) => a.start - b.start || a.end - b.end);
+}
+
+function normalizeCoreSentence(row, index, storyId, contentCommunity, sourceModeValue) {
+    const isWrapped = row && row.content;
+    const content = isWrapped ? row.content : row;
+    const order = Number.isInteger(row?.order) ? row.order : (Number.isInteger(row?.sentence_order) ? row.sentence_order : index);
+    const translation = getTranslationForImport(content, contentCommunity);
+    const en = content?.meanings?.en ?? content?.meaning_en ?? null;
+    return {
+        order,
+        content: {
+            id: content?.id || content?.sentence_id || crypto.randomUUID(),
+            reading: content?.reading ?? null,
+            storyId: content?.storyId || storyId,
+            meanings: content?.meanings ? {
+                en: content.meanings.en ?? en,
+                my: contentCommunity === "Burmese" ? (content.meanings.my ?? translation ?? null) : null,
+                byLanguage: contentCommunity === "Burmese" ? {} : (Object.keys(content.meanings.byLanguage || {}).length ? content.meanings.byLanguage : { [contentCommunity]: translation ?? null })
+            } : makeMeanings(en, translation, contentCommunity),
+            audioEndMs: content?.audioEndMs ?? null,
+            orderIndex: Number.isInteger(content?.orderIndex) ? content.orderIndex : order,
+            provenance: normalizeProvenance(content?.provenance || { sourceMode: content?.sourceMode }, sourceModeValue),
+            audioStartMs: content?.audioStartMs ?? null,
+            japaneseText: content?.japaneseText || content?.englishText || content?.text || "",
+            furiganaSpans: normalizeFuriganaSpansForImport(content?.japaneseText || content?.englishText || content?.text || "", content?.furiganaSpans)
+        }
+    };
+}
+function selectedLearningLanguageLabel() {
+    return normalizeLanguage(document.getElementById("learningLanguage").value) === "EN" ? "English" : "Japanese";
+}
+function selectedContentCommunityLabel() {
+    return (document.getElementById("contentCommunity").value || "").replace(/^\d+\./, "").trim();
+}
+function selectedPromptDataTabLabel() {
+    return cleanModeForCsv();
+}
+function selectedImportCategory() {
+    return cleanCategory(document.getElementById("category").value);
+}
+function normalizeImportCategory(value) {
+    const selected = selectedImportCategory();
+    const raw = String(value || "").replace(/^\d+\./, "").trim();
+    const allowed = Array.from(document.getElementById("category")?.options || [])
+        .map(o => cleanCategory(o.value))
+        .filter(Boolean);
+    if (raw && allowed.includes(raw)) return raw;
+    return selected || raw || "";
+}
+function buildImportMeta(publishKind) {
+    return {
+        schemaVersion: 1,
+        generatorVersion: "Json_Generator_V10_AccurateFuriganaAnchors",
+        learningLanguage: selectedLearningLanguageLabel(),
+        contentCommunity: selectedContentCommunityLabel(),
+        promptDataTab: selectedPromptDataTabLabel(),
+        publishKind,
+        createdForEmail: (document.getElementById("email").value || "").trim().toLowerCase()
+    };
+}
+function ensureImportReadyEnvelope(importJson, publishKind) {
+    if (!importJson || typeof importJson !== "object" || Array.isArray(importJson)) {
+        throw new Error("Root JSON object မဟုတ်ပါ။");
+    }
+    const storyId = importJson.sourceDraftId || importJson.core?.sentences?.[0]?.content?.storyId || crypto.randomUUID();
+    importJson.nimonImportMeta = {
+        ...buildImportMeta(publishKind),
+        ...(importJson.nimonImportMeta || {}),
+        schemaVersion: 1,
+        learningLanguage: selectedLearningLanguageLabel(),
+        contentCommunity: selectedContentCommunityLabel(),
+        createdForEmail: (document.getElementById("email").value || "").trim().toLowerCase(),
+        publishKind
+    };
+    importJson.publishKind = publishKind;
+    importJson.sourceDraftId = importJson.sourceDraftId || storyId;
+    importJson.updatedAt = importJson.updatedAt || new Date().toISOString();
+    if (importJson.core) {
+        importJson.core.level = jlptOnly(importJson.core.level || getCurrentState().level);
+        importJson.core.category = normalizeImportCategory(importJson.core.category);
+        importJson.core.targetDurationBandKey = importJson.core.targetDurationBandKey || durationBandKey(getCurrentState().duration);
+        importJson.core.coverImageUrl = importJson.core.coverImageUrl ?? null;
+    }
+    return importJson;
+}
+function normalizeFullLearnImportJson(parsed) {
+    const s = getCurrentState();
+    const contentCommunity = selectedContentCommunityLabel();
+    const sourceModeValue = s.mode === "AI" ? "ai" : "manual";
+    if (parsed.core && parsed.learn) {
+        const storyId = parsed.sourceDraftId || parsed.core?.sentences?.[0]?.content?.storyId || crypto.randomUUID();
+        parsed.core.sentences = (parsed.core.sentences || []).map((row, idx) => normalizeCoreSentence(row, idx, storyId, contentCommunity, sourceModeValue));
+        parsed.core.title = parsed.core.title || document.getElementById("storyTitle").value;
+        parsed.core.description = parsed.core.description || document.getElementById("description").value;
+        parsed.core.category = normalizeImportCategory(parsed.core.category);
+        parsed.core.level = jlptOnly(parsed.core.level || s.level);
+        parsed.core.coverImageUrl = parsed.core.coverImageUrl ?? null;
+        parsed.core.targetDurationBandKey = parsed.core.targetDurationBandKey || durationBandKey(s.duration);
+        parsed.learn.schemaVersion = parsed.learn.schemaVersion || 1;
+        parsed.learn.vocabularyKanji = parsed.learn.vocabularyKanji || { entries: [] };
+        parsed.learn.grammar = parsed.learn.grammar || { entries: [] };
+        parsed.learn.quiz = parsed.learn.quiz || { entries: [] };
+        parsed.learn.audio = parsed.learn.audio || { storyAudio: { sourceUrl: null, localPath: null } };
+        return ensureImportReadyEnvelope(parsed, "full_learn_v1");
+    }
+    return buildFullLearnImportFromFlatJson(parsed);
+}
+function buildReadonlyImportFromFlatJson(flatJson) {
+    const s = getCurrentState();
+    const contentCommunity = document.getElementById("contentCommunity").value.replace(/^\d+\./, "");
+    const sourceModeValue = s.mode === "AI" ? "ai" : "manual";
+    const sentences = Array.isArray(flatJson.sentences) ? flatJson.sentences : [];
+    if (!sentences.length) throw new Error('JSON ထဲမှာ sentences array မတွေ့ပါ။');
+    const first = sentences[0] || {};
+    const storyId = first.storyId || crypto.randomUUID();
+    return ensureImportReadyEnvelope({
+        core: {
+            level: jlptOnly(first.level || s.level),
+            title: first.title || document.getElementById("storyTitle").value,
+            category: normalizeImportCategory(first.category),
+            sentences: sentences.map((row, index) => normalizeCoreSentence(row, index, storyId, contentCommunity, sourceModeValue)),
+            description: first.description || document.getElementById("description").value,
+            coverImageUrl: null,
+            targetDurationBandKey: durationBandKey(s.duration)
+        },
+        sourceDraftId: storyId
+    }, "read_only_v1");
+}
+function normalizeVocabEntry(entry, contentCommunity, sourceModeValue) {
+    const examplePairs = Array.isArray(entry.examplePairs) ? entry.examplePairs : [];
+    const firstExample = examplePairs[0] || null;
+    return {
+        id: entry.id || crypto.randomUUID(),
+        type: entry.type || "vocabulary",
+        glosses: entry.glosses || makeMeanings(entry.meaning_en ?? null, entry.meaning_translate ?? entry.meaning_my ?? entry.gloss ?? "", contentCommunity),
+        reading: entry.reading ?? null,
+        provenance: normalizeProvenance(entry.provenance || { sourceMode: entry.sourceMode }, sourceModeValue),
+        examplePairs,
+        termJapanese: entry.termJapanese || entry.term || entry.word || "",
+        exampleMeanings: entry.exampleMeanings ?? firstExample?.meanings ?? null,
+        exampleSentence: entry.exampleSentence ?? firstExample?.japanese ?? null
+    };
+}
+function normalizeGrammarEntry(entry, contentCommunity, sourceModeValue) {
+    return {
+        id: entry.id || crypto.randomUUID(),
+        form: entry.form || entry.pattern || "",
+        usage: entry.usage ?? null,
+        examples: Array.isArray(entry.examples) ? entry.examples : [],
+        headline: entry.headline || entry.form || entry.pattern || "",
+        meanings: entry.meanings || makeMeanings(entry.meaning_en ?? null, entry.meaning_translate ?? entry.meaning_my ?? entry.meaning ?? "", contentCommunity),
+        provenance: normalizeProvenance(entry.provenance || { sourceMode: entry.sourceMode }, sourceModeValue),
+        relatedNote: entry.relatedNote ?? null,
+        mistakeWrong: entry.mistakeWrong ?? null,
+        mistakeCorrect: entry.mistakeCorrect ?? null
+    };
+}
+
+function randomizeQuizOptions(options, correctIndex) {
+    const opts = Array.isArray(options) ? options.slice(0, 4) : ["", "", "", ""];
+    while (opts.length < 4) opts.push("");
+    const safeCorrectIndex = Number.isInteger(correctIndex) && correctIndex >= 0 && correctIndex < 4 ? correctIndex : 0;
+    const correctValue = opts[safeCorrectIndex];
+    for (let i = opts.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [opts[i], opts[j]] = [opts[j], opts[i]];
+    }
+    const newIndex = opts.findIndex(v => v === correctValue);
+    return { options: opts, correctIndex: newIndex >= 0 ? newIndex : safeCorrectIndex };
+}
+function normalizeQuizEntry(entry, contentCommunity, sourceModeValue) {
+    const randomized = randomizeQuizOptions(entry.options, entry.correctIndex);
+    return {
+        id: entry.id || crypto.randomUUID(),
+        prompt: entry.prompt || entry.question || "",
+        options: randomized.options,
+        category: entry.category || "vocabulary",
+        provenance: normalizeProvenance(entry.provenance || { sourceMode: entry.sourceMode }, sourceModeValue),
+        sourceNote: entry.sourceNote ?? null,
+        correctIndex: randomized.correctIndex,
+        explanations: entry.explanations || makeMeanings(entry.meaning_en ?? null, entry.meaning_translate ?? entry.meaning_my ?? entry.explanation ?? "", contentCommunity)
+    };
+}
+function buildFullLearnImportFromFlatJson(flatJson) {
+    const s = getCurrentState();
+    const contentCommunity = document.getElementById("contentCommunity").value.replace(/^\d+\./, "");
+    const sourceModeValue = s.mode === "AI" ? "ai" : "manual";
+    const sentences = Array.isArray(flatJson.sentences) ? flatJson.sentences : (Array.isArray(flatJson.core?.sentences) ? flatJson.core.sentences : []);
+    if (!sentences.length) throw new Error('JSON ထဲမှာ core sentences / sentences array မတွေ့ပါ။');
+    const first = sentences[0]?.content || sentences[0] || {};
+    const storyId = first.storyId || flatJson.sourceDraftId || crypto.randomUUID();
+    const vocabRaw = flatJson.vocabularyKanji?.entries || flatJson.vocabularyKanji || flatJson.vocabulary || flatJson.vocab || [];
+    const grammarRaw = flatJson.grammar?.entries || flatJson.grammar || [];
+    const quizRaw = flatJson.quiz?.entries || flatJson.quiz || flatJson.quizzes || [];
+    return ensureImportReadyEnvelope({
+        core: {
+            level: jlptOnly(first.level || flatJson.level || s.level),
+            title: first.title || flatJson.title || document.getElementById("storyTitle").value,
+            category: normalizeImportCategory(first.category || flatJson.category),
+            sentences: sentences.map((row, index) => normalizeCoreSentence(row, index, storyId, contentCommunity, sourceModeValue)),
+            description: first.description || flatJson.description || document.getElementById("description").value,
+            coverImageUrl: null,
+            targetDurationBandKey: durationBandKey(s.duration)
+        },
+        learn: {
+            schemaVersion: 1,
+            vocabularyKanji: { entries: Array.isArray(vocabRaw) ? vocabRaw.map(e => normalizeVocabEntry(e, contentCommunity, sourceModeValue)) : [] },
+            grammar: { entries: Array.isArray(grammarRaw) ? grammarRaw.map(e => normalizeGrammarEntry(e, contentCommunity, sourceModeValue)) : [] },
+            quiz: { entries: Array.isArray(quizRaw) ? quizRaw.map(e => normalizeQuizEntry(e, contentCommunity, sourceModeValue)) : [] },
+            audio: { storyAudio: {
+                id: crypto.randomUUID(), localPath: null, sourceUrl: null,
+                provenance: { sourceMode: sourceModeValue, lastReviewedByCreator: true },
+                displayName: null, localFileName: null, localExtension: null, localSizeBytes: null, durationSeconds: null
+            }}
+        },
+        sourceDraftId: storyId
+    }, "full_learn_v1");
+}
+
+function setImportExportButtons(enabled) {
+    const copyBtn = document.getElementById("copyImportJsonBtn");
+    const downloadBtn = document.getElementById("downloadImportJsonBtn");
+    if (copyBtn) copyBtn.disabled = !enabled;
+    if (downloadBtn) downloadBtn.disabled = !enabled;
+}
+
+function countQuizCategories(entries) {
+    const result = { vocabulary: 0, grammar: 0, sample_sentence: 0 };
+    (entries || []).forEach(q => {
+        if (q && Object.prototype.hasOwnProperty.call(result, q.category)) {
+            result[q.category] += 1;
+        }
+    });
+    return result;
+}
+function parseCountValue(value) {
+    if (typeof value === "number") return value;
+    const n = parseInt(String(value || "").replace(/[^0-9]/g, ""), 10);
+    return Number.isFinite(n) ? n : 0;
+}
+function validateImportJsonAgainstCurrentRules(importJson) {
+    const s = getCurrentState();
+    const counts = getSelectedCounts();
+    const errors = [];
+    const warnings = [];
+    const coreSentences = importJson?.core?.sentences || [];
+    const vocabEntries = importJson?.learn?.vocabularyKanji?.entries || [];
+    const grammarEntries = importJson?.learn?.grammar?.entries || [];
+    const quizEntries = importJson?.learn?.quiz?.entries || [];
+    const minSent = Number(s.sentence[0]);
+    const maxSent = Number(s.sentence[1]);
+
+    if (cleanUploadType() !== "FULL") return { ok: true, errors, warnings };
+
+    if (coreSentences.length < minSent || coreSentences.length > maxSent) {
+        errors.push(`core.sentences count ${coreSentences.length} ဖြစ်နေပါတယ်။ လိုအပ်တာ ${minSent}–${maxSent} ဖြစ်ရမယ်။`);
+    }
+
+    const storyText = coreSentences.map(row => row?.content?.japaneseText || "").join("");
+    const charCount = Array.from(storyText).length;
+    const minChar = Number(s.sentence[2]);
+    const maxChar = Number(s.sentence[3]);
+    if (charCount < minChar || charCount > maxChar) {
+        warnings.push(`${s.language === "JP" ? "Japanese" : "English"} char count ${charCount} ဖြစ်နေပါတယ်။ Target ${minChar}–${maxChar} ဖြစ်ပါတယ်။`);
+    }
+
+    if (s.mode === "AI") {
+        const expectedVocab = parseCountValue(counts.vocabCount);
+        const expectedGrammar = parseCountValue(counts.grammarCount);
+        const expectedVQuiz = parseCountValue(counts.vQuizCount);
+        const expectedGQuiz = parseCountValue(counts.gQuizCount);
+        const expectedSentQuiz = parseCountValue(counts.sentQuizCount);
+        const expectedTotalQuiz = parseCountValue(counts.totalQuizCount);
+        const quizCats = countQuizCategories(quizEntries);
+
+        if (vocabEntries.length !== expectedVocab) {
+            errors.push(`learn.vocabularyKanji.entries count ${vocabEntries.length} ဖြစ်နေပါတယ်။ လိုအပ်တာ EXACTLY ${expectedVocab} ဖြစ်ရမယ်။`);
+        }
+        if (grammarEntries.length !== expectedGrammar) {
+            errors.push(`learn.grammar.entries count ${grammarEntries.length} ဖြစ်နေပါတယ်။ လိုအပ်တာ EXACTLY ${expectedGrammar} ဖြစ်ရမယ်။`);
+        }
+        if (quizEntries.length !== expectedTotalQuiz) {
+            errors.push(`learn.quiz.entries total ${quizEntries.length} ဖြစ်နေပါတယ်။ လိုအပ်တာ EXACTLY ${expectedTotalQuiz} ဖြစ်ရမယ်။`);
+        }
+        if (quizCats.vocabulary !== expectedVQuiz) {
+            errors.push(`vocabulary quiz count ${quizCats.vocabulary} ဖြစ်နေပါတယ်။ လိုအပ်တာ EXACTLY ${expectedVQuiz} ဖြစ်ရမယ်။`);
+        }
+        if (quizCats.grammar !== expectedGQuiz) {
+            errors.push(`grammar quiz count ${quizCats.grammar} ဖြစ်နေပါတယ်။ လိုအပ်တာ EXACTLY ${expectedGQuiz} ဖြစ်ရမယ်။`);
+        }
+        if (quizCats.sample_sentence !== expectedSentQuiz) {
+            errors.push(`sample_sentence quiz count ${quizCats.sample_sentence} ဖြစ်နေပါတယ်။ လိုအပ်တာ EXACTLY ${expectedSentQuiz} ဖြစ်ရမယ်။`);
+        }
+    }
+
+    return { ok: errors.length === 0, errors, warnings };
+}
+
+let _lastPrecheck = null;
+function renderImportPrecheck(precheck) {
+    const panel = document.getElementById("importPrecheckPanel");
+    const title = document.getElementById("importPrecheckTitle");
+    const grid = document.getElementById("importPrecheckGrid");
+    const errorsEl = document.getElementById("importPrecheckErrors");
+    const copyFixBtn = document.getElementById("copyFixPromptBtn");
+    const copyErrBtn = document.getElementById("copyErrorListBtn");
+    if (!panel || !title || !grid || !errorsEl) return;
+
+    _lastPrecheck = precheck;
+    panel.classList.remove("hidden", "error", "ok");
+    panel.classList.add(precheck.ok ? "ok" : "error");
+
+    title.textContent = precheck.ok
+        ? "Generated JSON matches required import rules. Download is enabled."
+        : "Generated JSON does not match required import rules. Download is disabled.";
+
+    const r = precheck.required;
+    const a = precheck.actual;
+    const gridItems = [
+        { k: "Content community (selected vs JSON)", v: `${r.selected.contentCommunity}  /  ${a.meta.contentCommunity}`, ok: a.meta.contentCommunity === r.selected.contentCommunity },
+        { k: "Learning language (selected vs JSON)", v: `${r.selected.learningLanguage}  /  ${a.meta.learningLanguage}`, ok: a.meta.learningLanguage === r.selected.learningLanguage },
+        { k: "Prompt mode (selected vs JSON)", v: `${r.selected.promptDataTab}  /  ${a.meta.promptDataTab}`, ok: a.meta.promptDataTab === r.selected.promptDataTab },
+        { k: "Publish kind (selected vs JSON)", v: `${r.selected.publishKind}  /  ${a.meta.publishKind}`, ok: a.meta.publishKind === r.selected.publishKind },
+        { k: "Story sentences (actual / required)", v: `${a.story.sentences}  /  ${r.story.minSentences}–${r.story.maxSentences}`, ok: a.story.sentences >= r.story.minSentences && a.story.sentences <= r.story.maxSentences },
+        { k: "Story chars (actual / required)", v: `${a.story.chars}  /  ${r.story.minChars}–${r.story.maxChars}`, ok: a.story.chars >= r.story.minChars && a.story.chars <= r.story.maxChars }
+    ];
+    if (r.selected.publishKind === "full_learn_v1" && r.fullLearn) {
+        gridItems.push(
+            { k: "Vocabulary (actual / required)", v: `${a.fullLearn.vocabulary}  /  ${formatExpectedRangeOrExact(r.fullLearn.vocabulary)}`, ok: true },
+            { k: "Grammar (actual / required)", v: `${a.fullLearn.grammar}  /  ${formatExpectedRangeOrExact(r.fullLearn.grammar)}`, ok: true },
+            { k: "Quiz total (actual / required)", v: `${a.fullLearn.quizTotal}  /  ${formatExpectedRangeOrExact(r.fullLearn.quizTotal)}`, ok: true },
+            { k: "Vocab quiz (actual / required)", v: `${a.fullLearn.quizVocabulary}  /  ${formatExpectedRangeOrExact(r.fullLearn.quizVocabulary)}`, ok: true },
+            { k: "Grammar quiz (actual / required)", v: `${a.fullLearn.quizGrammar}  /  ${formatExpectedRangeOrExact(r.fullLearn.quizGrammar)}`, ok: true },
+            { k: "Sentence quiz (actual / required)", v: `${a.fullLearn.quizSentence}  /  ${formatExpectedRangeOrExact(r.fullLearn.quizSentence)}`, ok: true }
+        );
+    }
+
+    grid.innerHTML = gridItems.map(item => {
+        const klass = item.ok ? "good" : "bad";
+        return `<div class="precheck-item"><div class="k">${item.k}</div><div class="v ${klass}">${item.v}</div></div>`;
+    }).join("");
+
+    if (precheck.ok) {
+        errorsEl.innerHTML = precheck.warnings && precheck.warnings.length
+            ? `<div><b>Warnings:</b><ul>${precheck.warnings.map(w => `<li>${escapeHtml(w)}</li>`).join("")}</ul></div>`
+            : `<div><b>OK.</b></div>`;
+    } else {
+        const lines = precheck.errors.map(e => `${e.rule}: expected ${e.expected}, actual ${e.actual}`);
+        errorsEl.innerHTML = `<div><b>Generated JSON does not match required import rules.</b></div>
+<div>Copy this error list and ask AI to regenerate.</div>
+<ul>${lines.map(x => `<li>${escapeHtml(x)}</li>`).join("")}</ul>`;
+    }
+
+    if (copyFixBtn) copyFixBtn.disabled = precheck.ok;
+    if (copyErrBtn) copyErrBtn.disabled = precheck.ok;
+}
+
+function escapeHtml(s) {
+    return String(s || "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+}
+
+function buildFixPrompt(precheck) {
+    const r = precheck.required;
+    const a = precheck.actual;
+    const requiredCountsLines = [
+        `- learningLanguage: ${r.selected.learningLanguage}`,
+        `- contentCommunity: ${r.selected.contentCommunity}`,
+        `- publishKind: ${r.selected.publishKind}`,
+        `- promptDataTab: ${r.selected.promptDataTab}`,
+        `- duration: ${r.selected.duration}`,
+        `- level: ${r.selected.level}`,
+        `- story sentences: ${r.story.minSentences}–${r.story.maxSentences}`,
+        `- story chars: ${r.story.minChars}–${r.story.maxChars}`
+    ];
+    if (r.selected.publishKind === "full_learn_v1" && r.fullLearn) {
+        requiredCountsLines.push(
+            `- vocabulary: ${formatExpectedRangeOrExact(r.fullLearn.vocabulary)}`,
+            `- grammar: ${formatExpectedRangeOrExact(r.fullLearn.grammar)}`,
+            `- quiz total: ${formatExpectedRangeOrExact(r.fullLearn.quizTotal)}`,
+            `- vocabulary quiz: ${formatExpectedRangeOrExact(r.fullLearn.quizVocabulary)}`,
+            `- grammar quiz: ${formatExpectedRangeOrExact(r.fullLearn.quizGrammar)}`,
+            `- sentence quiz: ${formatExpectedRangeOrExact(r.fullLearn.quizSentence)}`
+        );
+    }
+    const actualLines = [
+        `- learningLanguage: ${a.meta.learningLanguage}`,
+        `- contentCommunity: ${a.meta.contentCommunity}`,
+        `- publishKind: ${a.meta.publishKind}`,
+        `- promptDataTab: ${a.meta.promptDataTab}`,
+        `- story sentences: ${a.story.sentences}`,
+        `- story chars: ${a.story.chars}`
+    ];
+    if (r.selected.publishKind === "full_learn_v1") {
+        actualLines.push(
+            `- vocabulary: ${a.fullLearn.vocabulary}`,
+            `- grammar: ${a.fullLearn.grammar}`,
+            `- quiz total: ${a.fullLearn.quizTotal}`,
+            `- vocabulary quiz: ${a.fullLearn.quizVocabulary}`,
+            `- grammar quiz: ${a.fullLearn.quizGrammar}`,
+            `- sentence quiz: ${a.fullLearn.quizSentence}`
+        );
+    }
+
+    return `You generated a Nimon import JSON but it FAILS strict import rules.
+
+DO NOT change ANY metadata fields.
+Regenerate the entire JSON from scratch and output ONLY strict valid JSON.
+
+### REQUIRED COUNTS (must match exactly / within range)
+${requiredCountsLines.join("\n")}
+
+### ACTUAL COUNTS (your last output)
+${actualLines.join("\n")}
+
+### FIX INSTRUCTIONS
+- Keep nimonImportMeta.learningLanguage/contentCommunity/promptDataTab/publishKind exactly as required.
+- Rewrite story + modules until counts match.
+- Do NOT generate fewer or more than required counts.
+- No placeholders, no abbreviated arrays, no “etc.”, no “continue similarly”.
+- Output ONLY the final strict JSON object.`;
+}
+
+async function copyFixPromptToClipboard() {
+    if (!_lastPrecheck || _lastPrecheck.ok) return;
+    const text = buildFixPrompt(_lastPrecheck);
+    try {
+        await navigator.clipboard.writeText(text);
+        setExportStatus("Fix prompt copied.");
+        showToast("Fix prompt copied.");
+    } catch (e) {
+        setExportStatus("Copy failed. Select and copy manually.");
+    }
+}
+
+async function copyPrecheckErrorsToClipboard() {
+    if (!_lastPrecheck || _lastPrecheck.ok) return;
+    const lines = _lastPrecheck.errors.map(e => `${e.rule}: expected ${e.expected}, actual ${e.actual}`).join("\n");
+    try {
+        await navigator.clipboard.writeText(lines);
+        setExportStatus("Error list copied.");
+        showToast("Error list copied.");
+    } catch (e) {
+        setExportStatus("Copy failed. Select and copy manually.");
+    }
+}
+
+function convertAiJsonToReadonlyImport() {
+    const input = document.getElementById("aiJsonInput")?.value || "";
+    const out = document.getElementById("importJsonResult");
+    if (!input.trim()) {
+        out.value = "";
+        setImportExportButtons(false);
+        setExportStatus("AI result JSON ကို အရင် paste လုပ်ပါ။");
+        showToast("Paste JSON first.");
+        return;
+    }
+    try {
+        const parsed = JSON.parse(normalizeMaybeWrappedJsonText(input));
+        const isFull = cleanUploadType() === "FULL";
+        const importJson = isFull
+            ? normalizeFullLearnImportJson(parsed)
+            : (parsed.core ? ensureImportReadyEnvelope(parsed, "read_only_v1") : buildReadonlyImportFromFlatJson(parsed));
+        out.value = JSON.stringify(importJson, null, 2);
+        const validation = validateImportJsonAgainstHtmlRules(importJson);
+        renderImportPrecheck(validation);
+        setImportExportButtons(validation.ok);
+        const warningText = [];
+        if (!validation.ok) warningText.push("Precheck FAILED: download disabled.");
+        if (validation.warnings && validation.warnings.length) warningText.push(validation.warnings.join(" / "));
+        setExportStatus((isFull ? "FullLearn import JSON ready." : "ReadOnly import JSON ready.") + (warningText.length ? " " + warningText.join(" / ") : ""));
+        showToast(validation.ok ? "Import JSON ready." : "Import JSON precheck failed.");
+    } catch (e) {
+        out.value = "";
+        setImportExportButtons(false);
+        setExportStatus(formatJsonParseError(normalizeMaybeWrappedJsonText(input), e));
+        showToast("JSON parse error.");
+    }
+}
+function getCurrentImportJsonText() {
+    return document.getElementById("importJsonResult").value || "";
+}
+function buildImportJsonFileName() {
+    const s = getCurrentState();
+    const now = new Date();
+    const pad = n => String(n).padStart(2, "0");
+    const stamp = `${now.getFullYear()}${pad(now.getMonth()+1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+    return `nimon_${cleanUploadType() === "FULL" ? "fulllearn" : "readonly"}_import_${s.templateName}_${stamp}.json`;
+}
+function getSanitizedImportJsonFileName() {
+    let name = buildImportJsonFileName()
+        .replace(/[\\/:*?"<>|]+/g, "_")
+        .replace(/\s+/g, "_")
+        .replace(/_+/g, "_")
+        .trim();
+    if (!name) name = "nimon_import.json";
+    // Keep the .json extension even after length trimming.
+    name = name.replace(/\.+$/g, "");
+    if (!name.toLowerCase().endsWith(".json")) name += ".json";
+    if (name.length > 120) {
+        const base = name.slice(0, 115).replace(/_+$/g, "");
+        name = `${base}.json`;
+    }
+    return name;
+}
+function makeImportJsonDataUrl(jsonText) {
+    // Data URL is used as the fallback because some Android/WebView browsers
+    // save Blob URLs as random .tmp files even when a.download is set.
+    return "data:application/json;charset=utf-8," + encodeURIComponent(jsonText);
+}
+async function triggerJsonDownload(text, filename) {
+    const safeName = (filename || "nimon_import.json").toLowerCase().endsWith(".json")
+        ? filename
+        : `${filename}.json`;
+    const blob = new Blob([text], { type: "application/json;charset=utf-8" });
+
+    // Best path on modern Chromium/Edge: real Save As dialog with suggested .json filename.
+    if (window.showSaveFilePicker) {
+        const handle = await window.showSaveFilePicker({
+            suggestedName: safeName,
+            types: [{
+                description: "JSON file",
+                accept: { "application/json": [".json"] }
+            }]
+        });
+        const writable = await handle.createWritable();
+        await writable.write(blob);
+        await writable.close();
+        return "saved";
+    }
+
+    // Fallback path: use a data URL instead of Blob URL to avoid random .tmp names on some devices.
+    const a = document.createElement("a");
+    a.href = makeImportJsonDataUrl(text);
+    a.download = safeName;
+    a.style.display = "none";
+    a.rel = "noopener";
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => {
+        try { document.body.removeChild(a); } catch (_) {}
+    }, 1000);
+    return "downloaded";
+}
+// Kept for old callers; always routes to the JSON-specific downloader.
+async function triggerTextDownload(text, filename, mimeType) {
+    return triggerJsonDownload(text, filename || "nimon_import.json");
+}
+async function downloadImportJsonFile(event) {
+    if (event && typeof event.preventDefault === "function") event.preventDefault();
+    const json = getCurrentImportJsonText();
+    if (!json.trim()) {
+        setExportStatus("Import JSON မရှိသေးပါ။ အရင် Convert လုပ်ပါ။");
+        showToast("Convert first.");
+        return false;
+    }
+    try {
+        // Validate the text one more time before saving so users do not download broken JSON.
+        const parsed = JSON.parse(json);
+        const precheck = validateImportJsonAgainstHtmlRules(parsed);
+        renderImportPrecheck(precheck);
+        setImportExportButtons(precheck.ok);
+        if (!precheck.ok) {
+            setExportStatus("Precheck FAILED: download disabled. Fix counts first.");
+            showToast("Precheck failed.");
+            return false;
+        }
+        const filename = getSanitizedImportJsonFileName();
+        const result = await triggerJsonDownload(json, filename);
+        setExportStatus(`Import JSON ${result === "saved" ? "saved" : "download started"}: ${filename}`);
+        showToast(filename);
+    } catch (e) {
+        const msg = e && e.message ? e.message : String(e);
+        if (msg && msg.toLowerCase().includes("abort")) {
+            setExportStatus("Download cancelled.");
+            showToast("Cancelled.");
+        } else {
+            setExportStatus("Download failed: " + msg + "  Copy Import JSON and save it manually as .json if your browser blocks downloads.");
+            showToast("Download failed.");
+        }
+    }
+    return false;
+}
+async function copyImportJsonToClipboard() {
+    const json = getCurrentImportJsonText();
+    if (!json.trim()) {
+        setExportStatus("Import JSON မရှိသေးပါ။ အရင် Convert လုပ်ပါ။");
+        return;
+    }
+    try {
+        await navigator.clipboard.writeText(json);
+        setExportStatus("Import JSON copied.");
+        showToast("Import JSON copied.");
+    } catch (e) {
+        const textarea = document.getElementById("importJsonResult");
+        textarea.focus();
+        textarea.select();
+        document.execCommand("copy");
+        setExportStatus("Import JSON copied.");
+    }
+}
+
+
+function showToast(message) {
+    const toast = document.getElementById("toast");
+    if (!toast) return;
+    toast.textContent = message;
+    toast.classList.add("show");
+    window.clearTimeout(showToast._timer);
+    showToast._timer = window.setTimeout(() => toast.classList.remove("show"), 1800);
+}
+async function copyPromptResultToClipboard() {
+    const textarea = document.getElementById("promptResult");
+    const promptText = textarea.value || "";
+    if (!promptText.trim()) {
+        setExportStatus("Prompt result မရှိသေးပါ။ အရင် Generate နှိပ်ပါ။");
+        showToast("Prompt result မရှိသေးပါ။");
+        return;
+    }
+    try {
+        await navigator.clipboard.writeText(promptText);
+    } catch (e) {
+        textarea.focus();
+        textarea.select();
+        document.execCommand("copy");
+    }
+    setExportStatus("Prompt copied.");
+    showToast("Prompt copied.");
+}
+
+
+function formatLimitCount(limit, moduleType) {
+    if (!limit) return "-";
+    if (currentMode === "AI") return limit.ai_selected ?? "-";
+    const min = limit.manual_min ?? "-";
+    const max = limit.manual_max ?? "-";
+    return `${min}–${max}`;
+}
+function quizDistributionInfo(categoryName, countValue) {
+    const count = Number(countValue);
+    if (!Number.isFinite(count)) return [];
+    if (categoryName === "Vocabulary Quiz") {
+        const blank = Math.ceil(count * 0.5);
+        const meaning = count - blank;
+        return [`Blank ${blank}`, `Meaning ${meaning}`];
+    }
+    if (categoryName === "Grammar Quiz") {
+        const blank = Math.ceil(count * 0.6);
+        const scrambled = count - blank;
+        return [`Blank ${blank}`, `Scrambled ${scrambled}`];
+    }
+    if (categoryName === "Sentence Quiz") return [`Paraphrases / Synonyms ${count}`];
+    return [];
+}
+function renderLimitPreview() {
+    const s = getCurrentState();
+    const uploadType = cleanUploadType();
+    const learnWrap = document.getElementById("learnLimitCards");
+    const quizWrap = document.getElementById("quizLimitCards");
+    const section = document.getElementById("limitPreviewSection");
+    if (!learnWrap || !quizWrap || !section) return;
+
+    if (uploadType !== "FULL") {
+        section.style.display = "none";
+        learnWrap.innerHTML = "";
+        quizWrap.innerHTML = "";
+        return;
+    }
+
+    const vocab = findLearnLimit("Vocabulary");
+    const grammar = findLearnLimit("Grammar");
+    const learnCards = [
+        { name: "Vocabulary / Kanji", count: formatLimitCount(vocab, "learn"), meta: currentMode === "AI" ? `${s.aiLimit} selected` : "manual min–max" },
+        { name: "Grammar", count: formatLimitCount(grammar, "learn"), meta: currentMode === "AI" ? `${s.aiLimit} selected` : "manual min–max" }
+    ];
+    learnWrap.innerHTML = learnCards.map(item => `
+        <div class="limit-card">
+            <div class="limit-name">${item.name}</div>
+            <div class="limit-count">${item.count}</div>
+            <div class="limit-meta">${item.meta}<br>${s.duration} | ${s.level} | ${s.language}</div>
+        </div>`).join("");
+
+    const quizItems = [
+        { name: "Vocabulary Quizzes", key: "Vocabulary Quiz" },
+        { name: "Grammar Quizzes", key: "Grammar Quiz" },
+        { name: "Sentence Quizzes", key: "Sentence Quiz" },
+        { name: "Total Quizzes", key: "Total Quiz", total: true }
+    ];
+    quizWrap.innerHTML = quizItems.map(item => {
+        const limit = findQuizLimit(item.key);
+        const count = formatLimitCount(limit, "quiz");
+        const chips = currentMode === "AI" && !item.total
+            ? quizDistributionInfo(item.key, count).map(x => `<span class="limit-chip">${x}</span>`).join("")
+            : "";
+        const meta = item.total
+            ? "All quiz categories combined"
+            : (currentMode === "AI" ? "AI quiz type distribution" : "manual min–max");
+        return `<div class="limit-card ${item.total ? "total" : ""}">
+            <div class="limit-name">${item.name}</div>
+            <div class="limit-count">${count}</div>
+            <div class="limit-meta">${meta}</div>
+            ${chips ? `<div class="limit-chip-row">${chips}</div>` : ""}
+        </div>`;
+    }).join("");
+    section.style.display = "block";
+}
+
+function handleGenerate() {
+    const manualValidation = validateManualStoryInput(true);
+    if (!manualValidation.ok) return;
+    const s = getCurrentState();
+    const cards = [
+        ["template_name", s.templateName],
+        ["combination_summary", s.combinationSummary],
+        ["sentences", `${s.sentence[0]}–${s.sentence[1]}`],
+        [s.language === "JP" ? "Japanese chars" : "English chars", `${s.sentence[2]}–${s.sentence[3]}`]
+    ];
+    document.getElementById("resultCards").innerHTML = cards.map(([label,value]) => `<div class="result-card"><div class="label">${label}</div><div class="value">${value}</div></div>`).join("");
+    renderLimitPreview();
+    document.getElementById("csvPreview").value = buildCsvPreview();
+    document.getElementById("promptResult").value = buildPromptText();
+    enableExportButtons(true);
+    setExportStatus("Preview ready. CSV download လုပ်နိုင်ပါပြီ။");
+    document.getElementById("resultSection").style.display = "block";
+    document.getElementById("resultSection").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+document.querySelectorAll(".required-field").forEach(field => {
+    field.addEventListener("input", checkFormValidity);
+    field.addEventListener("change", checkFormValidity);
+});
+window.onload = () => {
+    updateContentCommunity();
+    updateModeState();
+    enableExportButtons(false);
+    setImportExportButtons(false);
+    checkFormValidity();
+    const convertBtn = document.getElementById("convertImportJsonBtn");
+    if (convertBtn) {
+        convertBtn.disabled = false;
+        convertBtn.addEventListener("click", function(event) {
+            if (event && typeof event.preventDefault === "function") event.preventDefault();
+            convertAiJsonToReadonlyImport();
+            return false;
+        });
+    }
+    const downloadImportBtn = document.getElementById("downloadImportJsonBtn");
+    if (downloadImportBtn) {
+        downloadImportBtn.addEventListener("click", downloadImportJsonFile);
+    }
+    const copyImportBtn = document.getElementById("copyImportJsonBtn");
+    if (copyImportBtn) {
+        copyImportBtn.addEventListener("click", function(event) {
+            if (event && typeof event.preventDefault === "function") event.preventDefault();
+            copyImportJsonToClipboard();
+            return false;
+        });
+    }
+};
+</script>
+</body>
+</html>

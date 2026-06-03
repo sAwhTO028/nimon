@@ -12,6 +12,7 @@ import 'package:nimon/core/validation/story_validators.dart';
 import 'package:nimon/core/validation/validation_issue.dart';
 import 'package:nimon/core/validation/validation_mode.dart';
 import 'package:nimon/core/validation/validation_severity.dart';
+import 'package:nimon/features/create/story_basics_category_options.dart';
 import 'package:nimon/features/create/story_creator_models.dart';
 
 /// Payload for [StoryCreatorDraftNotifier.applyBasics] built from the unified form.
@@ -107,18 +108,7 @@ class CreateStoryBasicsFormState extends State<CreateStoryBasicsForm> {
   final _descriptionController = TextEditingController();
 
   final List<String> _jlptLevels = const ['N5', 'N4', 'N3', 'N2', 'N1'];
-  final List<String> _categories = const [
-    'Love',
-    'Comedy',
-    'Horror',
-    'Cultural',
-    'Adventure',
-    'Fantasy',
-    'Drama',
-    'Business',
-    'Sci-Fi',
-    'Mystery',
-  ];
+  static const _categories = kStoryBasicsCategoryOptions;
 
   String? _selectedLevel;
   String? _selectedCategory;
@@ -296,7 +286,7 @@ class CreateStoryBasicsFormState extends State<CreateStoryBasicsForm> {
       _titleController.text = d.title;
       _descriptionController.text = d.description;
       _selectedLevel = d.level.isEmpty ? null : d.level;
-      _selectedCategory = d.category.isEmpty ? null : d.category;
+      _selectedCategory = storyBasicsCategoryDropdownValue(d.category);
       _selectedDuration = durationLabel;
       _existingPromptSourceNote = d.promptSourceNote;
       _coverNetworkUrl = netCover;
@@ -615,7 +605,7 @@ class CreateStoryBasicsFormState extends State<CreateStoryBasicsForm> {
               title: 'Category',
               requiredMark: true,
               child: DropdownButtonFormField<String>(
-                value: _selectedCategory,
+                value: storyBasicsCategoryDropdownValue(_selectedCategory),
                 items: [
                   for (final c in _categories)
                     DropdownMenuItem(value: c, child: Text(c)),

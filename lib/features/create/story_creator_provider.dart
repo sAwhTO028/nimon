@@ -7,6 +7,7 @@ import 'package:nimon/core/validation/app_quota_exceeded_exception.dart';
 import 'package:nimon/features/create/creator_readiness.dart';
 import 'package:nimon/features/create/data/remote_backend_config.dart';
 import 'package:nimon/features/create/creator_published_edit_baseline.dart';
+import 'package:nimon/features/create/creator_prompt_source_note.dart';
 import 'package:nimon/features/create/creator_read_only_publish_tracking.dart';
 import 'package:nimon/features/create/data/story_draft_remote_publish_errors.dart';
 import 'package:nimon/features/create/data/story_draft_repository.dart';
@@ -213,6 +214,19 @@ class StoryCreatorDraftNotifier extends StateNotifier<StoryCreatorDraftState> {
         basics: loaded.basics.copyWith(creatorOwnerId: _devOwnerId),
       );
     }
+    final promptBackfilled = withBackfilledImportPromptSourceNote(loaded);
+    final needsPromptBackfill =
+        promptBackfilled.basics.promptSourceNote.trim() !=
+            loaded.basics.promptSourceNote.trim();
+    if (needsPromptBackfill) {
+      loaded = promptBackfilled;
+      if (kDebugMode) {
+        debugPrint(
+          '[creator_draft] prompt_source_backfill draftId=$id '
+          'note="${loaded.basics.promptSourceNote}"',
+        );
+      }
+    }
     state = state.copyWith(
       draft: loaded,
       dirty: false,
@@ -224,6 +238,9 @@ class StoryCreatorDraftNotifier extends StateNotifier<StoryCreatorDraftState> {
     unawaited(_hydratePublishedEditBaselines(id));
     if (needsOwnerBackfill) {
       await persistLocalNow(reason: 'owner_backfill');
+    }
+    if (needsPromptBackfill) {
+      await persistLocalNow(reason: 'prompt_source_backfill');
     }
   }
 
@@ -310,6 +327,49 @@ class StoryCreatorDraftNotifier extends StateNotifier<StoryCreatorDraftState> {
     await persistLocalNow(reason: 'new_draft_init');
     _hydrated = true;
     return state.draft;
+  }
+
+  /// Replaces the in-memory creator session with an already-mapped import draft and
+  /// persists it locally.
+  ///
+  /// JSON import creates/updates a draft only. Publish still requires the normal
+  /// user-initiated publish action ([publishReadingOnlyToDisk] /
+  /// [publishFullLearnToDisk]).
+  ///
+  /// Uses [persistLocalNow] with [reason] default `json_import`, which maps to
+  /// [StoryDraftRemotePublishIntent.none] (no publish POST).
+  Future<void> importMappedDraft(
+    CreatorStoryV1 draft, {
+    String reason = 'json_import',
+  }) async {
+    _persistDebounce?.cancel();
+
+    final imported = draft.publishState == StoryPublishState.draft &&
+            (draft.publishedMonoId == null ||
+                draft.publishedMonoId!.trim().isEmpty)
+        ? draft
+        : draft.copyWith(
+            publishState: StoryPublishState.draft,
+            clearPublishedLinkageFields: true,
+          );
+
+    state = state.copyWith(
+      draft: imported,
+      dirty: true,
+      saveStatus: CreatorDraftSaveStatus.idle,
+      clearLastSaveError: true,
+      clearReadOnlyPublishedCoreSig: true,
+      clearPublishedEditBaselines: true,
+    );
+    _hydrated = true;
+
+    await _drafts.saveResumeMeta(
+      CreatorDraftResumeMeta.initial(
+        draftId: imported.id,
+        module: CreatorLastActiveModule.storytelling,
+      ),
+    );
+    await persistLocalNow(reason: reason);
   }
 
   void markDirty() {
@@ -543,6 +603,16 @@ class StoryCreatorDraftNotifier extends StateNotifier<StoryCreatorDraftState> {
       // Keep status as-is; persist methods will move it to saving/saved/failed.
     );
     if (dirty) markDirty();
+  }
+
+  /// Ensures in-memory draft has import AI prompt metadata before publish preflight.
+  void ensurePromptSourceBackfillForPublish() {
+    final next = withBackfilledImportPromptSourceNote(state.draft);
+    if (next.basics.promptSourceNote.trim() ==
+        state.draft.basics.promptSourceNote.trim()) {
+      return;
+    }
+    _setDraft(next, dirty: true);
   }
 
   Future<void> discardDraftFromDiskAndReset() async {
