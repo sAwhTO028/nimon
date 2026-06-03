@@ -265,6 +265,15 @@ model PublishedMono {
 
   content Json @default("{}")
 
+  /// M22B: denormalized feed summary (catalog list avoids selecting `content` JSONB).
+  coverImageUrl String?
+  publishKind   String?
+  hasAudio      Boolean @default(false)
+  sentenceCount Int?
+  vocabCount    Int?
+  grammarCount  Int?
+  quizCount     Int?
+
   /// P1 Trash: when set, mono is hidden from catalog/feed and default owner published list.
   trashedAt DateTime?
 

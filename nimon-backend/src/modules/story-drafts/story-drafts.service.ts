@@ -21,6 +21,10 @@ import {
   resolvePublishedMonoIdForReadOnlyPublish,
   type PublishedMonoReadOnlyPublishScope,
 } from '../published-monos/published-mono-slot-guards';
+import {
+  feedSummaryFromDraft,
+  prismaFeedSummaryData,
+} from '../published-monos/published-mono-feed-summary';
 import { PrismaService } from '../prisma/prisma.service';
 import { FREE_TIER_QUOTA_KEYS, FREE_TIER_QUOTAS } from '../../common/limits/free-tier-quotas';
 import { QuotaExceededException } from '../../common/limits/quota-exceeded.exception';
@@ -231,6 +235,38 @@ export class StoryDraftsService {
       grammar: { entries: grammarEntries },
       quiz: { entries: quizEntries },
       audio: { storyAudio },
+    };
+  }
+
+  /**
+   * Builds `content` JSON and denormalized feed summary fields (M22B) for publish writes.
+   */
+  private buildPublishedMonoContentAndSummary(
+    draft: any,
+    publishKind: 'read_only_v1' | 'full_learn_v1',
+    prevContent: Record<string, unknown>,
+    now: Date,
+  ): {
+    content: Prisma.InputJsonValue;
+    feedSummary: ReturnType<typeof prismaFeedSummaryData>;
+  } {
+    const core = this.buildPublishedCorePayloadFromDraft(draft);
+    const content: Record<string, unknown> = {
+      ...prevContent,
+      sourceDraftId: draft.id,
+      publishKind,
+      updatedAt: now.toISOString(),
+      core,
+    };
+    if (publishKind === 'full_learn_v1') {
+      content.learn = this.buildLearnSnapshotFromDraft(draft);
+    }
+    const summary = prismaFeedSummaryData(
+      feedSummaryFromDraft(draft, publishKind),
+    );
+    return {
+      content: content as Prisma.InputJsonValue,
+      feedSummary: summary,
     };
   }
 
@@ -1093,6 +1129,12 @@ export class StoryDraftsService {
       });
       const prevContent = (existingPm?.content ?? {}) as Record<string, unknown>;
       const clearTrash = existingPm?.trashedAt != null;
+      const { content, feedSummary } = this.buildPublishedMonoContentAndSummary(
+        draft,
+        'read_only_v1',
+        prevContent,
+        now,
+      );
       await tx.publishedMono.update({
         where: { id: publishedMonoId },
         data: {
@@ -1103,13 +1145,8 @@ export class StoryDraftsService {
           description: draft.description ?? '',
           contentLocale: 'en',
           learningLanguage: 'ja',
-          content: {
-            ...prevContent,
-            sourceDraftId: draft.id,
-            publishKind: 'read_only_v1',
-            updatedAt: now.toISOString(),
-            core: this.buildPublishedCorePayloadFromDraft(draft),
-          } as Prisma.InputJsonValue,
+          content,
+          ...feedSummary,
         },
       });
 
@@ -1281,8 +1318,12 @@ export class StoryDraftsService {
         const pm = await tx.publishedMono.findUnique({ where: { id: publishedMonoId } });
         if (pm) {
           const prev = (pm.content ?? {}) as Record<string, unknown>;
-          const learn = this.buildLearnSnapshotFromDraft(reloaded);
-          const core = this.buildPublishedCorePayloadFromDraft(reloaded);
+          const { content, feedSummary } = this.buildPublishedMonoContentAndSummary(
+            reloaded,
+            'full_learn_v1',
+            prev,
+            now,
+          );
           await tx.publishedMono.update({
             where: { id: publishedMonoId },
             data: {
@@ -1292,14 +1333,8 @@ export class StoryDraftsService {
               description: reloaded.description ?? '',
               contentLocale: 'en',
               learningLanguage: 'ja',
-              content: {
-                ...prev,
-                sourceDraftId: reloaded.id,
-                publishKind: 'full_learn_v1',
-                updatedAt: now.toISOString(),
-                core,
-                learn,
-              } as Prisma.InputJsonValue,
+              content,
+              ...feedSummary,
             },
           });
         }

@@ -16,6 +16,34 @@ import type { PublishedMonoDetailDto } from '../published-monos/published-monos.
 
 import type { MonoFeedListResponseDto, MonoFeedSummaryItemDto } from './mono-feed.dto';
 
+/** Prisma select for catalog feed list — excludes `content` JSONB (M22B). */
+export const MONO_FEED_LIST_PUBLISHED_MONO_SELECT = {
+  id: true,
+  ownerId: true,
+  contentLocale: true,
+  learningLanguage: true,
+  title: true,
+  category: true,
+  level: true,
+  description: true,
+  createdAt: true,
+  updatedAt: true,
+  coverImageUrl: true,
+  publishKind: true,
+  hasAudio: true,
+  sentenceCount: true,
+  vocabCount: true,
+  grammarCount: true,
+  quizCount: true,
+  owner: {
+    select: {
+      profile: {
+        select: { displayName: true, handle: true, avatarUrl: true },
+      },
+    },
+  },
+} as const;
+
 const DEFAULT_LIMIT = 15;
 const MAX_LIMIT = 30;
 
@@ -129,47 +157,6 @@ export class MonoFeedService {
     return Math.min(Math.max(rounded, 1), MAX_LIMIT);
   }
 
-  /**
-   * Derives cover URL and publishKind from `content` JSON without returning full blob to clients.
-   */
-  private extractContentMeta(content: unknown): {
-    coverUrl: string | null;
-    publishKind: string | null;
-    hasAudio: boolean;
-  } {
-    const c = (content ?? {}) as Record<string, unknown>;
-    const publishKind =
-      typeof c.publishKind === 'string' && c.publishKind.trim() !== ''
-        ? c.publishKind.trim()
-        : null;
-    const core =
-      c.core && typeof c.core === 'object'
-        ? (c.core as Record<string, unknown>)
-        : {};
-    const coverUrl =
-      typeof core.coverImageUrl === 'string' && core.coverImageUrl.trim() !== ''
-        ? core.coverImageUrl.trim()
-        : null;
-    const learn =
-      c.learn && typeof c.learn === 'object'
-        ? (c.learn as Record<string, unknown>)
-        : {};
-    const audio =
-      learn.audio && typeof learn.audio === 'object'
-        ? (learn.audio as Record<string, unknown>)
-        : {};
-    const storyAudio =
-      audio.storyAudio && typeof audio.storyAudio === 'object'
-        ? (audio.storyAudio as Record<string, unknown>)
-        : null;
-    const sourceUrl =
-      storyAudio && typeof storyAudio.sourceUrl === 'string'
-        ? storyAudio.sourceUrl.trim()
-        : '';
-    const hasAudio = sourceUrl.length > 0;
-    return { coverUrl, publishKind, hasAudio };
-  }
-
   private publicWebBaseUrl(): string {
     const raw =
       process.env.NIMON_PUBLIC_WEB_BASE_URL?.trim() ||
@@ -194,7 +181,9 @@ export class MonoFeedService {
       description: string;
       createdAt: Date;
       updatedAt: Date;
-      content: unknown;
+      coverImageUrl: string | null;
+      publishKind: string | null;
+      hasAudio: boolean;
       owner: {
         profile: {
           displayName: string | null;
@@ -209,9 +198,12 @@ export class MonoFeedService {
       myReaction: 'heart' | null;
     },
   ): MonoFeedSummaryItemDto {
-    const { coverUrl: rawCover, publishKind, hasAudio } =
-      this.extractContentMeta(row.content);
-    const coverUrl = this.media.url(rawCover);
+    const coverUrl = this.media.url(row.coverImageUrl);
+    const publishKind =
+      row.publishKind != null && row.publishKind.trim() !== ''
+        ? row.publishKind.trim()
+        : null;
+    const hasAudio = row.hasAudio;
     const cat = (row.category ?? '').trim();
     return {
       monoId: row.id,
@@ -239,7 +231,7 @@ export class MonoFeedService {
 
   /**
    * Public catalog list — `published_monos` only, ordered by `updatedAt` desc, `id` desc.
-   * Selects `content` only to derive `coverUrl` and `publishKind`; response items exclude raw `content`.
+   * Uses denormalized summary columns; response items exclude raw `content`.
    */
   async listFeed(options: {
     limit: number;
@@ -342,26 +334,7 @@ export class MonoFeedService {
       where,
       orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
       take,
-      select: {
-        id: true,
-        ownerId: true,
-        contentLocale: true,
-        learningLanguage: true,
-        title: true,
-        category: true,
-        level: true,
-        description: true,
-        createdAt: true,
-        updatedAt: true,
-        content: true,
-        owner: {
-          select: {
-            profile: {
-              select: { displayName: true, handle: true, avatarUrl: true },
-            },
-          },
-        },
-      },
+      select: MONO_FEED_LIST_PUBLISHED_MONO_SELECT,
     });
 
     const hasMore = rows.length > options.limit;

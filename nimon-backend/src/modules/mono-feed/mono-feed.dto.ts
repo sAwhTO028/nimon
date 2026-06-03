@@ -25,7 +25,7 @@ export type MonoFeedSummaryItemDto = {
   isBookmarkedByMe: boolean;
   myReaction: 'heart' | null;
   shareUrl: string;
-  /** From `content.publishKind` in DB when present. */
+  /** From denormalized `published_monos.publishKind` (backfilled from `content` on publish). */
   publishKind: string | null;
   /** V1: all rows in `published_monos` treated as public catalog. */
   accessType: 'public';

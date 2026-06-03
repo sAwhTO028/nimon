@@ -5,6 +5,97 @@ import { StoryDraftsService } from './story-drafts.service';
 /** Matches legacy dev list queries — service scopes all list rows by this owner id. */
 const LIST_OWNER = DEFAULT_DEV_OWNER_ID;
 
+/** AI import + N5 + 3–5 mins — smallest HTML-valid publish fixture (JP). */
+const HTML_AI_N5_3_5 = {
+  targetDurationBandKey: '3_5' as const,
+  promptSourceNote: 'promptDataTab=AI_mode',
+  sentenceCount: 24,
+  charsPerSentence: 15,
+  vocabCount: 8,
+  grammarCount: 3,
+  quizVocab: 5,
+  quizGrammar: 3,
+  quizSentence: 3,
+  quizTotal: 11,
+};
+
+function htmlValidSentences(count: number, charsPerSentence: number) {
+  const t = 'あ'.repeat(charsPerSentence);
+  return Array.from({ length: count }, (_, order) => ({
+    order,
+    content: { japaneseText: t },
+  }));
+}
+
+function htmlValidVocabFiller(fromOrder: number, count: number) {
+  return Array.from({ length: count }, (_, i) => ({
+    order: fromOrder + i,
+    content: {
+      termJapanese: `たんご${fromOrder + i}`,
+      type: 'vocabulary' as const,
+      reading: 'あ',
+      glosses: { my: 'meaning' },
+    },
+  }));
+}
+
+function htmlValidGrammarFiller(fromOrder: number, count: number) {
+  return Array.from({ length: count }, (_, i) => ({
+    order: fromOrder + i,
+    content: { headline: `ぶんぽう${fromOrder + i}` },
+  }));
+}
+
+function htmlValidQuizFiller(
+  fromOrder: number,
+  opts: { vocab: number; grammar: number; sentence: number },
+) {
+  const rows: Array<{
+    order: number;
+    content: {
+      category: string;
+      prompt: string;
+      options: string[];
+      correctIndex: number;
+    };
+  }> = [];
+  let order = fromOrder;
+  for (let i = 0; i < opts.vocab; i++) {
+    rows.push({
+      order: order++,
+      content: {
+        category: 'vocabulary',
+        prompt: `Vocab quiz filler ${fromOrder + i}?`,
+        options: ['a', 'b', 'c', 'd'],
+        correctIndex: 0,
+      },
+    });
+  }
+  for (let i = 0; i < opts.grammar; i++) {
+    rows.push({
+      order: order++,
+      content: {
+        category: 'grammar',
+        prompt: `Grammar quiz filler ${fromOrder + i}?`,
+        options: ['a', 'b', 'c', 'd'],
+        correctIndex: 0,
+      },
+    });
+  }
+  for (let i = 0; i < opts.sentence; i++) {
+    rows.push({
+      order: order++,
+      content: {
+        category: 'sample_sentence',
+        prompt: `Sentence quiz filler ${fromOrder + i}?`,
+        options: ['a', 'b', 'c', 'd'],
+        correctIndex: 0,
+      },
+    });
+  }
+  return rows;
+}
+
 describe('StoryDraftsService.listDrafts', () => {
   type RowOpts = {
     targetDurationBandKey?: string | null;
@@ -275,7 +366,8 @@ describe('StoryDraftsService.publishFullLearn + publishReadOnly content merge', 
     schemaVersion: 1,
     createdAt: new Date('2026-01-01'),
     updatedAt: new Date('2026-01-01'),
-    promptSourceNote: '',
+    promptSourceNote: HTML_AI_N5_3_5.promptSourceNote,
+    targetDurationBandKey: HTML_AI_N5_3_5.targetDurationBandKey,
     publishState: 'reading_only_published',
     readingOnlyPublishedAt: new Date('2026-01-01'),
     fullLearnPublishedAt: null as Date | null,
@@ -293,7 +385,6 @@ describe('StoryDraftsService.publishFullLearn + publishReadOnly content merge', 
       category: 'cat',
       level: 'n5',
       description: 'desc',
-      targetDurationBandKey: null,
       moduleWorkflowStatuses: {
         vocabulary_kanji: 'completed',
         grammar: 'completed',
@@ -301,14 +392,17 @@ describe('StoryDraftsService.publishFullLearn + publishReadOnly content merge', 
         audio: 'completed',
       },
       sentences: [
-        { order: 1, content: { japaneseText: 'い' } },
+        { order: 1, content: { japaneseText: 'い'.repeat(HTML_AI_N5_3_5.charsPerSentence) } },
         {
           order: 0,
           content: {
-            japaneseText: 'あ',
+            japaneseText: 'あ'.repeat(HTML_AI_N5_3_5.charsPerSentence),
             furiganaSpans: [{ start: 0, end: 1, reading: 'a' }],
           },
         },
+        ...htmlValidSentences(HTML_AI_N5_3_5.sentenceCount - 2, HTML_AI_N5_3_5.charsPerSentence).map(
+          (s, i) => ({ ...s, order: i + 2 }),
+        ),
       ],
       vocabEntries: [
         {
@@ -329,9 +423,11 @@ describe('StoryDraftsService.publishFullLearn + publishReadOnly content merge', 
             glosses: { en: 'I' },
           },
         },
+        ...htmlValidVocabFiller(2, HTML_AI_N5_3_5.vocabCount - 2),
       ],
       grammarEntries: [
         { order: 0, content: { headline: 'について（パターン）' } },
+        ...htmlValidGrammarFiller(1, HTML_AI_N5_3_5.grammarCount - 1),
       ],
       quizEntries: [
         {
@@ -352,6 +448,11 @@ describe('StoryDraftsService.publishFullLearn + publishReadOnly content merge', 
             correctIndex: 2,
           },
         },
+        ...htmlValidQuizFiller(2, {
+          vocab: HTML_AI_N5_3_5.quizVocab - 1,
+          grammar: HTML_AI_N5_3_5.quizGrammar - 1,
+          sentence: HTML_AI_N5_3_5.quizSentence,
+        }),
       ],
       audios: [{ kind: 'storyAudio', content: { id: 'aud', sourceUrl: 'https://cdn/x.mp3' } }],
     };
@@ -381,6 +482,12 @@ describe('StoryDraftsService.publishFullLearn + publishReadOnly content merge', 
     const monoData = publishedMonoUpdate.mock.calls[0][0].data as Record<string, unknown>;
     expect(monoData.title).toBe('Title');
     expect(monoData.description).toBe('desc');
+    expect(monoData.publishKind).toBe('full_learn_v1');
+    expect(monoData.hasAudio).toBe(true);
+    expect(monoData.sentenceCount).toBe(HTML_AI_N5_3_5.sentenceCount);
+    expect(monoData.vocabCount).toBe(HTML_AI_N5_3_5.vocabCount);
+    expect(monoData.grammarCount).toBe(HTML_AI_N5_3_5.grammarCount);
+    expect(monoData.quizCount).toBe(HTML_AI_N5_3_5.quizTotal);
 
     const payload = monoData.content as Record<string, unknown>;
     expect(payload.publishKind).toBe('full_learn_v1');
@@ -389,23 +496,25 @@ describe('StoryDraftsService.publishFullLearn + publishReadOnly content merge', 
     const core = payload.core as {
       sentences: Array<{ order: number; content: Record<string, unknown> }>;
     };
-    expect(core.sentences).toHaveLength(2);
+    expect(core.sentences).toHaveLength(HTML_AI_N5_3_5.sentenceCount);
     expect(core.sentences[0].order).toBe(0);
-    expect(core.sentences[0].content.japaneseText).toBe('あ');
+    expect(core.sentences[0].content.japaneseText).toBe('あ'.repeat(HTML_AI_N5_3_5.charsPerSentence));
     expect(core.sentences[0].content.furiganaSpans).toEqual([
       { start: 0, end: 1, reading: 'a' },
     ]);
     expect(core.sentences[1].order).toBe(1);
-    expect(core.sentences[1].content.japaneseText).toBe('い');
+    expect(core.sentences[1].content.japaneseText).toBe('い'.repeat(HTML_AI_N5_3_5.charsPerSentence));
 
     const learn = payload.learn as Record<string, unknown>;
     expect(learn.schemaVersion).toBe(1);
-    const vocab = learn.vocabularyKanji as { entries: Array<{ id: string }> };
-    expect(vocab.entries).toHaveLength(2);
+    const vocab = learn.vocabularyKanji as { entries: Array<{ id: string; termJapanese?: string }> };
+    expect(vocab.entries).toHaveLength(HTML_AI_N5_3_5.vocabCount);
     expect(vocab.entries[0].termJapanese).toBe('こんにちは');
     expect(vocab.entries[1].termJapanese).toBe('私');
-    expect((learn.grammar as { entries: unknown[] }).entries).toHaveLength(1);
-    expect((learn.quiz as { entries: unknown[] }).entries).toHaveLength(2);
+    expect((learn.grammar as { entries: unknown[] }).entries).toHaveLength(
+      HTML_AI_N5_3_5.grammarCount,
+    );
+    expect((learn.quiz as { entries: unknown[] }).entries).toHaveLength(HTML_AI_N5_3_5.quizTotal);
     const audio = learn.audio as { storyAudio: Record<string, unknown> | null };
     expect(audio.storyAudio).toEqual({ id: 'aud', sourceUrl: 'https://cdn/x.mp3' });
   });
@@ -421,39 +530,23 @@ describe('StoryDraftsService.publishFullLearn + publishReadOnly content merge', 
       category: 'cat',
       level: 'n5',
       description: 'desc',
-      targetDurationBandKey: null,
       moduleWorkflowStatuses: {
         vocabulary_kanji: 'completed',
         grammar: 'completed',
         quiz: 'completed',
         audio: 'completed',
       },
-      sentences: [{ order: 0, content: { japaneseText: 'あ' } }],
-      vocabEntries: [
-        {
-          order: 0,
-          content: {
-            termJapanese: 'あ',
-            type: 'vocabulary',
-            reading: 'あ',
-            glosses: { my: 'Ah' },
-          },
-        },
-      ],
-      grammarEntries: [
-        { order: 0, content: { headline: 'パターン見出し' } },
-      ],
-      quizEntries: [
-        {
-          order: 0,
-          content: {
-            category: 'vocabulary',
-            prompt: 'Sample quiz question text here?',
-            options: ['a', 'b', 'c', 'd'],
-            correctIndex: 1,
-          },
-        },
-      ],
+      sentences: htmlValidSentences(
+        HTML_AI_N5_3_5.sentenceCount,
+        HTML_AI_N5_3_5.charsPerSentence,
+      ),
+      vocabEntries: htmlValidVocabFiller(0, HTML_AI_N5_3_5.vocabCount),
+      grammarEntries: htmlValidGrammarFiller(0, HTML_AI_N5_3_5.grammarCount),
+      quizEntries: htmlValidQuizFiller(0, {
+        vocab: HTML_AI_N5_3_5.quizVocab,
+        grammar: HTML_AI_N5_3_5.quizGrammar,
+        sentence: HTML_AI_N5_3_5.quizSentence,
+      }),
       audios: [],
     };
 
@@ -486,14 +579,19 @@ describe('StoryDraftsService.publishFullLearn + publishReadOnly content merge', 
       category: 'c',
       level: 'n5',
       description: 'd',
-      targetDurationBandKey: null,
-      sentences: [{ order: 0, content: { japaneseText: 'こんにちは' } }],
+      targetDurationBandKey: HTML_AI_N5_3_5.targetDurationBandKey,
+      sentences: [
+        { order: 0, content: { japaneseText: 'こんにちは'.repeat(HTML_AI_N5_3_5.charsPerSentence) } },
+        ...htmlValidSentences(HTML_AI_N5_3_5.sentenceCount - 1, HTML_AI_N5_3_5.charsPerSentence).map(
+          (s, i) => ({ ...s, order: i + 1 }),
+        ),
+      ],
       schemaVersion: 1,
       createdAt: new Date('2026-01-01'),
       updatedAt: new Date('2026-01-01'),
       publishState: 'reading_only_published',
       readingOnlyPublishedAt: new Date('2026-01-01'),
-      promptSourceNote: '',
+      promptSourceNote: HTML_AI_N5_3_5.promptSourceNote,
       moduleWorkflowStatuses: {},
       vocabEntries: [],
       grammarEntries: [],
@@ -548,24 +646,27 @@ describe('StoryDraftsService.publishFullLearn + publishReadOnly content merge', 
       category: 'c',
       level: 'n5',
       description: 'd',
-      targetDurationBandKey: null,
+      targetDurationBandKey: HTML_AI_N5_3_5.targetDurationBandKey,
       sentences: [
-        { order: 2, content: { japaneseText: '三', meanings: { en: 'three' } } },
-        { order: 0, content: { japaneseText: '一' } },
+        { order: 2, content: { japaneseText: '三'.repeat(HTML_AI_N5_3_5.charsPerSentence), meanings: { en: 'three' } } },
+        { order: 0, content: { japaneseText: '一'.repeat(HTML_AI_N5_3_5.charsPerSentence) } },
         {
           order: 1,
           content: {
-            japaneseText: '二',
+            japaneseText: '二'.repeat(HTML_AI_N5_3_5.charsPerSentence),
             furiganaSpans: [{ start: 0, end: 1, reading: 'に' }],
           },
         },
+        ...htmlValidSentences(HTML_AI_N5_3_5.sentenceCount - 3, HTML_AI_N5_3_5.charsPerSentence).map(
+          (s, i) => ({ ...s, order: i + 3 }),
+        ),
       ],
       schemaVersion: 1,
       createdAt: new Date('2026-01-01'),
       updatedAt: new Date('2026-01-01'),
       publishState: 'reading_only_published',
       readingOnlyPublishedAt: new Date('2026-01-01'),
-      promptSourceNote: '',
+      promptSourceNote: HTML_AI_N5_3_5.promptSourceNote,
       moduleWorkflowStatuses: {},
       vocabEntries: [],
       grammarEntries: [],
@@ -590,11 +691,12 @@ describe('StoryDraftsService.publishFullLearn + publishReadOnly content merge', 
     const coreSentences = (
       content.core as { sentences: Array<{ order: number; content: Record<string, unknown> }> }
     ).sentences;
-    expect(coreSentences.map((r) => r.order)).toEqual([0, 1, 2]);
-    expect(coreSentences[0].content.japaneseText).toBe('一');
-    expect(coreSentences[1].content.japaneseText).toBe('二');
+    expect(coreSentences).toHaveLength(HTML_AI_N5_3_5.sentenceCount);
+    expect(coreSentences.map((r) => r.order).slice(0, 3)).toEqual([0, 1, 2]);
+    expect(coreSentences[0].content.japaneseText).toBe('一'.repeat(HTML_AI_N5_3_5.charsPerSentence));
+    expect(coreSentences[1].content.japaneseText).toBe('二'.repeat(HTML_AI_N5_3_5.charsPerSentence));
     expect(coreSentences[1].content.furiganaSpans).toEqual([{ start: 0, end: 1, reading: 'に' }]);
-    expect(coreSentences[2].content.japaneseText).toBe('三');
+    expect(coreSentences[2].content.japaneseText).toBe('三'.repeat(HTML_AI_N5_3_5.charsPerSentence));
     expect(coreSentences[2].content.meanings).toEqual({ en: 'three' });
   });
 });

@@ -3,7 +3,7 @@ import { canonicalizeMediaUrl } from '../media/media-url-canonicalizer';
 import type { MediaUrlCanonicalizerService } from '../media/media-url-canonicalizer.service';
 import type { PublicWebBaseUrlService } from '../common/public-web-base-url.service';
 import { PUBLISHED_MONO_CATALOG_VISIBLE } from '../published-monos/published-mono-visibility';
-import { MonoFeedService } from './mono-feed.service';
+import { MONO_FEED_LIST_PUBLISHED_MONO_SELECT, MonoFeedService } from './mono-feed.service';
 
 const DEFAULT_CANON_BASE = 'http://localhost:3000/uploads';
 
@@ -53,10 +53,13 @@ describe('MonoFeedService', () => {
     description: 'Short teaser',
     createdAt: t1,
     updatedAt: t0,
-    content: {
-      publishKind: 'read_only_v1',
-      core: { coverImageUrl: 'https://cdn.example/cover.jpg' },
-    },
+    coverImageUrl: 'https://cdn.example/cover.jpg',
+    publishKind: 'read_only_v1',
+    hasAudio: false,
+    sentenceCount: 2,
+    vocabCount: 3,
+    grammarCount: 1,
+    quizCount: 4,
     owner: {
       profile: {
         displayName: 'Writer',
@@ -119,12 +122,7 @@ describe('MonoFeedService', () => {
   it('rewrites loopback upload coverUrl and writerAvatarUrl using MEDIA_PUBLIC_BASE_URL', async () => {
     const row = {
       ...sampleRow,
-      content: {
-        publishKind: 'read_only_v1',
-        core: {
-          coverImageUrl: 'http://localhost:3000/uploads/u/cover/a.webp',
-        },
-      },
+      coverImageUrl: 'http://localhost:3000/uploads/u/cover/a.webp',
       owner: {
         profile: {
           displayName: 'Writer',
@@ -143,6 +141,20 @@ describe('MonoFeedService', () => {
     expect(it.writerAvatarUrl).toBe(
       'http://192.168.11.5:3000/uploads/u/cover/av.webp',
     );
+  });
+
+  it('listFeed findMany does not select content JSONB (M22B)', async () => {
+    const { svc, findMany } = mkSvc();
+    findMany.mockResolvedValue([]);
+    await svc.listFeed({ limit: 15, userId: null });
+    expect(findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        select: MONO_FEED_LIST_PUBLISHED_MONO_SELECT,
+      }),
+    );
+    expect(
+      (MONO_FEED_LIST_PUBLISHED_MONO_SELECT as Record<string, unknown>).content,
+    ).toBeUndefined();
   });
 
   it('list returns items with slim summary fields (no content in response)', async () => {
@@ -363,6 +375,20 @@ describe('MonoFeedService', () => {
     await expect(
       svc.listFeed({ limit: 15, sort: 'popular', userId: null }),
     ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('list uses denormalized hasAudio when present', async () => {
+    const { svc, findMany } = mkSvc();
+    findMany.mockResolvedValue([
+      {
+        ...sampleRow,
+        hasAudio: true,
+        publishKind: 'full_learn_v1',
+      },
+    ]);
+    const out = await svc.listFeed({ limit: 15, userId: null });
+    expect(out.items[0]!.hasAudio).toBe(true);
+    expect(out.items[0]!.publishKind).toBe('full_learn_v1');
   });
 
   it('get detail returns full content compatible with PublishedMono detail', async () => {
