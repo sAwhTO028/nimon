@@ -261,6 +261,47 @@ describe('MonoFeedService', () => {
     );
   });
 
+  it('authenticated my user feed filter is my+ja not en+ja (strict; no en fallback)', async () => {
+    const { svc, findMany } = mkSvc();
+    findMany.mockResolvedValue([]);
+    (svc as any).prisma.userPreference.findUnique.mockResolvedValue({
+      contentLocale: 'my',
+      learningLanguage: 'ja',
+    });
+    await svc.listFeed({ limit: 15, userId: 'u1' });
+    const call = findMany.mock.calls[0][0];
+    const andClauses = call.where.AND as unknown[];
+    expect(andClauses).toEqual(
+      expect.arrayContaining([feedLocaleWhere('my', 'ja')]),
+    );
+    expect(andClauses).not.toEqual(
+      expect.arrayContaining([feedLocaleWhere('en', 'ja')]),
+    );
+  });
+
+  it('authenticated my user receives my-tagged catalog rows from findMany', async () => {
+    const myRow = {
+      ...sampleRow,
+      contentLocale: 'my',
+      learningLanguage: 'ja',
+    };
+    const { svc, findMany } = mkSvc();
+    findMany.mockResolvedValue([myRow]);
+    (svc as any).prisma.userPreference.findUnique.mockResolvedValue({
+      contentLocale: 'my',
+      learningLanguage: 'ja',
+    });
+    const out = await svc.listFeed({ limit: 15, userId: 'u1' });
+    expect(out.items).toHaveLength(1);
+    expect(findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          AND: expect.arrayContaining([feedLocaleWhere('my', 'ja')]),
+        },
+      }),
+    );
+  });
+
   it('authenticated feed uses saved preferences when params absent', async () => {
     const { svc, findMany } = mkSvc();
     findMany.mockResolvedValue([]);

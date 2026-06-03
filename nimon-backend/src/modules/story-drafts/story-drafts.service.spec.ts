@@ -1,3 +1,4 @@
+import { BadRequestException } from '@nestjs/common';
 import { PublishState } from '@prisma/client';
 import { DEFAULT_DEV_OWNER_ID } from '../auth/dev-owner.constants';
 import { StoryDraftsService } from './story-drafts.service';
@@ -341,6 +342,7 @@ describe('StoryDraftsService.publishFullLearn + publishReadOnly content merge', 
     publishedMonoUpdate?: jest.Mock;
     publishedMonoCreate?: jest.Mock;
     publishedMonoCount?: jest.Mock;
+    userPreferenceFindUnique?: jest.Mock;
   }) {
     return jest.fn(async (fn: (tx: any) => Promise<any>) => {
       const tx = {
@@ -356,6 +358,14 @@ describe('StoryDraftsService.publishFullLearn + publishReadOnly content merge', 
             jest.fn().mockResolvedValue({ id: 'new-mono' }),
           count: mocks.publishedMonoCount ?? jest.fn().mockResolvedValue(0),
         },
+        userPreference: {
+          findUnique:
+            mocks.userPreferenceFindUnique ??
+            jest.fn().mockResolvedValue({
+              contentLocale: 'my',
+              learningLanguage: 'ja',
+            }),
+        },
       };
       return fn(tx);
     });
@@ -368,6 +378,8 @@ describe('StoryDraftsService.publishFullLearn + publishReadOnly content merge', 
     updatedAt: new Date('2026-01-01'),
     promptSourceNote: HTML_AI_N5_3_5.promptSourceNote,
     targetDurationBandKey: HTML_AI_N5_3_5.targetDurationBandKey,
+    contentLocale: 'my',
+    learningLanguage: 'ja',
     publishState: 'reading_only_published',
     readingOnlyPublishedAt: new Date('2026-01-01'),
     fullLearnPublishedAt: null as Date | null,
@@ -483,6 +495,8 @@ describe('StoryDraftsService.publishFullLearn + publishReadOnly content merge', 
     expect(monoData.title).toBe('Title');
     expect(monoData.description).toBe('desc');
     expect(monoData.publishKind).toBe('full_learn_v1');
+    expect(monoData.contentLocale).toBe('my');
+    expect(monoData.learningLanguage).toBe('ja');
     expect(monoData.hasAudio).toBe(true);
     expect(monoData.sentenceCount).toBe(HTML_AI_N5_3_5.sentenceCount);
     expect(monoData.vocabCount).toBe(HTML_AI_N5_3_5.vocabCount);
@@ -699,11 +713,94 @@ describe('StoryDraftsService.publishFullLearn + publishReadOnly content merge', 
     expect(coreSentences[2].content.japaneseText).toBe('三'.repeat(HTML_AI_N5_3_5.charsPerSentence));
     expect(coreSentences[2].content.meanings).toEqual({ en: 'three' });
   });
+
+  it('publishReadOnly stamps contentLocale from draft not hardcoded en', async () => {
+    const draftId = 'draft-locale-stamp';
+    const publishedMonoUpdate = jest.fn().mockResolvedValue({});
+    const draftBefore = {
+      ...baseDraftShape,
+      id: draftId,
+      version: 3,
+      publishedMonoId: 'mono-ls',
+      title: 'Title',
+      category: 'cat',
+      level: 'n5',
+      description: 'desc',
+      contentLocale: 'my',
+      learningLanguage: 'ja',
+      moduleWorkflowStatuses: {
+        vocabulary_kanji: 'completed',
+        grammar: 'completed',
+        quiz: 'completed',
+        audio: 'completed',
+      },
+      sentences: htmlValidSentences(
+        HTML_AI_N5_3_5.sentenceCount,
+        HTML_AI_N5_3_5.charsPerSentence,
+      ),
+      vocabEntries: htmlValidVocabFiller(0, HTML_AI_N5_3_5.vocabCount),
+      grammarEntries: htmlValidGrammarFiller(0, HTML_AI_N5_3_5.grammarCount),
+      quizEntries: htmlValidQuizFiller(0, {
+        vocab: HTML_AI_N5_3_5.quizVocab,
+        grammar: HTML_AI_N5_3_5.quizGrammar,
+        sentence: HTML_AI_N5_3_5.quizSentence,
+      }),
+      audios: [],
+    };
+
+    const prisma = {
+      $transaction: txFactory({
+        storyDraftFindFirst: jest.fn().mockResolvedValue(draftBefore),
+        storyDraftUpdateMany: jest.fn().mockResolvedValue({ count: 1 }),
+        publishedMonoFindUnique: jest.fn().mockResolvedValue({ content: {} }),
+        publishedMonoUpdate,
+      }),
+    } as any;
+
+    await new StoryDraftsService(prisma).publishReadOnly(ownerId, draftId, '"v3"');
+
+    const monoData = publishedMonoUpdate.mock.calls[0][0].data as Record<string, unknown>;
+    expect(monoData.contentLocale).toBe('my');
+    expect(monoData.learningLanguage).toBe('ja');
+  });
+
+  it('publishReadOnly rejects ja+ja draft language pair', async () => {
+    const draftBefore = {
+      ...baseDraftShape,
+      id: 'draft-bad-pair',
+      version: 1,
+      publishedMonoId: null,
+      contentLocale: 'ja',
+      learningLanguage: 'ja',
+      sentences: htmlValidSentences(24, 15),
+      vocabEntries: [],
+      grammarEntries: [],
+      quizEntries: [],
+      audios: [],
+      moduleWorkflowStatuses: {},
+    };
+
+    const prisma = {
+      $transaction: txFactory({
+        storyDraftFindFirst: jest.fn().mockResolvedValue(draftBefore),
+        storyDraftUpdateMany: jest.fn(),
+      }),
+    } as any;
+
+    await expect(
+      new StoryDraftsService(prisma).publishReadOnly(ownerId, 'draft-bad-pair', '"v1"'),
+    ).rejects.toThrow(BadRequestException);
+  });
 });
 
 describe('StoryDraftsService.updateDraft', () => {
   const ownerId = LIST_OWNER;
   const draftId = 'draft-update-linked';
+
+  const userPreferenceFindUnique = jest.fn().mockResolvedValue({
+    contentLocale: 'en',
+    learningLanguage: 'ja',
+  });
 
   const minimalWriteBody = {
     schemaVersion: 1 as const,
@@ -798,6 +895,7 @@ describe('StoryDraftsService.updateDraft', () => {
         };
         return fn(tx);
       }),
+      userPreference: { findUnique: userPreferenceFindUnique },
     } as any;
 
     await new StoryDraftsService(prisma).updateDraft(
@@ -880,6 +978,7 @@ describe('StoryDraftsService.updateDraft', () => {
         };
         return fn(tx);
       }),
+      userPreference: { findUnique: userPreferenceFindUnique },
     } as any;
 
     await new StoryDraftsService(prisma).updateDraft(
@@ -969,6 +1068,7 @@ describe('StoryDraftsService.updateDraft', () => {
         };
         return fn(tx);
       }),
+      userPreference: { findUnique: userPreferenceFindUnique },
     } as any;
 
     await new StoryDraftsService(prisma).updateDraft(ownerId, draftId, reorderBody as any, '"v1"');
@@ -1058,6 +1158,7 @@ describe('StoryDraftsService.updateDraft', () => {
         };
         return fn(tx);
       }),
+      userPreference: { findUnique: userPreferenceFindUnique },
     } as any;
 
     const svc = new StoryDraftsService(prisma);

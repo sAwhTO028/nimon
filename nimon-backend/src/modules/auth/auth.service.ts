@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   Injectable,
   UnauthorizedException,
@@ -26,8 +27,15 @@ import {
   validateProfileHandle,
 } from '../../common/validation/profile-validation';
 import {
+  assertDistinctLanguagePair,
+  safeV1ContentLocale,
+  safeV1LearningLanguage,
+} from '../../common/validation/language-pair-validation';
+import {
   DEFAULT_ME_PREFERENCES,
   READING_TEXT_SIZES,
+  type ContentLocale,
+  type LearningLanguage,
   type MePreferencesResponseDto,
   type PatchMePreferencesDto,
   type ReadingTextSize,
@@ -545,6 +553,33 @@ export class AuthService {
       } else {
         data.showExplanations = false;
       }
+    }
+
+    const current = await this.getMePreferences(userId);
+    let nextContent: ContentLocale = current.contentLocale;
+    let nextLearning: LearningLanguage = current.learningLanguage;
+    if (dto.contentLocale !== undefined) {
+      nextContent =
+        dto.contentLocale === null
+          ? DEFAULT_ME_PREFERENCES.contentLocale
+          : dto.contentLocale;
+    }
+    if (dto.learningLanguage !== undefined) {
+      nextLearning =
+        dto.learningLanguage === null
+          ? DEFAULT_ME_PREFERENCES.learningLanguage
+          : dto.learningLanguage;
+    }
+    try {
+      assertDistinctLanguagePair(
+        safeV1ContentLocale(nextContent),
+        safeV1LearningLanguage(nextLearning),
+      );
+    } catch (e) {
+      if (e instanceof BadRequestException) {
+        throw new BadRequestException('language_pair_same_not_allowed');
+      }
+      throw e;
     }
 
     const out = await this.prisma.userPreference.upsert({

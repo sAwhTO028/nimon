@@ -149,6 +149,12 @@ model StoryDraft {
   targetDurationBandKey String?
   coverImageUrl         String?
 
+  /// M22D-1: community / audience language (`en` | `my` | `ja`). Null → publish uses user prefs.
+  contentLocale String?
+
+  /// M22D-1: target language being learned (V1: `ja`). Null → publish uses user prefs.
+  learningLanguage String?
+
   // moduleWorkflowStatuses: Map<learnModuleId, ModuleTaskStatus> (stored as JSON for V1)
   moduleWorkflowStatuses Json @default("{}")
 

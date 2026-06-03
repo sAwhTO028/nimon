@@ -9,6 +9,10 @@ import { ValidationMode } from '../../common/validation/validation-mode';
 import { assertNoBlockingValidationIssues } from '../../common/validation/validation-exception';
 import { combine, type ValidationResult } from '../../common/validation/validation-result';
 import {
+  resolvePublishLanguageTags,
+  type ResolvedPublishLanguageTags,
+} from '../../common/validation/language-pair-validation';
+import {
   storyPublishInputFromDraftRow,
   validateStoryPublishInput,
 } from '../../common/validation/publish-validation';
@@ -278,6 +282,48 @@ export class StoryDraftsService {
     });
   }
 
+  private async resolveDraftLanguageTagsForWrite(
+    ownerId: string,
+    draftContentLocale?: string | null,
+    draftLearningLanguage?: string | null,
+  ): Promise<ResolvedPublishLanguageTags> {
+    const pref = await this.prisma.userPreference.findUnique({
+      where: { userId: ownerId },
+      select: { contentLocale: true, learningLanguage: true },
+    });
+    return resolvePublishLanguageTags({
+      draftContentLocale,
+      draftLearningLanguage,
+      prefContentLocale: pref?.contentLocale,
+      prefLearningLanguage: pref?.learningLanguage,
+    });
+  }
+
+  private async resolvePublishLanguageTagsForDraft(
+    ownerId: string,
+    draft: { contentLocale?: string | null; learningLanguage?: string | null },
+    tx?: {
+      userPreference: {
+        findUnique: (args: {
+          where: { userId: string };
+          select: { contentLocale: true; learningLanguage: true };
+        }) => Promise<{ contentLocale: string | null; learningLanguage: string | null } | null>;
+      };
+    },
+  ): Promise<ResolvedPublishLanguageTags> {
+    const prefClient = tx?.userPreference ?? this.prisma.userPreference;
+    const pref = await prefClient.findUnique({
+      where: { userId: ownerId },
+      select: { contentLocale: true, learningLanguage: true },
+    });
+    return resolvePublishLanguageTags({
+      draftContentLocale: draft.contentLocale,
+      draftLearningLanguage: draft.learningLanguage,
+      prefContentLocale: pref?.contentLocale,
+      prefLearningLanguage: pref?.learningLanguage,
+    });
+  }
+
   private mapFullDraft(draft: any): StoryDraftResponseDto {
     const etag = this.etagFromVersion(draft.version);
     const createdAt = draft.createdAt.toISOString();
@@ -328,6 +374,8 @@ export class StoryDraftsService {
         promptSourceNote: draft.promptSourceNote ?? '',
         targetDurationBandKey: draft.targetDurationBandKey ?? null,
         coverImageUrl: draft.coverImageUrl ?? null,
+        contentLocale: draft.contentLocale ?? null,
+        learningLanguage: draft.learningLanguage ?? null,
         createdAt,
         updatedAt,
       },
@@ -394,6 +442,13 @@ export class StoryDraftsService {
       );
     }
 
+    const basicsAny = basics as Record<string, unknown>;
+    const languageTags = await this.resolveDraftLanguageTagsForWrite(
+      ownerId,
+      basicsAny.contentLocale as string | null | undefined,
+      basicsAny.learningLanguage as string | null | undefined,
+    );
+
     const created = await this.prisma.storyDraft.create({
       data: {
         id: draftId,
@@ -408,6 +463,8 @@ export class StoryDraftsService {
         promptSourceNote: basics.promptSourceNote ?? '',
         targetDurationBandKey: basics.targetDurationBandKey ?? null,
         coverImageUrl: basics.coverImageUrl ?? null,
+        contentLocale: languageTags.contentLocale,
+        learningLanguage: languageTags.learningLanguage,
         moduleWorkflowStatuses: this.ensureModuleWorkflowStatuses(null),
       },
       include: {
@@ -585,6 +642,13 @@ export class StoryDraftsService {
     const quiz = body.quiz?.entries ?? [];
     const storyAudio = body.audio?.storyAudio ?? null;
 
+    const basicsAny = basics as Record<string, unknown>;
+    const languageTags = await this.resolveDraftLanguageTagsForWrite(
+      ownerId,
+      basicsAny.contentLocale as string | null | undefined,
+      basicsAny.learningLanguage as string | null | undefined,
+    );
+
     const updated = await this.prisma.$transaction(async (tx) => {
       const current = await tx.storyDraft.findFirst({
         where: { id: draftId, ownerId },
@@ -686,6 +750,8 @@ export class StoryDraftsService {
           promptSourceNote: basics.promptSourceNote ?? '',
           targetDurationBandKey: basics.targetDurationBandKey ?? null,
           coverImageUrl: basics.coverImageUrl ?? null,
+          contentLocale: languageTags.contentLocale,
+          learningLanguage: languageTags.learningLanguage,
           moduleWorkflowStatuses: this.ensureModuleWorkflowStatuses(
             body.moduleWorkflowStatuses,
           ),
@@ -1041,6 +1107,12 @@ export class StoryDraftsService {
         this.throwConflict(draft.version);
       }
 
+      const publishLanguageTags = await this.resolvePublishLanguageTagsForDraft(
+        ownerId,
+        draft,
+        tx,
+      );
+
       const pubCheck = validateStoryPublishInput(
         storyPublishInputFromDraftRow(draft),
         ValidationMode.ReadOnlyPublish,
@@ -1085,8 +1157,8 @@ export class StoryDraftsService {
             category: draft.category ?? '',
             level: draft.level ?? '',
             description: draft.description ?? '',
-            contentLocale: 'en',
-            learningLanguage: 'ja',
+            contentLocale: publishLanguageTags.contentLocale,
+            learningLanguage: publishLanguageTags.learningLanguage,
             content: { sourceDraftId: draft.id },
           },
           select: { id: true },
@@ -1143,8 +1215,8 @@ export class StoryDraftsService {
           category: draft.category ?? '',
           level: draft.level ?? '',
           description: draft.description ?? '',
-          contentLocale: 'en',
-          learningLanguage: 'ja',
+          contentLocale: publishLanguageTags.contentLocale,
+          learningLanguage: publishLanguageTags.learningLanguage,
           content,
           ...feedSummary,
         },
@@ -1225,6 +1297,12 @@ export class StoryDraftsService {
       if (requiredIfMatch !== currentEtag) {
         this.throwConflict(draft.version);
       }
+
+      const publishLanguageTags = await this.resolvePublishLanguageTagsForDraft(
+        ownerId,
+        draft,
+        tx,
+      );
 
       const learnCheck = validateStoryPublishInput(
         storyPublishInputFromDraftRow(draft),
@@ -1331,8 +1409,8 @@ export class StoryDraftsService {
               category: reloaded.category ?? '',
               level: reloaded.level ?? '',
               description: reloaded.description ?? '',
-              contentLocale: 'en',
-              learningLanguage: 'ja',
+              contentLocale: publishLanguageTags.contentLocale,
+              learningLanguage: publishLanguageTags.learningLanguage,
               content,
               ...feedSummary,
             },

@@ -524,6 +524,69 @@ describe('MeController preferences', () => {
     await nest.close();
   });
 
+  it('PATCH rejects contentLocale ja when learningLanguage is ja', async () => {
+    const nest = app.createNestApplication();
+    nest.useGlobalPipes(
+      new ValidationPipe({ transform: true, whitelist: true, forbidNonWhitelisted: true }),
+    );
+    await nest.init();
+
+    const prisma = nest.get('PRISMA') as any;
+    prisma.user.findUnique.mockResolvedValue({ id: 'u1' });
+    prisma.userPreference.findUnique.mockResolvedValue({
+      appLocale: null,
+      contentLocale: 'en',
+      learningLanguage: 'ja',
+      themeMode: null,
+      readingTextSize: null,
+      showExplanations: null,
+    });
+
+    await request(nest.getHttpServer())
+      .patch('/v1/me/preferences')
+      .set('Authorization', 'Bearer t')
+      .send({ contentLocale: 'ja' })
+      .expect(400);
+
+    expect(prisma.userPreference.upsert).not.toHaveBeenCalled();
+    await nest.close();
+  });
+
+  it('PATCH contentLocale my with learningLanguage ja passes validation', async () => {
+    const nest = app.createNestApplication();
+    nest.useGlobalPipes(
+      new ValidationPipe({ transform: true, whitelist: true, forbidNonWhitelisted: true }),
+    );
+    await nest.init();
+
+    const prisma = nest.get('PRISMA') as any;
+    prisma.user.findUnique.mockResolvedValue({ id: 'u1' });
+    prisma.userPreference.findUnique.mockResolvedValue({
+      appLocale: null,
+      contentLocale: 'en',
+      learningLanguage: 'ja',
+      themeMode: null,
+      readingTextSize: null,
+      showExplanations: null,
+    });
+    prisma.userPreference.upsert.mockResolvedValue({
+      appLocale: null,
+      contentLocale: 'my',
+      learningLanguage: 'ja',
+      themeMode: null,
+      readingTextSize: null,
+      showExplanations: null,
+    });
+
+    await request(nest.getHttpServer())
+      .patch('/v1/me/preferences')
+      .set('Authorization', 'Bearer t')
+      .send({ contentLocale: 'my' })
+      .expect(200);
+
+    await nest.close();
+  });
+
   it('PATCH rejects invalid contentLocale', async () => {
     const nest = app.createNestApplication();
     nest.useGlobalPipes(

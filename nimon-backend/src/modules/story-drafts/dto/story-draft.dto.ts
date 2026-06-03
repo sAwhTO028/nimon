@@ -12,6 +12,10 @@ export type StoryDraftBasicsDto = {
   promptSourceNote: string;
   targetDurationBandKey: string | null;
   coverImageUrl: string | null;
+  /** Community / audience language (`en` | `my` | `ja`). */
+  contentLocale: string | null;
+  /** Target language being learned (V1: `ja`). */
+  learningLanguage: string | null;
   createdAt: string;
   updatedAt: string;
 };

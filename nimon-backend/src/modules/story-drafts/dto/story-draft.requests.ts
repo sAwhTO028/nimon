@@ -43,6 +43,14 @@ class CreateDraftBasicsDto {
   @IsOptional()
   @IsString()
   coverImageUrl?: string | null;
+
+  @IsOptional()
+  @IsIn(['en', 'my', 'ja'])
+  contentLocale?: string | null;
+
+  @IsOptional()
+  @IsIn(['ja'])
+  learningLanguage?: string | null;
 }
 
 export class CreateStoryDraftRequestDto {
@@ -97,6 +105,14 @@ class StoryDraftBasicsWriteDto {
   @IsOptional()
   @IsString()
   updatedAt?: string;
+
+  @IsOptional()
+  @IsIn(['en', 'my', 'ja'])
+  contentLocale?: string | null;
+
+  @IsOptional()
+  @IsIn(['ja'])
+  learningLanguage?: string | null;
 }
 
 class EntriesWrapperDto {
