@@ -208,27 +208,7 @@ class RemotePublishedMonoRepository {
   }
 
   PublishedMonoListItemDto _listItemFromMap(Map<String, Object?> it) {
-    return PublishedMonoListItemDto(
-      id: _optStr(it['id']) ?? '',
-      ownerId: _optStr(it['ownerId']) ?? '',
-      sourceDraftId: readPublishedMonoSourceDraftIdFromJson(it),
-      title: _optStr(it['title']) ?? '',
-      category: _optStr(it['category']) ?? '',
-      level: _optStr(it['level']) ?? '',
-      description: _optStr(it['description']) ?? '',
-      publishKind: _optStr(it['publishKind']),
-      displayPublishKind: _optStr(it['displayPublishKind']) ?? 'unknown',
-      coverImageUrl: _optStr(it['coverImageUrl']),
-      targetDurationLabel: _optStr(it['targetDurationLabel']),
-      createdAt: _optStr(it['createdAt']) ?? '',
-      updatedAt: _optStr(it['updatedAt']) ?? '',
-      contentSummary: it['contentSummary'],
-      trashedAt: _optStr(it['trashedAt']),
-      writerDisplayName: _optStr(it['writerDisplayName']),
-      writerHandle: _optStr(it['writerHandle']),
-      writerAvatarUrl: _optStr(it['writerAvatarUrl']),
-      shareUrl: _optStr(it['shareUrl']),
-    );
+    return publishedMonoListItemDtoFromBackendJson(it);
   }
 
   String _friendlyBackendUserMessage(http.Response r,

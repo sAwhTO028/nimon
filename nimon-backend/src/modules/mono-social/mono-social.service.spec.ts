@@ -159,5 +159,33 @@ describe('MonoSocialService', () => {
     expect(p2.totalCount).toBe(35);
     expect(prisma.monoBookmark.count).toHaveBeenCalled();
   });
+
+  it('listMyBookmarks returns contentLocale and learningLanguage (M22F-1)', async () => {
+    const { prisma, svc } = mk();
+    prisma.monoBookmark.count.mockResolvedValue(1);
+    prisma.monoBookmark.findMany.mockResolvedValue([
+      {
+        id: '00000000-0000-4000-8000-000000000099',
+        createdAt: new Date(Date.UTC(2026, 0, 20)),
+        publishedMono: {
+          id: monoId,
+          ownerId: userId,
+          title: 'T',
+          category: '',
+          level: 'N5',
+          description: '',
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          content: {},
+          contentLocale: 'en',
+          learningLanguage: 'ja',
+          owner: { profile: { displayName: 'W', handle: 'w' } },
+        },
+      },
+    ]);
+    const out = await svc.listMyBookmarks({ userId, limit: 20 });
+    expect(out.items[0]?.contentLocale).toBe('en');
+    expect(out.items[0]?.learningLanguage).toBe('ja');
+  });
 });
 

@@ -185,6 +185,8 @@ export class MonoSocialService {
             createdAt: true,
             updatedAt: true,
             content: true,
+            contentLocale: true,
+            learningLanguage: true,
             owner: {
               select: {
                 profile: { select: { displayName: true, handle: true } },
@@ -270,6 +272,14 @@ export class MonoSocialService {
         accessType: 'public' as const,
         bookmarkedAt: b.createdAt.toISOString(),
         targetDurationLabel,
+        contentLocale:
+          m.contentLocale != null && String(m.contentLocale).trim() !== ''
+            ? String(m.contentLocale).trim()
+            : null,
+        learningLanguage:
+          m.learningLanguage != null && String(m.learningLanguage).trim() !== ''
+            ? String(m.learningLanguage).trim()
+            : null,
       };
     });
 

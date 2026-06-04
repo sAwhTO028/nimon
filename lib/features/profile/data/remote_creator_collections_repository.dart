@@ -82,6 +82,13 @@ class RemoteCreatorCollectionsRepository {
     try {
       final m = _jsonObject(r);
       final msg = m['message'];
+      if (msg is Map) {
+        final inner = msg['message'];
+        if (inner is String) {
+          final t = inner.trim();
+          if (t.isNotEmpty) return t;
+        }
+      }
       if (msg is String) return msg.trim().isEmpty ? null : msg.trim();
       if (msg is List) {
         final parts =
@@ -117,6 +124,11 @@ class RemoteCreatorCollectionsRepository {
         code == 'collection_not_found' ||
         code == 'collection_item_not_found') {
       throw StateError('Collection not found.');
+    }
+    if (r.statusCode == 400 && code == 'content_locale_mismatch') {
+      throw StateError(
+        'This story belongs to a different community than the collection.',
+      );
     }
     if (code != null &&
         code.isNotEmpty &&
@@ -170,6 +182,7 @@ class RemoteCreatorCollectionsRepository {
     String? coverImageUrl,
     String? visibility,
     int? sortOrder,
+    String? contentLocale,
   }) async {
     final uri = _u('/v1/me/creator-collections');
     final body = <String, Object?>{
@@ -178,6 +191,8 @@ class RemoteCreatorCollectionsRepository {
       if (coverImageUrl != null) 'coverImageUrl': coverImageUrl,
       if (visibility != null) 'visibility': visibility,
       if (sortOrder != null) 'sortOrder': sortOrder,
+      if (contentLocale != null && contentLocale.trim().isNotEmpty)
+        'contentLocale': contentLocale.trim(),
     };
     final resp = await _nimonAuthSend(
       uri,

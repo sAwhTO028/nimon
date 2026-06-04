@@ -137,6 +137,7 @@ describe('CreatorCollectionsService', () => {
       coverImageUrl: null,
       visibility: 'public',
       sortOrder: 0,
+      contentLocale: 'en',
       createdAt: new Date(),
       updatedAt: new Date(),
     });
@@ -146,6 +147,9 @@ describe('CreatorCollectionsService', () => {
         count: jest.fn().mockResolvedValue(9),
       },
       creatorMonoCollectionItem: { groupBy: jest.fn() },
+      userPreference: {
+        findUnique: jest.fn().mockResolvedValue({ contentLocale: 'en' }),
+      },
     } as any;
 
     await new CreatorCollectionsService(prisma, mkMedia()).create(ownerId, {
@@ -157,6 +161,7 @@ describe('CreatorCollectionsService', () => {
         ownerId,
         title: 'Hello',
         visibility: 'public',
+        contentLocale: 'en',
       }),
     });
   });
@@ -218,7 +223,9 @@ describe('CreatorCollectionsService', () => {
   });
 
   it('addItemMine rejects mono not owned by user', async () => {
-    const findFirstColl = jest.fn().mockResolvedValue({ id: collId, ownerId });
+    const findFirstColl = jest
+      .fn()
+      .mockResolvedValue({ id: collId, ownerId, contentLocale: null });
     const findFirstMono = jest.fn().mockResolvedValue(null);
     const prisma = {
       creatorMonoCollection: { findFirst: findFirstColl },
@@ -231,12 +238,17 @@ describe('CreatorCollectionsService', () => {
 
     expect(findFirstMono).toHaveBeenCalledWith({
       where: { id: monoId, ownerId },
+      select: { id: true, contentLocale: true },
     });
   });
 
   it('addItemMine is idempotent when link exists', async () => {
-    const findFirstColl = jest.fn().mockResolvedValue({ id: collId, ownerId });
-    const findFirstMono = jest.fn().mockResolvedValue({ id: monoId, ownerId });
+    const findFirstColl = jest
+      .fn()
+      .mockResolvedValue({ id: collId, ownerId, contentLocale: null });
+    const findFirstMono = jest
+      .fn()
+      .mockResolvedValue({ id: monoId, contentLocale: 'my' });
     const findFirstItem = jest
       .fn()
       .mockResolvedValue({ id: 'item-1', publishedMonoId: monoId, collectionId: collId });
@@ -264,8 +276,12 @@ describe('CreatorCollectionsService', () => {
   });
 
   it('addItemMine moves mono from another collection into target', async () => {
-    const findFirstColl = jest.fn().mockResolvedValue({ id: collId, ownerId });
-    const findFirstMono = jest.fn().mockResolvedValue({ id: monoId, ownerId });
+    const findFirstColl = jest
+      .fn()
+      .mockResolvedValue({ id: collId, ownerId, contentLocale: null });
+    const findFirstMono = jest
+      .fn()
+      .mockResolvedValue({ id: monoId, contentLocale: 'en' });
     const findFirstItem = jest
       .fn()
       .mockResolvedValue({ id: 'item-1', publishedMonoId: monoId, collectionId: 'old-coll' });
@@ -293,10 +309,12 @@ describe('CreatorCollectionsService', () => {
   });
 
   it('bulkAdd skips duplicates and non-owned ids', async () => {
-    const findFirstColl = jest.fn().mockResolvedValue({ id: collId, ownerId });
+    const findFirstColl = jest
+      .fn()
+      .mockResolvedValue({ id: collId, ownerId, contentLocale: null });
     const publishedMonoFindMany = jest
       .fn()
-      .mockResolvedValue([{ id: monoId }]); // only one owned
+      .mockResolvedValue([{ id: monoId, contentLocale: 'my' }]); // only one owned
     const findManyExisting = jest.fn().mockResolvedValue([
       { id: 'item-1', publishedMonoId: monoId, collectionId: collId },
     ]);
@@ -331,8 +349,12 @@ describe('CreatorCollectionsService', () => {
   });
 
   it('bulkAdd moves from another collection into target', async () => {
-    const findFirstColl = jest.fn().mockResolvedValue({ id: collId, ownerId });
-    const publishedMonoFindMany = jest.fn().mockResolvedValue([{ id: monoId }]);
+    const findFirstColl = jest
+      .fn()
+      .mockResolvedValue({ id: collId, ownerId, contentLocale: null });
+    const publishedMonoFindMany = jest
+      .fn()
+      .mockResolvedValue([{ id: monoId, contentLocale: 'my' }]);
     const findManyExisting = jest.fn().mockResolvedValue([
       { id: 'item-1', publishedMonoId: monoId, collectionId: 'old-coll' },
     ]);
@@ -772,8 +794,12 @@ describe('CreatorCollectionsService', () => {
   });
 
   it('addItemMine blocks move into target when target already has 30 items', async () => {
-    const findFirstColl = jest.fn().mockResolvedValue({ id: collId, ownerId });
-    const findFirstMono = jest.fn().mockResolvedValue({ id: monoId, ownerId });
+    const findFirstColl = jest
+      .fn()
+      .mockResolvedValue({ id: collId, ownerId, contentLocale: null });
+    const findFirstMono = jest
+      .fn()
+      .mockResolvedValue({ id: monoId, contentLocale: 'my' });
     const findFirstItem = jest
       .fn()
       .mockResolvedValue({ id: 'item-1', publishedMonoId: monoId, collectionId: 'old-coll' });
@@ -801,8 +827,12 @@ describe('CreatorCollectionsService', () => {
   });
 
   it('bulkAdd blocks when adding would exceed 30 items in target', async () => {
-    const findFirstColl = jest.fn().mockResolvedValue({ id: collId, ownerId });
-    const publishedMonoFindMany = jest.fn().mockResolvedValue([{ id: monoId }]);
+    const findFirstColl = jest
+      .fn()
+      .mockResolvedValue({ id: collId, ownerId, contentLocale: null });
+    const publishedMonoFindMany = jest
+      .fn()
+      .mockResolvedValue([{ id: monoId, contentLocale: 'en' }]);
     const findManyExisting = jest.fn().mockResolvedValue([]);
     const aggregate = jest.fn().mockResolvedValue({ _max: { sortOrder: 0 } });
     const prisma = {
@@ -827,5 +857,216 @@ describe('CreatorCollectionsService', () => {
       }),
     ).rejects.toBeInstanceOf(QuotaExceededException);
     expect(prisma.creatorMonoCollectionItem.create).not.toHaveBeenCalled();
+  });
+
+  it('create defaults contentLocale from user prefs (M22F-2)', async () => {
+    const create = jest.fn().mockResolvedValue({
+      id: collId,
+      ownerId,
+      title: 'T',
+      description: null,
+      coverImageUrl: null,
+      visibility: 'public',
+      sortOrder: 0,
+      contentLocale: 'my',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+    const prisma = {
+      creatorMonoCollection: {
+        count: jest.fn().mockResolvedValue(0),
+        create,
+      },
+      userPreference: {
+        findUnique: jest.fn().mockResolvedValue({ contentLocale: 'my' }),
+      },
+    } as any;
+
+    const out = await new CreatorCollectionsService(prisma, mkMedia()).create(ownerId, {
+      title: 'T',
+    });
+
+    expect(out.collection.contentLocale).toBe('my');
+    expect(create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ contentLocale: 'my' }),
+      }),
+    );
+  });
+
+  it('create with explicit en stores en (M22F-2)', async () => {
+    const create = jest.fn().mockResolvedValue({
+      id: collId,
+      ownerId,
+      title: 'T',
+      description: null,
+      coverImageUrl: null,
+      visibility: 'public',
+      sortOrder: 0,
+      contentLocale: 'en',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+    const prisma = {
+      creatorMonoCollection: {
+        count: jest.fn().mockResolvedValue(0),
+        create,
+      },
+      userPreference: {
+        findUnique: jest.fn().mockResolvedValue({ contentLocale: 'my' }),
+      },
+    } as any;
+
+    const out = await new CreatorCollectionsService(prisma, mkMedia()).create(ownerId, {
+      title: 'T',
+      contentLocale: 'en',
+    });
+
+    expect(out.collection.contentLocale).toBe('en');
+    expect(create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ contentLocale: 'en' }),
+      }),
+    );
+  });
+
+  it('listMine returns collection contentLocale (M22F-2)', async () => {
+    const findMany = jest.fn().mockResolvedValue([
+      {
+        id: collId,
+        ownerId,
+        title: 'T',
+        description: null,
+        coverImageUrl: null,
+        visibility: 'public',
+        contentLocale: 'my',
+        createdAt: new Date('2026-01-01T00:00:00.000Z'),
+        updatedAt: new Date('2026-01-02T00:00:00.000Z'),
+      },
+    ]);
+    const groupBy = jest.fn().mockResolvedValue([{ collectionId: collId, _count: { _all: 1 } }]);
+    const prisma = {
+      creatorMonoCollection: { findMany },
+      creatorMonoCollectionItem: { groupBy, findMany: jest.fn().mockResolvedValue([]) },
+    } as any;
+
+    const out = await new CreatorCollectionsService(prisma, mkMedia()).listMine(ownerId);
+    expect(out.collections[0]?.contentLocale).toBe('my');
+  });
+
+  it('addItemMine rejects content_locale_mismatch for my collection (M22F-2)', async () => {
+    const findFirstColl = jest
+      .fn()
+      .mockResolvedValue({ id: collId, ownerId, contentLocale: 'my' });
+    const findFirstMono = jest
+      .fn()
+      .mockResolvedValue({ id: monoId, contentLocale: 'en' });
+    const prisma = {
+      creatorMonoCollection: { findFirst: findFirstColl },
+      publishedMono: { findFirst: findFirstMono },
+    } as any;
+
+    await expect(
+      new CreatorCollectionsService(prisma, mkMedia()).addItemMine(ownerId, collId, monoId),
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('addItemMine allows en mono into legacy null collection (M22F-2)', async () => {
+    const findFirstColl = jest
+      .fn()
+      .mockResolvedValue({ id: collId, ownerId, contentLocale: null });
+    const findFirstMono = jest
+      .fn()
+      .mockResolvedValue({ id: monoId, contentLocale: 'en' });
+    const findFirstItem = jest
+      .fn()
+      .mockResolvedValue({ id: 'item-1', publishedMonoId: monoId, collectionId: collId });
+    const prisma = {
+      creatorMonoCollection: { findFirst: findFirstColl },
+      publishedMono: { findFirst: findFirstMono },
+      creatorMonoCollectionItem: {
+        findFirst: findFirstItem,
+        aggregate: jest.fn(),
+        create: jest.fn(),
+        update: jest.fn(),
+      },
+      $transaction: async (fn: any) =>
+        await fn({
+          creatorMonoCollectionItem: prisma.creatorMonoCollectionItem,
+        }),
+    } as any;
+
+    const out = await new CreatorCollectionsService(prisma, mkMedia()).addItemMine(ownerId, collId, monoId);
+    expect(out.created).toBe(false);
+  });
+
+  it('bulkAdd rejects when any mono mismatches my collection (M22F-2)', async () => {
+    const findFirstColl = jest
+      .fn()
+      .mockResolvedValue({ id: collId, ownerId, contentLocale: 'my' });
+    const publishedMonoFindMany = jest.fn().mockResolvedValue([
+      { id: monoId, contentLocale: 'my' },
+      { id: 'eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee', contentLocale: 'en' },
+    ]);
+    const prisma = {
+      creatorMonoCollection: { findFirst: findFirstColl },
+      publishedMono: { findMany: publishedMonoFindMany },
+    } as any;
+
+    await expect(
+      new CreatorCollectionsService(prisma, mkMedia()).bulkAddItemsMine(ownerId, collId, {
+        publishedMonoIds: [monoId, 'eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee'],
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('listMineCollectionMonos returns contentLocale and learningLanguage (M22F-1)', async () => {
+    const findFirst = jest.fn().mockResolvedValue({ id: collId, ownerId });
+    const findManyItems = jest.fn().mockResolvedValue([
+      {
+        id: 'eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee',
+        collectionId: collId,
+        publishedMonoId: monoId,
+        sortOrder: 0,
+        createdAt: new Date(),
+        publishedMono: {
+          id: monoId,
+          ownerId,
+          title: 'Mono',
+          category: '',
+          level: 'N5',
+          description: '',
+          createdAt: new Date('2026-01-01T00:00:00.000Z'),
+          updatedAt: new Date('2026-01-02T00:00:00.000Z'),
+          content: {},
+          contentLocale: 'ja',
+          learningLanguage: 'ja',
+        },
+      },
+    ]);
+    const prisma = {
+      creatorMonoCollection: { findFirst },
+      creatorMonoCollectionItem: { findMany: findManyItems },
+      userProfile: {
+        findUnique: jest.fn().mockResolvedValue(null),
+      },
+    } as any;
+
+    const out = await new CreatorCollectionsService(prisma, mkMedia()).listMineCollectionMonos(
+      ownerId,
+      collId,
+    );
+
+    expect(out.items).toHaveLength(1);
+    expect(out.items[0]?.contentLocale).toBe('ja');
+    expect(out.items[0]?.learningLanguage).toBe('ja');
+    expect(findManyItems).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          collectionId: collId,
+          publishedMono: PUBLISHED_MONO_CATALOG_VISIBLE,
+        }),
+      }),
+    );
   });
 });

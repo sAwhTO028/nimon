@@ -104,6 +104,8 @@ describe('StoryDraftsService.listDrafts', () => {
     title?: string | null;
     description?: string | null;
     hasUnpublishedCoreChanges?: boolean;
+    contentLocale?: string | null;
+    learningLanguage?: string | null;
   };
 
   const row = (
@@ -126,6 +128,8 @@ describe('StoryDraftsService.listDrafts', () => {
     hasUnpublishedCoreChanges:
       opts.hasUnpublishedCoreChanges ??
       (publishState === PublishState.draft ? false : true),
+    contentLocale: opts.contentLocale ?? null,
+    learningLanguage: opts.learningLanguage ?? null,
     _count: { sentences },
   });
 
@@ -153,6 +157,37 @@ describe('StoryDraftsService.listDrafts', () => {
     expect(out.items[0].completionPercent).toBeGreaterThanOrEqual(0);
     expect(out.items[0].completionPercent).toBeLessThanOrEqual(100);
     expect(out.items[0].processingStatus).toBeNull();
+  });
+
+  it('includes contentLocale and learningLanguage on summary items (M22F-1)', async () => {
+    const findMany = jest.fn().mockResolvedValue([
+      row('loc', '2026-01-02T00:00:00.000Z', 1, PublishState.draft, {
+        contentLocale: 'my',
+        learningLanguage: 'ja',
+      }),
+      row('leg', '2026-01-01T00:00:00.000Z', 0, PublishState.draft, {
+        contentLocale: null,
+        learningLanguage: null,
+      }),
+    ]);
+    const prisma = {
+      storyDraft: { findMany },
+      user: { upsert: jest.fn().mockResolvedValue(undefined) },
+    } as any;
+    const svc = new StoryDraftsService(prisma);
+    const out = await svc.listDrafts(LIST_OWNER, { limit: '5' });
+    expect(out.items[0].contentLocale).toBe('my');
+    expect(out.items[0].learningLanguage).toBe('ja');
+    expect(out.items[1].contentLocale).toBeNull();
+    expect(out.items[1].learningLanguage).toBeNull();
+    expect(findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        select: expect.objectContaining({
+          contentLocale: true,
+          learningLanguage: true,
+        }),
+      }),
+    );
   });
 
   it('includes targetDurationBandKey on summary items', async () => {

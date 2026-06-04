@@ -10,6 +10,7 @@ class CreatorMonoCollection {
     required this.itemCount,
     required this.createdAt,
     required this.updatedAt,
+    this.contentLocale,
   });
 
   final String id;
@@ -21,6 +22,9 @@ class CreatorMonoCollection {
   final int itemCount;
   final String createdAt;
   final String updatedAt;
+
+  /// Collection community (`en` | `my` | `ja`); null = legacy / mixed.
+  final String? contentLocale;
 
   factory CreatorMonoCollection.fromJson(Map<String, Object?> m) {
     int itemCount(Object? v) {
@@ -40,6 +44,9 @@ class CreatorMonoCollection {
       itemCount: itemCount(m['itemCount']),
       createdAt: (m['createdAt'] ?? '').toString(),
       updatedAt: (m['updatedAt'] ?? '').toString(),
+      contentLocale: m['contentLocale']?.toString().trim().isEmpty == true
+          ? null
+          : m['contentLocale']?.toString().trim(),
     );
   }
 }

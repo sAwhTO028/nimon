@@ -79,6 +79,10 @@ export type DraftListSummaryResponseDto = {
   workspaceState: DraftListWorkspaceState;
   /** Module key from workflow JSON when heuristic finds an active step; otherwise null. */
   lastEditingStep: string | null;
+  /** M22F-1: community / audience (`en` | `my` | `ja`); null = legacy. */
+  contentLocale: string | null;
+  /** M22F-1: target learning language (V1: `ja`); null = legacy. */
+  learningLanguage: string | null;
 };
 
 export type StoryDraftListEnvelopeDto = {

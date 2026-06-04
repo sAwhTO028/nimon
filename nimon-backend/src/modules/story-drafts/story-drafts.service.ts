@@ -877,6 +877,8 @@ export class StoryDraftsService {
         targetDurationBandKey: true,
         moduleWorkflowStatuses: true,
         hasUnpublishedCoreChanges: true,
+        contentLocale: true,
+        learningLanguage: true,
         _count: { select: { sentences: true } },
       },
     });
@@ -1029,6 +1031,8 @@ export class StoryDraftsService {
     targetDurationBandKey: string | null;
     moduleWorkflowStatuses: unknown;
     hasUnpublishedCoreChanges: boolean;
+    contentLocale: string | null;
+    learningLanguage: string | null;
     _count: { sentences: number };
   }): DraftListSummaryResponseDto {
     const ps = d.publishState;
@@ -1081,6 +1085,14 @@ export class StoryDraftsService {
       completionPercent,
       workspaceState: this.listSummaryWorkspaceState(ps, dirty),
       lastEditingStep: this.lastEditingStepFromModuleStatuses(moduleStatuses),
+      contentLocale:
+        d.contentLocale != null && String(d.contentLocale).trim() !== ''
+          ? String(d.contentLocale).trim()
+          : null,
+      learningLanguage:
+        d.learningLanguage != null && String(d.learningLanguage).trim() !== ''
+          ? String(d.learningLanguage).trim()
+          : null,
     };
   }
 

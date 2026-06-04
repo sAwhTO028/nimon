@@ -11,6 +11,7 @@ import 'data/creator_mono_collection.dart';
 import 'data/profile_public_providers.dart';
 import 'mono_story_list_row.dart';
 import 'presentation/providers/my_creator_collections_notifier.dart';
+import 'package:nimon/ui/widgets/community_badge.dart';
 import 'package:nimon/ui/widgets/nimon_circle_nav_button.dart';
 
 class OwnerCreatorCollectionDetailArgs {
@@ -230,6 +231,14 @@ class _OwnerCreatorCollectionDetailScreenState
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: CommunityBadge(
+                    contentLocale: widget.args.collection.contentLocale,
+                    legacyAsMixed: true,
+                  ),
+                ),
+                const SizedBox(height: 8),
                 if (desc.isNotEmpty) ...[
                   Text(
                     desc,
@@ -301,6 +310,8 @@ class _OwnerCreatorCollectionDetailScreenState
                                     : _items[i].bodyText.trim(),
                             jlptLevel: _items[i].level.trim(),
                             thumbnailUrl: _items[i].coverImageUrl,
+                            showCommunityBadge: true,
+                            contentLocale: _items[i].contentLocale,
                             onMenuTap: () =>
                                 unawaited(_showItemMenu(_items[i])),
                           ),

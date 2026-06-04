@@ -65,9 +65,15 @@ class MyCreatorCollectionsNotifier
 
   Future<void> refresh() => load();
 
-  Future<CreatorMonoCollection> createCollection(String title) async {
+  Future<CreatorMonoCollection> createCollection(
+    String title, {
+    String? contentLocale,
+  }) async {
     final trimmed = title.trim();
-    final created = await _repo.createCollection(title: trimmed);
+    final created = await _repo.createCollection(
+      title: trimmed,
+      contentLocale: contentLocale,
+    );
     await load();
     return created;
   }

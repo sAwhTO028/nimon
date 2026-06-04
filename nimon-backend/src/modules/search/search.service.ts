@@ -190,6 +190,8 @@ export class SearchService {
         level: true,
         description: true,
         content: true,
+        contentLocale: true,
+        learningLanguage: true,
         owner: {
           select: {
             profile: {

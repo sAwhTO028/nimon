@@ -23,6 +23,8 @@ export type CreatorMonoCollectionDto = {
   itemCount: number;
   createdAt: string;
   updatedAt: string;
+  /** M22F-2: collection community; null = legacy / mixed. */
+  contentLocale: string | null;
 };
 
 export type CreatorMonoCollectionMonosResponseDto = {
@@ -53,6 +55,12 @@ export class CreateCreatorMonoCollectionDto {
   @IsOptional()
   @IsInt()
   sortOrder?: number;
+
+  /** Optional; when omitted, server defaults from UserPreference.contentLocale. */
+  @IsOptional()
+  @IsString()
+  @IsIn(['en', 'my', 'ja'])
+  contentLocale?: string;
 }
 
 export class UpdateCreatorMonoCollectionDto {

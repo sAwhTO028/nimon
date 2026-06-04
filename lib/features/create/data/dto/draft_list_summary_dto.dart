@@ -27,6 +27,8 @@ class DraftListSummaryDto {
     this.workspaceState,
     this.lastEditingStep,
     this.hasUnpublishedCoreChanges,
+    this.contentLocale,
+    this.learningLanguage,
   });
 
   final String draftId;
@@ -66,6 +68,12 @@ class DraftListSummaryDto {
 
   /// When null on a published row, [effectiveDraftListWorkspaceState] treats as dirty.
   final bool? hasUnpublishedCoreChanges;
+
+  /// Community / audience (`en` | `my` | `ja`); null = legacy.
+  final String? contentLocale;
+
+  /// Target learning language (V1: `ja`); null = legacy.
+  final String? learningLanguage;
 
   /// Interim rows when the list endpoint returns **only** `draftId` (legacy / degraded server).
   factory DraftListSummaryDto.interimIdOnly(String draftId) {
@@ -142,6 +150,8 @@ class DraftListSummaryDto {
       lastEditingStep: lastEditingModuleHeuristic(modMap),
       hasUnpublishedCoreChanges: story.hasUnpublishedCoreChanges ??
           (ps == StoryPublishState.draft ? false : true),
+      contentLocale: story.basics.contentLocale,
+      learningLanguage: story.basics.learningLanguage,
     );
   }
 
@@ -204,6 +214,8 @@ class DraftListSummaryDto {
       workspaceState: wsResolved,
       lastEditingStep: _optStr(m['lastEditingStep']),
       hasUnpublishedCoreChanges: hucForDto,
+      contentLocale: _optStr(m['contentLocale']),
+      learningLanguage: _optStr(m['learningLanguage']),
     );
   }
 

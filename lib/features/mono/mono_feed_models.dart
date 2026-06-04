@@ -77,6 +77,9 @@ class MonoFeedItem {
   /// Server read-duration label (e.g. `3–5 min` from `targetDurationBandKey`).
   final String? readDurationLabel;
 
+  /// Community / audience from catalog row (`en` | `my` | `ja`); null = legacy.
+  final String? contentLocale;
+
   const MonoFeedItem({
     required this.id,
     this.writerId,
@@ -101,6 +104,7 @@ class MonoFeedItem {
     this.shareUrl,
     this.catalogCategory,
     this.readDurationLabel,
+    this.contentLocale,
   });
 
   /// Id for **`/learn/...`** and [catalogPublishedMonoDetailProvider] — never includes

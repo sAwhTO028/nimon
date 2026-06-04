@@ -269,6 +269,8 @@ class _ProfileSavedRemoteTabState extends ConsumerState<ProfileSavedRemoteTab> {
                         jlptLevel: it.level,
                         thumbnailUrl: it.coverImageUrl,
                         publishBadgeText: publishBadgeLabelForMonoFeedItem(it),
+                        showCommunityBadge: true,
+                        contentLocale: it.contentLocale,
                         onMenuTap: null,
                       ),
                     ),

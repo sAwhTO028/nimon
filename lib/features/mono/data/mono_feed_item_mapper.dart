@@ -221,6 +221,7 @@ MonoFeedItem monoFeedItemFromPublishedMonoListItemDto(
     likesCount: likesCount,
     isBookmarkedByMe: isBookmarkedByMe,
     myReaction: myReaction,
+    contentLocale: dto.contentLocale,
   );
 }
 

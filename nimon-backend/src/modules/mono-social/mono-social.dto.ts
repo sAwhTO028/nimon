@@ -33,6 +33,10 @@ export type MonoBookmarksListItemDto = {
   bookmarkedAt: string;
   /** Same derivation as published list (`content.core.targetDurationBandKey`). */
   targetDurationLabel: string | null;
+  /** M22F-1: from `published_monos.contentLocale`; null = legacy. */
+  contentLocale: string | null;
+  /** M22F-1: from `published_monos.learningLanguage`; null = legacy. */
+  learningLanguage: string | null;
 };
 
 export type MonoBookmarksListResponseDto = {

@@ -21,6 +21,8 @@ class PublishedMonoListItemDto {
     this.writerHandle,
     this.writerAvatarUrl,
     this.shareUrl,
+    this.contentLocale,
+    this.learningLanguage,
   });
 
   final String id;
@@ -50,6 +52,12 @@ class PublishedMonoListItemDto {
 
   /// Canonical web share link (`NIMON_PUBLIC_WEB_BASE_URL/mono/:id`) when server sends it.
   final String? shareUrl;
+
+  /// Community / audience (`en` | `my` | `ja`); null = legacy.
+  final String? contentLocale;
+
+  /// Target learning language (V1: `ja`); null = legacy. Not shown in list badges.
+  final String? learningLanguage;
 }
 
 /// Result of `POST .../trash` or `POST .../restore`.
@@ -203,5 +211,7 @@ PublishedMonoListItemDto publishedMonoListItemDtoFromBackendJson(
     writerHandle: optStr(it['writerHandle']),
     writerAvatarUrl: optStr(it['writerAvatarUrl']),
     shareUrl: optStr(it['shareUrl']),
+    contentLocale: optStr(it['contentLocale']),
+    learningLanguage: optStr(it['learningLanguage']),
   );
 }

@@ -243,6 +243,7 @@ class RemoteMonoSocialRepository {
           shareUrl: _optStr(it['shareUrl']),
           catalogCategory: catRaw.isNotEmpty ? catRaw : null,
           readDurationLabel: tdRaw.isNotEmpty ? tdRaw : null,
+          contentLocale: _optStr(it['contentLocale']),
         ),
       );
     }

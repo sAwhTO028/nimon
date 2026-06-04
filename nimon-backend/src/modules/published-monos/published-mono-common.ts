@@ -70,6 +70,22 @@ export function displayKindFrom(publishKind: string | null | undefined): 'read_o
   return 'unknown';
 }
 
+/** Trims nullable locale columns for list/detail DTOs (M22F-1). */
+export function publishedMonoLocaleFields(m: {
+  contentLocale?: string | null;
+  learningLanguage?: string | null;
+}): { contentLocale: string | null; learningLanguage: string | null } {
+  const trim = (v: string | null | undefined): string | null => {
+    if (v == null) return null;
+    const t = String(v).trim();
+    return t.length > 0 ? t : null;
+  };
+  return {
+    contentLocale: trim(m.contentLocale),
+    learningLanguage: trim(m.learningLanguage),
+  };
+}
+
 /**
  * Shallow merge for Prisma Json content.
  */
@@ -86,6 +102,8 @@ export function publishedMonoListItemFromCatalogSummaryRow(
     updatedAt: Date;
     coverImageUrl?: string | null;
     publishKind?: string | null;
+    contentLocale?: string | null;
+    learningLanguage?: string | null;
   },
   mediaPublicBaseUrl: string,
 ): PublishedMonoListItemDto {
@@ -116,6 +134,7 @@ export function publishedMonoListItemFromCatalogSummaryRow(
     writerDisplayName: null,
     writerHandle: null,
     writerAvatarUrl: null,
+    ...publishedMonoLocaleFields(m),
   };
 }
 
@@ -129,6 +148,8 @@ export function publishedMonoListItemFromRow(m: {
   createdAt: Date;
   updatedAt: Date;
   content: unknown;
+  contentLocale?: string | null;
+  learningLanguage?: string | null;
 }, mediaPublicBaseUrl: string): PublishedMonoListItemDto {
   const content = (m.content ?? {}) as any;
   const sourceDraftId =
@@ -169,6 +190,7 @@ export function publishedMonoListItemFromRow(m: {
     writerDisplayName: null,
     writerHandle: null,
     writerAvatarUrl: null,
+    ...publishedMonoLocaleFields(m),
   };
 }
 

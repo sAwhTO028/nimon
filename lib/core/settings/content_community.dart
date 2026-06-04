@@ -72,6 +72,38 @@ String contentCommunityDisplayLabel(String? storedValue) {
   };
 }
 
+/// Compact list-row badge label for owner surfaces (M22F-1): `MY`, `EN`, `JA`, or `—`.
+String contentCommunityBadgeShortLabel(String? contentLocale) {
+  final wire = normalizeContentLocaleWireCode(contentLocale);
+  return switch (wire) {
+    ContentCommunityWire.myanmar => 'MY',
+    ContentCommunityWire.internationalEnglish => 'EN',
+    ContentCommunityWire.japanese => 'JA',
+    _ => '—',
+  };
+}
+
+/// Accessibility / tooltip label for [contentCommunityBadgeShortLabel].
+String contentCommunityBadgeSemanticsLabel(String? contentLocale) {
+  final short = contentCommunityBadgeShortLabel(contentLocale);
+  if (short == '—') return 'Community unset';
+  return contentCommunityDisplayLabel(contentLocale);
+}
+
+/// Collection card badge: `MIX` for legacy/null collection community (M22F-2).
+String contentCommunityCollectionBadgeShortLabel(String? contentLocale) {
+  final wire = normalizeContentLocaleWireCode(contentLocale);
+  if (wire == null) return 'MIX';
+  return contentCommunityBadgeShortLabel(contentLocale);
+}
+
+/// Semantics for collection list badges.
+String contentCommunityCollectionBadgeSemanticsLabel(String? contentLocale) {
+  final wire = normalizeContentLocaleWireCode(contentLocale);
+  if (wire == null) return 'Legacy or mixed community';
+  return contentCommunityDisplayLabel(contentLocale);
+}
+
 /// Returns `true` when import JSON community matches the user's settings wire code.
 bool contentCommunityMatchesPreference({
   required String? preferenceContentLocale,

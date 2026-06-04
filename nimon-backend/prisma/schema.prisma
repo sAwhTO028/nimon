@@ -340,6 +340,9 @@ model CreatorMonoCollection {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
+  /// M22F-2: collection community (`en` | `my` | `ja`). Null = legacy / mixed.
+  contentLocale String?
+
   items CreatorMonoCollectionItem[]
 
   @@index([ownerId, sortOrder, createdAt])

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:nimon/features/profile/public_profile_widgets.dart';
+import 'package:nimon/ui/widgets/community_badge.dart';
 
 /// Thumbnail size for [MonoStoryListRow] (profile, public profile, collections, etc.).
 const double kMonoStoryListThumbSize = 76;
@@ -21,6 +22,8 @@ class MonoStoryListRow extends StatelessWidget {
     this.categoryText,
     this.durationText,
     this.publishBadgeText,
+    this.showCommunityBadge = false,
+    this.contentLocale,
   });
 
   final String title;
@@ -39,6 +42,12 @@ class MonoStoryListRow extends StatelessWidget {
 
   /// e.g. `Read only` / `Full learn` (Published Mono contract v1).
   final String? publishBadgeText;
+
+  /// When true, shows [CommunityBadge] in the chip row (owner surfaces).
+  final bool showCommunityBadge;
+
+  /// `en` | `my` | `ja`; null renders legacy `—` when [showCommunityBadge] is true.
+  final String? contentLocale;
 
   @override
   Widget build(BuildContext context) {
@@ -101,35 +110,44 @@ class MonoStoryListRow extends StatelessWidget {
                     ],
                   ],
                 ),
-                if (publishBadgeText != null &&
-                    publishBadgeText!.trim().isNotEmpty) ...[
+                if (showCommunityBadge ||
+                    (publishBadgeText != null &&
+                        publishBadgeText!.trim().isNotEmpty)) ...[
                   const SizedBox(height: 4),
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        color: theme.colorScheme.surfaceContainerHighest
-                            .withValues(alpha: 0.6),
-                        borderRadius: BorderRadius.circular(6),
-                        border: Border.all(
-                          color: onVar.withValues(alpha: 0.18),
-                        ),
-                      ),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 6,
-                          vertical: 2,
-                        ),
-                        child: Text(
-                          publishBadgeText!.trim(),
-                          style: theme.textTheme.labelSmall?.copyWith(
-                            fontWeight: FontWeight.w700,
-                            color: onVar.withValues(alpha: 0.85),
-                            height: 1.0,
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 4,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      if (showCommunityBadge)
+                        CommunityBadge(contentLocale: contentLocale),
+                      if (publishBadgeText != null &&
+                          publishBadgeText!.trim().isNotEmpty)
+                        DecoratedBox(
+                          decoration: BoxDecoration(
+                            color: theme.colorScheme.surfaceContainerHighest
+                                .withValues(alpha: 0.6),
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(
+                              color: onVar.withValues(alpha: 0.18),
+                            ),
+                          ),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 6,
+                              vertical: 2,
+                            ),
+                            child: Text(
+                              publishBadgeText!.trim(),
+                              style: theme.textTheme.labelSmall?.copyWith(
+                                fontWeight: FontWeight.w700,
+                                color: onVar.withValues(alpha: 0.85),
+                                height: 1.0,
+                              ),
+                            ),
                           ),
                         ),
-                      ),
-                    ),
+                    ],
                   ),
                 ],
                 if ((categoryText != null && categoryText!.trim().isNotEmpty) ||

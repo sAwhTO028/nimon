@@ -35,6 +35,11 @@ import type {
   CreatorMonoCollectionMonosResponseDto,
   UpdateCreatorMonoCollectionDto,
 } from './creator-collections.dto';
+import {
+  assertBulkCollectionContentLocaleCompatible,
+  assertCollectionContentLocaleCompatible,
+  resolveCollectionContentLocaleForCreate,
+} from './collection-content-locale';
 
 const DEFAULT_MONO_PAGE = 20;
 const MAX_MONO_PAGE = 50;
@@ -51,6 +56,8 @@ const PUBLIC_COLLECTION_MONO_SELECT = {
   updatedAt: true,
   coverImageUrl: true,
   publishKind: true,
+  contentLocale: true,
+  learningLanguage: true,
 } as const satisfies Prisma.PublishedMonoSelect;
 
 @Injectable()
@@ -83,9 +90,15 @@ export class CreatorCollectionsService {
       visibility: string;
       createdAt: Date;
       updatedAt: Date;
+      contentLocale?: string | null;
     },
     itemCount: number,
   ): CreatorMonoCollectionDto {
+    const localeRaw = row.contentLocale;
+    const contentLocale =
+      localeRaw != null && String(localeRaw).trim() !== ''
+        ? String(localeRaw).trim()
+        : null;
     return {
       id: row.id,
       ownerId: row.ownerId,
@@ -96,7 +109,22 @@ export class CreatorCollectionsService {
       itemCount,
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
+      contentLocale,
     };
+  }
+
+  private async resolveCreateCollectionContentLocale(
+    ownerId: string,
+    explicit?: string | null,
+  ): Promise<string> {
+    const pref = await this.prisma.userPreference.findUnique({
+      where: { userId: ownerId },
+      select: { contentLocale: true },
+    });
+    return resolveCollectionContentLocaleForCreate(
+      explicit,
+      pref?.contentLocale,
+    );
   }
 
   private catalogVisiblePublishedMonoWhere(
@@ -235,6 +263,10 @@ export class CreatorCollectionsService {
         collectionCount,
       );
     }
+    const contentLocale = await this.resolveCreateCollectionContentLocale(
+      ownerId,
+      dto.contentLocale,
+    );
     const row = await this.prisma.creatorMonoCollection.create({
       data: {
         ownerId,
@@ -243,6 +275,7 @@ export class CreatorCollectionsService {
         coverImageUrl: dto.coverImageUrl ?? null,
         visibility: dto.visibility ?? 'public',
         sortOrder: dto.sortOrder ?? 0,
+        contentLocale,
       },
     });
     return { collection: this.toDto(row, 0) };
@@ -315,10 +348,17 @@ export class CreatorCollectionsService {
 
     const mono = await this.prisma.publishedMono.findFirst({
       where: { id: publishedMonoId, ownerId },
+      select: { id: true, contentLocale: true },
     });
     if (!mono) {
       throw new ForbiddenException('not_owner_of_published_mono');
     }
+
+    assertCollectionContentLocaleCompatible(
+      coll.contentLocale,
+      mono.contentLocale,
+      publishedMonoId,
+    );
 
     // Product rule: a published mono can belong to only one collection.
     // - already in target: no-op
@@ -409,7 +449,7 @@ export class CreatorCollectionsService {
 
     const owned = await this.prisma.publishedMono.findMany({
       where: { ownerId, id: { in: ids } },
-      select: { id: true },
+      select: { id: true, contentLocale: true },
     });
     const ownedSet = new Set(owned.map((o) => o.id));
     const skippedNotOwnedOrMissing = ids.filter((id) => !ownedSet.has(id)).length;
@@ -422,6 +462,12 @@ export class CreatorCollectionsService {
         skippedNotOwnedOrMissing,
       };
     }
+
+    const eligibleMonos = owned.filter((o) => eligible.includes(o.id));
+    assertBulkCollectionContentLocaleCompatible(
+      coll.contentLocale,
+      eligibleMonos,
+    );
 
     // Product rule: one mono can belong to only one collection.
     // Bulk add implements "move to collection" semantics.

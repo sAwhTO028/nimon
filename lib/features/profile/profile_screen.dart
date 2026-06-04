@@ -35,6 +35,7 @@ import 'package:nimon/features/mono/mono_screen.dart'
 import 'package:nimon/features/profile/profile_navigation_drawer.dart';
 import 'package:nimon/features/profile/profile_push_drawer_scope.dart';
 import 'package:nimon/features/profile/mono_story_list_row.dart';
+import 'package:nimon/ui/widgets/community_badge.dart';
 import 'package:nimon/features/profile/profile_processing_refresh.dart';
 import 'package:nimon/features/profile/workspace_draft_menu_policy.dart';
 import 'package:nimon/features/profile/public_profile_widgets.dart';
@@ -81,6 +82,7 @@ class _OneShortItem {
   final String? categoryText;
   final String? targetDurationText;
   final String? publishBadgeText;
+  final String? contentLocale;
 
   const _OneShortItem({
     required this.id,
@@ -94,6 +96,7 @@ class _OneShortItem {
     this.categoryText,
     this.targetDurationText,
     this.publishBadgeText,
+    this.contentLocale,
   });
 }
 
@@ -635,6 +638,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
           publishBadgeText: publishBadgeLabel(
             displayKindFromApi(m.displayPublishKind),
           ),
+          contentLocale: m.contentLocale,
         ),
     ];
   }
@@ -852,9 +856,14 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
       );
       return false;
     }
+    final localeMap = <String, String?>{
+      for (final m in ref.read(profilePublishedMonoPagerProvider).items)
+        if (safeIds.contains(m.id)) m.id: m.contentLocale,
+    };
     return showAddToCollectionSheet(
       context: context,
       publishedMonoIds: safeIds,
+      publishedMonoContentLocales: localeMap,
     );
   }
 
@@ -2500,6 +2509,8 @@ class _FolderGroupListState extends State<_FolderGroupList> {
                                   ? 'Untitled'
                                   : c.title.trim(),
                               countLabel: countLabel,
+                              showCommunityBadge: true,
+                              contentLocale: c.contentLocale,
                               description: (c.description ?? '').trim().isEmpty
                                   ? null
                                   : c.description!.trim(),
@@ -2950,6 +2961,8 @@ class _FolderGroupListState extends State<_FolderGroupList> {
                     categoryText: it.categoryText,
                     durationText: it.targetDurationText,
                     publishBadgeText: it.publishBadgeText,
+                    showCommunityBadge: it.isBackendPublished,
+                    contentLocale: it.contentLocale,
                   ),
                 ),
                 if (_selecting)
@@ -4887,6 +4900,7 @@ class _ProcessingDraftCard extends ConsumerWidget {
                       runSpacing: 4,
                       children: [
                         statusChip,
+                        CommunityBadge(contentLocale: item.summary.contentLocale),
                         _ProcessingChip(label: item.level),
                         _ProcessingChip(label: item.category),
                         _ProcessingChip(label: item.durationLabel),

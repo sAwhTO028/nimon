@@ -179,6 +179,8 @@ export class PublishedMonosService {
         level: true,
         description: true,
         content: true,
+        contentLocale: true,
+        learningLanguage: true,
       },
     });
 
@@ -245,6 +247,8 @@ export class PublishedMonosService {
         level: true,
         description: true,
         content: true,
+        contentLocale: true,
+        learningLanguage: true,
       },
     });
 

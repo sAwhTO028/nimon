@@ -28,6 +28,10 @@ export type PublishedMonoListItemDto = {
    * May be omitted on legacy clients; prefer when present.
    */
   shareUrl?: string;
+  /** M22F-1: community / audience (`en` | `my` | `ja`); null = legacy/untagged. */
+  contentLocale: string | null;
+  /** M22F-1: target learning language (V1: `ja`); null = legacy/untagged. */
+  learningLanguage: string | null;
 };
 
 export type PublishedMonoListResponseDto = {

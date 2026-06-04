@@ -9,8 +9,12 @@ import 'package:nimon/core/validation/app_quota_exceeded_exception.dart';
 import 'package:nimon/core/validation/http_validation_failed_exception.dart';
 import 'package:nimon/core/validation/protected_action.dart';
 import 'package:nimon/core/validation/protected_action_guard.dart';
+import 'package:nimon/core/settings/content_community.dart';
+import 'package:nimon/features/profile/presentation/add_to_collection_locale_policy.dart';
 import 'package:nimon/features/profile/presentation/providers/my_creator_collections_notifier.dart';
 import 'package:nimon/features/profile/data/published_mono_id_sanitizer.dart';
+import 'package:nimon/features/settings/presentation/providers/user_preferences_notifier.dart';
+import 'package:nimon/ui/widgets/community_badge.dart';
 import 'package:nimon/core/validation/collection_validators.dart';
 import 'package:nimon/core/validation/form_validation_adapter.dart';
 import 'package:nimon/core/validation/localized_validation_messages.dart';
@@ -26,6 +30,7 @@ const ValueKey<String> collectionSheetSelectedCountTextKey =
 Future<bool> showAddToCollectionSheet({
   required BuildContext context,
   required List<String> publishedMonoIds,
+  Map<String, String?> publishedMonoContentLocales = const {},
   AddToCollectionSheetMode mode = AddToCollectionSheetMode.createAndAdd,
   bool startInCreateMode = false,
 }) async {
@@ -33,6 +38,23 @@ Future<bool> showAddToCollectionSheet({
     context,
     action: ProtectedActionType.createCollection,
   )) {
+    return false;
+  }
+  if (!context.mounted) return false;
+  final sanitized = PublishedMonoIdSanitizer.sanitize(publishedMonoIds);
+  final localeMap = <String, String?>{
+    for (final id in sanitized)
+      id: publishedMonoContentLocales[id],
+  };
+  if (mode == AddToCollectionSheetMode.createAndAdd &&
+      sanitized.isNotEmpty &&
+      selectedMonosHaveMixedCommunities(localeMap)) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Select monos from the same community.'),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
     return false;
   }
   if (!context.mounted) return false;
@@ -46,6 +68,7 @@ Future<bool> showAddToCollectionSheet({
     builder: (ctx) => ProfileCollectionBottomSheetFrame(
       child: _AddToCollectionSheetBody(
         publishedMonoIds: publishedMonoIds,
+        publishedMonoContentLocales: localeMap,
         mode: mode,
         startInCreateMode: startInCreateMode,
       ),
@@ -65,11 +88,13 @@ enum AddToCollectionSheetMode {
 class _AddToCollectionSheetBody extends ConsumerStatefulWidget {
   const _AddToCollectionSheetBody({
     required this.publishedMonoIds,
+    required this.publishedMonoContentLocales,
     required this.mode,
     required this.startInCreateMode,
   });
 
   final List<String> publishedMonoIds;
+  final Map<String, String?> publishedMonoContentLocales;
   final AddToCollectionSheetMode mode;
   final bool startInCreateMode;
 
@@ -193,9 +218,13 @@ class _AddToCollectionSheetBodyState
       debugPrint('[AddToCollectionSheet] creating collection title="$name"');
     }
     try {
+      final prefs = ref.read(userPreferencesNotifierProvider).prefs;
+      final defaultLocale =
+          normalizeContentLocaleWireCode(prefs.contentLocale) ??
+              ContentCommunityWire.internationalEnglish;
       final created = await ref
           .read(myCreatorCollectionsNotifierProvider.notifier)
-          .createCollection(name);
+          .createCollection(name, contentLocale: defaultLocale);
       if (!mounted) return;
       if (kDebugMode) {
         debugPrint(
@@ -388,24 +417,69 @@ class _AddToCollectionSheetBodyState
                                 const Divider(height: 1),
                             itemBuilder: (ctx, i) {
                               final c = state.collections[i];
+                              final disabledReason =
+                                  collectionPickerDisabledReason(
+                                collection: c,
+                                monoIdToContentLocale:
+                                    widget.publishedMonoContentLocales,
+                              );
+                              final enabled = disabledReason == null;
                               return ListTile(
                                 contentPadding: EdgeInsets.zero,
+                                enabled: enabled,
                                 title: Text(
                                   c.title,
                                   maxLines: 2,
                                   overflow: TextOverflow.ellipsis,
                                   style: theme.textTheme.titleSmall?.copyWith(
                                     fontWeight: FontWeight.w700,
-                                    color: scheme.onSurface,
+                                    color: enabled
+                                        ? scheme.onSurface
+                                        : scheme.onSurface.withValues(
+                                            alpha: 0.45,
+                                          ),
                                   ),
                                 ),
-                                subtitle: Text(
-                                  '${c.itemCount} stor${c.itemCount == 1 ? 'y' : 'ies'}',
-                                  style: theme.textTheme.bodySmall?.copyWith(
-                                    color: scheme.onSurfaceVariant,
-                                  ),
+                                subtitle: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Wrap(
+                                      spacing: 6,
+                                      runSpacing: 4,
+                                      crossAxisAlignment:
+                                          WrapCrossAlignment.center,
+                                      children: [
+                                        CommunityBadge(
+                                          contentLocale: c.contentLocale,
+                                          legacyAsMixed: true,
+                                        ),
+                                        Text(
+                                          '${c.itemCount} stor${c.itemCount == 1 ? 'y' : 'ies'}',
+                                          style:
+                                              theme.textTheme.bodySmall?.copyWith(
+                                            color: scheme.onSurfaceVariant,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    if (disabledReason != null) ...[
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        disabledReason,
+                                        style:
+                                            theme.textTheme.labelSmall?.copyWith(
+                                          color: scheme.error.withValues(
+                                            alpha: 0.85,
+                                          ),
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ],
+                                  ],
                                 ),
-                                onTap: () => unawaited(_bulkAddTo(c.id)),
+                                onTap: enabled
+                                    ? () => unawaited(_bulkAddTo(c.id))
+                                    : null,
                               );
                             },
                           ),

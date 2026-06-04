@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:nimon/features/profile/public_profile_data.dart';
 import 'package:nimon/ui/nimon_story_cover_image.dart';
+import 'package:nimon/ui/widgets/community_badge.dart';
 
 /// Thumbnail + JLPT badge for public story rows.
 class PublicStoryThumb extends StatelessWidget {
@@ -86,6 +87,8 @@ class CollectionListRow extends StatelessWidget {
     this.description,
     this.coverImageUrl,
     this.trailing,
+    this.showCommunityBadge = false,
+    this.contentLocale,
   });
 
   final String title;
@@ -93,6 +96,11 @@ class CollectionListRow extends StatelessWidget {
   final String? description;
   final String? coverImageUrl;
   final Widget? trailing;
+
+  /// Owner surfaces: show collection community chip on count line.
+  final bool showCommunityBadge;
+
+  final String? contentLocale;
 
   @override
   Widget build(BuildContext context) {
@@ -140,15 +148,37 @@ class CollectionListRow extends StatelessWidget {
                   ],
                 ),
                 const SizedBox(height: 4),
-                Text(
-                  countLabel,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.labelMedium?.copyWith(
-                    color: onVar.withValues(alpha: 0.9),
-                    fontWeight: FontWeight.w600,
+                if (showCommunityBadge)
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 4,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      CommunityBadge(
+                        contentLocale: contentLocale,
+                        legacyAsMixed: true,
+                      ),
+                      Text(
+                        countLabel,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.labelMedium?.copyWith(
+                          color: onVar.withValues(alpha: 0.9),
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  )
+                else
+                  Text(
+                    countLabel,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.labelMedium?.copyWith(
+                      color: onVar.withValues(alpha: 0.9),
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
-                ),
                 if (desc.isNotEmpty) ...[
                   const SizedBox(height: 4),
                   Text(
