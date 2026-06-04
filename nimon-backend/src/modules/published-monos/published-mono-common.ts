@@ -73,6 +73,52 @@ export function displayKindFrom(publishKind: string | null | undefined): 'read_o
 /**
  * Shallow merge for Prisma Json content.
  */
+/** M22B / M22E: list rows from denormalized columns (no `content` JSONB select). */
+export function publishedMonoListItemFromCatalogSummaryRow(
+  m: {
+    id: string;
+    ownerId: string;
+    title: string;
+    category: string;
+    level: string;
+    description: string;
+    createdAt: Date;
+    updatedAt: Date;
+    coverImageUrl?: string | null;
+    publishKind?: string | null;
+  },
+  mediaPublicBaseUrl: string,
+): PublishedMonoListItemDto {
+  const publishKind =
+    typeof m.publishKind === 'string' && m.publishKind.trim() !== ''
+      ? m.publishKind.trim()
+      : null;
+  const contentSummary = publishKind
+    ? { publishKind, updatedAt: null as string | null }
+    : null;
+  const coverImageUrl = canonicalizeMediaUrl(m.coverImageUrl ?? null, mediaPublicBaseUrl);
+
+  return {
+    id: m.id,
+    ownerId: m.ownerId,
+    sourceDraftId: null,
+    title: m.title ?? '',
+    category: m.category ?? '',
+    level: m.level ?? '',
+    description: m.description ?? '',
+    publishKind,
+    displayPublishKind: displayKindFrom(publishKind),
+    coverImageUrl,
+    targetDurationLabel: null,
+    createdAt: m.createdAt.toISOString(),
+    updatedAt: m.updatedAt.toISOString(),
+    contentSummary,
+    writerDisplayName: null,
+    writerHandle: null,
+    writerAvatarUrl: null,
+  };
+}
+
 export function publishedMonoListItemFromRow(m: {
   id: string;
   ownerId: string;

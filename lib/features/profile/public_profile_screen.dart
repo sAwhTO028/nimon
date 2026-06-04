@@ -27,6 +27,7 @@ import 'package:nimon/features/profile/presentation/providers/my_creator_collect
 import 'package:nimon/features/mono/data/mono_feed_providers.dart'
     show remoteUserFollowRepositoryProvider, followingMonoFeedPagerProvider;
 import 'package:nimon/features/profile/presentation/providers/profile_following_pager.dart';
+import 'package:nimon/features/settings/presentation/providers/user_preferences_notifier.dart';
 import 'package:nimon/ui/widgets/nimon_circle_nav_button.dart';
 
 /// Remote public profile flexible **image** slot height (below toolbar).
@@ -439,6 +440,23 @@ class _PublicProfileScreenState extends ConsumerState<PublicProfileScreen>
     final topPad = MediaQuery.paddingOf(context).top;
     final monosListKey = _routeUserId.isEmpty ? '__none__' : _routeUserId;
     final monosState = ref.watch(publicProfileMonosProvider(monosListKey));
+
+    if (_useRemoteProfile) {
+      ref.listen(userPreferencesNotifierProvider, (prev, next) {
+        if (prev == null) return;
+        final prevLocale = prev.prefs.contentLocale;
+        final nextLocale = next.prefs.contentLocale;
+        final prevLearn = prev.prefs.learningLanguage;
+        final nextLearn = next.prefs.learningLanguage;
+        if (prevLocale == nextLocale && prevLearn == nextLearn) return;
+        _publicCollectionsLoaded = false;
+        if (_tabController.index == 1) {
+          unawaited(_loadPublicCollections(force: true));
+        } else if (mounted) {
+          setState(() {});
+        }
+      });
+    }
 
     if (_useRemoteProfile) {
       if (_loadingProfile && _remoteProfile == null) {

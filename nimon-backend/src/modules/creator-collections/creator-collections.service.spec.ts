@@ -10,8 +10,22 @@ import { FREE_TIER_QUOTA_KEYS, FREE_TIER_QUOTAS } from '../../common/limits/free
 
 import { canonicalizeMediaUrl } from '../media/media-url-canonicalizer';
 import type { MediaUrlCanonicalizerService } from '../media/media-url-canonicalizer.service';
+import { publishedMonoCatalogLocaleWhere } from '../published-monos/published-mono-catalog-locale';
 import { PUBLISHED_MONO_CATALOG_VISIBLE } from '../published-monos/published-mono-visibility';
 import { CreatorCollectionsService } from './creator-collections.service';
+
+const catalogVisibleForLocale = (
+  contentLocale: 'en' | 'my' | 'ja',
+  learningLanguage: 'ja' = 'ja',
+) => ({
+  AND: [
+    PUBLISHED_MONO_CATALOG_VISIBLE,
+    publishedMonoCatalogLocaleWhere({
+      effectiveContentLocale: contentLocale,
+      effectiveLearningLanguage: learningLanguage,
+    }),
+  ],
+});
 
 function mkMedia(
   base = 'http://localhost:3000/uploads',
@@ -355,6 +369,7 @@ describe('CreatorCollectionsService', () => {
         groupBy: jest.fn().mockResolvedValue([]),
         findMany: jest.fn().mockResolvedValue([]),
       },
+      userPreference: { findUnique: jest.fn() },
     } as any;
 
     await new CreatorCollectionsService(prisma, mkMedia()).listPublicForUser(ownerId);
@@ -449,7 +464,7 @@ describe('CreatorCollectionsService', () => {
     expect(out.collections[0].coverImageUrl).toBe('https://img.test/explicit.png');
   });
 
-  it('listPublicCollectionMonos applies catalog visibility filter', async () => {
+  it('listPublicCollectionMonos applies catalog visibility and guest locale filter', async () => {
     const findFirst = jest.fn().mockResolvedValue({
       id: collId,
       ownerId,
@@ -460,6 +475,7 @@ describe('CreatorCollectionsService', () => {
       creatorMonoCollection: { findFirst },
       creatorMonoCollectionItem: { findMany },
       userProfile: { findUnique: jest.fn().mockResolvedValue(null) },
+      userPreference: { findUnique: jest.fn() },
     } as any;
 
     await new CreatorCollectionsService(prisma, mkMedia()).listPublicCollectionMonos(ownerId, collId);
@@ -468,7 +484,10 @@ describe('CreatorCollectionsService', () => {
       expect.objectContaining({
         where: expect.objectContaining({
           collectionId: collId,
-          publishedMono: PUBLISHED_MONO_CATALOG_VISIBLE,
+          publishedMono: catalogVisibleForLocale('en', 'ja'),
+        }),
+        select: expect.objectContaining({
+          publishedMono: expect.any(Object),
         }),
       }),
     );
@@ -495,7 +514,6 @@ describe('CreatorCollectionsService', () => {
     const findMany = jest.fn().mockResolvedValue([
       {
         id: 'it1',
-        collectionId: collId,
         publishedMono: {
           id: monoId,
           ownerId,
@@ -505,13 +523,15 @@ describe('CreatorCollectionsService', () => {
           description: 'd',
           createdAt: new Date('2026-01-01T00:00:00.000Z'),
           updatedAt: new Date('2026-01-02T00:00:00.000Z'),
-          content: {},
+          coverImageUrl: null,
+          publishKind: null,
         },
       },
     ]);
     const prisma = {
       creatorMonoCollection: { findFirst },
       creatorMonoCollectionItem: { findMany },
+      userPreference: { findUnique: jest.fn() },
       userProfile: {
         findUnique: jest.fn().mockResolvedValue({
           displayName: 'Author',
@@ -526,6 +546,229 @@ describe('CreatorCollectionsService', () => {
     expect(out.items[0]?.writerDisplayName).toBe('Author');
     expect(out.items[0]?.writerHandle).toBe('auth_one');
     expect(out.items[0]?.writerAvatarUrl).toBe('https://avatar.test/a.png');
+  });
+
+  describe('M22E-1 public viewer language filter', () => {
+    const viewerId = 'eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee';
+    const monoMy = '11111111-1111-1111-1111-111111111111';
+
+    const prismaWithMyJaViewer = (overrides: Record<string, unknown> = {}) =>
+      ({
+        userPreference: {
+          findUnique: jest.fn().mockResolvedValue({
+            contentLocale: 'my',
+            learningLanguage: 'ja',
+          }),
+        },
+        ...overrides,
+      }) as any;
+
+    it('listPublicForUser returns filtered itemCount and hides empty collections (my+ja viewer)', async () => {
+      const findMany = jest.fn().mockResolvedValue([
+        {
+          id: collId,
+          ownerId,
+          title: 'Mixed',
+          description: null,
+          coverImageUrl: null,
+          visibility: 'public',
+          sortOrder: 0,
+          createdAt: new Date('2026-01-01T00:00:00.000Z'),
+          updatedAt: new Date('2026-01-02T00:00:00.000Z'),
+        },
+        {
+          id: 'coll-en-only',
+          ownerId,
+          title: 'En only',
+          description: null,
+          coverImageUrl: null,
+          visibility: 'public',
+          sortOrder: 1,
+          createdAt: new Date('2026-01-01T00:00:00.000Z'),
+          updatedAt: new Date('2026-01-02T00:00:00.000Z'),
+        },
+      ]);
+      const groupBy = jest.fn().mockResolvedValue([
+        { collectionId: collId, _count: { _all: 1 } },
+        { collectionId: 'coll-en-only', _count: { _all: 0 } },
+      ]);
+      const coverFindMany = jest.fn().mockResolvedValue([
+        {
+          collectionId: collId,
+          publishedMono: { coverImageUrl: 'https://img.test/my-cover.png' },
+        },
+      ]);
+      const prisma = prismaWithMyJaViewer({
+        creatorMonoCollection: { findMany },
+        creatorMonoCollectionItem: { groupBy, findMany: coverFindMany },
+      });
+
+      const out = await new CreatorCollectionsService(prisma, mkMedia()).listPublicForUser(
+        ownerId,
+        { viewerUserId: viewerId },
+      );
+
+      expect(groupBy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            publishedMono: catalogVisibleForLocale('my', 'ja'),
+          }),
+        }),
+      );
+      expect(out.collections).toHaveLength(1);
+      expect(out.collections[0].id).toBe(collId);
+      expect(out.collections[0].itemCount).toBe(1);
+      expect(out.collections[0].coverImageUrl).toBe('https://img.test/my-cover.png');
+    });
+
+    it('listPublicCollectionMonos returns only viewer-visible monos for my+ja', async () => {
+      const findFirst = jest.fn().mockResolvedValue({
+        id: collId,
+        ownerId,
+        visibility: 'public',
+      });
+      const findMany = jest.fn().mockResolvedValue([
+        {
+          id: 'item-my',
+          publishedMono: {
+            id: monoMy,
+            ownerId,
+            title: 'My mono',
+            category: 'c',
+            level: 'N5',
+            description: 'd',
+            createdAt: new Date('2026-01-01T00:00:00.000Z'),
+            updatedAt: new Date('2026-01-02T00:00:00.000Z'),
+            coverImageUrl: 'https://img.test/a.png',
+            publishKind: 'read_only_v1',
+          },
+        },
+      ]);
+      const prisma = prismaWithMyJaViewer({
+        creatorMonoCollection: { findFirst },
+        creatorMonoCollectionItem: { findMany },
+        userProfile: { findUnique: jest.fn().mockResolvedValue(null) },
+      });
+
+      const out = await new CreatorCollectionsService(prisma, mkMedia()).listPublicCollectionMonos(
+        ownerId,
+        collId,
+        undefined,
+        undefined,
+        { viewerUserId: viewerId },
+      );
+
+      expect(findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            publishedMono: catalogVisibleForLocale('my', 'ja'),
+          }),
+        }),
+      );
+      expect(out.items).toHaveLength(1);
+      expect(out.items[0]?.id).toBe(monoMy);
+    });
+
+    it('listPublicCollectionMonos returns empty items when no viewer-visible monos', async () => {
+      const findFirst = jest.fn().mockResolvedValue({
+        id: 'coll-en-only',
+        ownerId,
+        visibility: 'public',
+      });
+      const findMany = jest.fn().mockResolvedValue([]);
+      const prisma = prismaWithMyJaViewer({
+        creatorMonoCollection: { findFirst },
+        creatorMonoCollectionItem: { findMany },
+        userProfile: { findUnique: jest.fn().mockResolvedValue(null) },
+      });
+
+      const out = await new CreatorCollectionsService(prisma, mkMedia()).listPublicCollectionMonos(
+        ownerId,
+        'coll-en-only',
+        undefined,
+        undefined,
+        { viewerUserId: viewerId },
+      );
+
+      expect(out.items).toHaveLength(0);
+      expect(out.nextCursor).toBeNull();
+    });
+
+    it('guest viewer uses en+ja catalog filter on public list', async () => {
+      const findMany = jest.fn().mockResolvedValue([
+        {
+          id: collId,
+          ownerId,
+          title: 'T',
+          description: null,
+          coverImageUrl: null,
+          visibility: 'public',
+          sortOrder: 0,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+      ]);
+      const groupBy = jest.fn().mockResolvedValue([
+        { collectionId: collId, _count: { _all: 1 } },
+      ]);
+      const prisma = {
+        creatorMonoCollection: { findMany },
+        creatorMonoCollectionItem: {
+          groupBy,
+          findMany: jest.fn().mockResolvedValue([]),
+        },
+        userPreference: { findUnique: jest.fn() },
+      } as any;
+
+      await new CreatorCollectionsService(prisma, mkMedia()).listPublicForUser(ownerId, {
+        viewerUserId: null,
+      });
+
+      expect(groupBy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            publishedMono: catalogVisibleForLocale('en', 'ja'),
+          }),
+        }),
+      );
+    });
+
+    it('listMine still uses unfiltered catalog visibility only', async () => {
+      const findMany = jest.fn().mockResolvedValue([
+        {
+          id: collId,
+          ownerId,
+          title: 'T',
+          description: null,
+          coverImageUrl: null,
+          visibility: 'public',
+          sortOrder: 0,
+          createdAt: new Date('2026-01-01T00:00:00.000Z'),
+          updatedAt: new Date('2026-01-02T00:00:00.000Z'),
+        },
+      ]);
+      const groupBy = jest.fn().mockResolvedValue([
+        { collectionId: collId, _count: { _all: 2 } },
+      ]);
+      const prisma = {
+        creatorMonoCollection: { findMany },
+        creatorMonoCollectionItem: {
+          groupBy,
+          findMany: jest.fn().mockResolvedValue([]),
+        },
+      } as any;
+
+      const out = await new CreatorCollectionsService(prisma, mkMedia()).listMine(ownerId);
+
+      expect(groupBy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            publishedMono: PUBLISHED_MONO_CATALOG_VISIBLE,
+          }),
+        }),
+      );
+      expect(out.collections[0].itemCount).toBe(2);
+    });
   });
 
   it('addItemMine blocks move into target when target already has 30 items', async () => {

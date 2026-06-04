@@ -9,10 +9,19 @@ import { assertNoBlockingValidationIssues } from '../../common/validation/valida
 import { validateCollectionName } from '../../common/validation/collection-validation';
 import { FREE_TIER_QUOTA_KEYS, FREE_TIER_QUOTAS } from '../../common/limits/free-tier-quotas';
 import { QuotaExceededException } from '../../common/limits/quota-exceeded.exception';
+import type { Prisma } from '@prisma/client';
+
 import { MediaUrlCanonicalizerService } from '../media/media-url-canonicalizer.service';
 import { PrismaService } from '../prisma/prisma.service';
+import type { CatalogLanguageContext } from '../published-monos/published-mono-catalog-locale';
+import {
+  publishedMonoCatalogLocaleWhere,
+  resolveCatalogLanguageContext,
+  type CatalogLanguageResolveOptions,
+} from '../published-monos/published-mono-catalog-locale';
 import {
   attachWriterProfileToListItem,
+  publishedMonoListItemFromCatalogSummaryRow,
   publishedMonoListItemFromRow,
   type WriterProfileSlice,
 } from '../published-monos/published-mono-common';
@@ -29,6 +38,20 @@ import type {
 
 const DEFAULT_MONO_PAGE = 20;
 const MAX_MONO_PAGE = 50;
+
+/** Public collection mono list — denormalized summary only (M22B parity). */
+const PUBLIC_COLLECTION_MONO_SELECT = {
+  id: true,
+  ownerId: true,
+  title: true,
+  category: true,
+  level: true,
+  description: true,
+  createdAt: true,
+  updatedAt: true,
+  coverImageUrl: true,
+  publishKind: true,
+} as const satisfies Prisma.PublishedMonoSelect;
 
 @Injectable()
 export class CreatorCollectionsService {
@@ -76,15 +99,27 @@ export class CreatorCollectionsService {
     };
   }
 
+  private catalogVisiblePublishedMonoWhere(
+    lang?: CatalogLanguageContext,
+  ): Prisma.PublishedMonoWhereInput {
+    if (!lang) {
+      return PUBLISHED_MONO_CATALOG_VISIBLE;
+    }
+    return {
+      AND: [PUBLISHED_MONO_CATALOG_VISIBLE, publishedMonoCatalogLocaleWhere(lang)],
+    };
+  }
+
   private async visibleItemCountsForCollections(
     collectionIds: string[],
+    publishedMonoWhere: Prisma.PublishedMonoWhereInput = PUBLISHED_MONO_CATALOG_VISIBLE,
   ): Promise<Map<string, number>> {
     if (collectionIds.length === 0) return new Map();
     const grouped = await this.prisma.creatorMonoCollectionItem.groupBy({
       by: ['collectionId'],
       where: {
         collectionId: { in: collectionIds },
-        publishedMono: PUBLISHED_MONO_CATALOG_VISIBLE,
+        publishedMono: publishedMonoWhere,
       },
       _count: { _all: true },
     });
@@ -93,12 +128,13 @@ export class CreatorCollectionsService {
 
   private async derivedCoversForCollections(
     collectionIds: string[],
+    publishedMonoWhere: Prisma.PublishedMonoWhereInput = PUBLISHED_MONO_CATALOG_VISIBLE,
   ): Promise<Map<string, string>> {
     if (collectionIds.length === 0) return new Map();
     const rows = await this.prisma.creatorMonoCollectionItem.findMany({
       where: {
         collectionId: { in: collectionIds },
-        publishedMono: PUBLISHED_MONO_CATALOG_VISIBLE,
+        publishedMono: publishedMonoWhere,
       },
       orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }, { id: 'asc' }],
       select: {
@@ -120,14 +156,41 @@ export class CreatorCollectionsService {
     });
 
     const out = new Map<string, string>();
+    const base = this.media.mediaPublicBaseUrl();
     for (const r of rows) {
       if (out.has(r.collectionId)) continue;
       const dto = publishedMonoListItemFromRow(
         r.publishedMono,
-        this.media.mediaPublicBaseUrl(),
+        base,
       );
       const cover = (dto.coverImageUrl ?? '').trim();
       if (cover) out.set(r.collectionId, cover);
+    }
+    return out;
+  }
+
+  /** First viewer-visible mono cover via M22B `coverImageUrl` column (no `content` JSONB). */
+  private async derivedCoversForCollectionsFromSummary(
+    collectionIds: string[],
+    publishedMonoWhere: Prisma.PublishedMonoWhereInput,
+  ): Promise<Map<string, string>> {
+    if (collectionIds.length === 0) return new Map();
+    const rows = await this.prisma.creatorMonoCollectionItem.findMany({
+      where: {
+        collectionId: { in: collectionIds },
+        publishedMono: publishedMonoWhere,
+      },
+      orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }, { id: 'asc' }],
+      select: {
+        collectionId: true,
+        publishedMono: { select: { coverImageUrl: true } },
+      },
+    });
+    const out = new Map<string, string>();
+    for (const r of rows) {
+      if (out.has(r.collectionId)) continue;
+      const cover = this.media.url(r.publishedMono.coverImageUrl);
+      if ((cover ?? '').trim()) out.set(r.collectionId, cover!.trim());
     }
     return out;
   }
@@ -422,18 +485,31 @@ export class CreatorCollectionsService {
     });
   }
 
-  /** Public: collections visible on creator profile. */
-  async listPublicForUser(targetUserId: string): Promise<{
+  /** Public: collections visible on creator profile (viewer language filter). */
+  async listPublicForUser(
+    targetUserId: string,
+    viewer: CatalogLanguageResolveOptions = {},
+  ): Promise<{
     collections: CreatorMonoCollectionDto[];
   }> {
+    const langCtx = await resolveCatalogLanguageContext(this.prisma, viewer);
+    const visibleMonoWhere = this.catalogVisiblePublishedMonoWhere(langCtx);
+
     const rows = await this.prisma.creatorMonoCollection.findMany({
       where: { ownerId: targetUserId, visibility: 'public' },
       orderBy: [{ sortOrder: 'asc' }, { createdAt: 'desc' }],
     });
-    const counts = await this.visibleItemCountsForCollections(rows.map((r) => r.id));
-    const derivedCovers = await this.derivedCoversForCollections(rows.map((r) => r.id));
+    const counts = await this.visibleItemCountsForCollections(
+      rows.map((r) => r.id),
+      visibleMonoWhere,
+    );
+    const visibleRows = rows.filter((r) => (counts.get(r.id) ?? 0) > 0);
+    const derivedCovers = await this.derivedCoversForCollectionsFromSummary(
+      visibleRows.map((r) => r.id),
+      visibleMonoWhere,
+    );
     return {
-      collections: rows.map((r) => {
+      collections: visibleRows.map((r) => {
         const explicit = (r.coverImageUrl ?? '').trim();
         const derived = derivedCovers.get(r.id);
         const cover = explicit || (derived ?? null);
@@ -453,6 +529,7 @@ export class CreatorCollectionsService {
     collectionId: string,
     limitRaw?: string,
     cursor?: string,
+    viewer: CatalogLanguageResolveOptions = {},
   ): Promise<CreatorMonoCollectionMonosResponseDto> {
     const coll = await this.prisma.creatorMonoCollection.findFirst({
       where: {
@@ -465,11 +542,14 @@ export class CreatorCollectionsService {
       throw new NotFoundException('collection_not_found');
     }
 
+    const langCtx = await resolveCatalogLanguageContext(this.prisma, viewer);
+    const visibleMonoWhere = this.catalogVisiblePublishedMonoWhere(langCtx);
+
     const take = this.parseMonoLimit(limitRaw);
     const rows = await this.prisma.creatorMonoCollectionItem.findMany({
       where: {
         collectionId,
-        publishedMono: PUBLISHED_MONO_CATALOG_VISIBLE,
+        publishedMono: visibleMonoWhere,
       },
       orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }, { id: 'asc' }],
       take: take + 1,
@@ -479,8 +559,9 @@ export class CreatorCollectionsService {
             skip: 1,
           }
         : {}),
-      include: {
-        publishedMono: true,
+      select: {
+        id: true,
+        publishedMono: { select: PUBLIC_COLLECTION_MONO_SELECT },
       },
     });
 
@@ -490,7 +571,7 @@ export class CreatorCollectionsService {
     const base = this.media.mediaPublicBaseUrl();
     const items: PublishedMonoListItemDto[] = page.map((r) =>
       attachWriterProfileToListItem(
-        publishedMonoListItemFromRow(r.publishedMono, base),
+        publishedMonoListItemFromCatalogSummaryRow(r.publishedMono, base),
         writer,
         base,
       ),

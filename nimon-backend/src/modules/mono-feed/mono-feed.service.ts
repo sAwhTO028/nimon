@@ -11,6 +11,10 @@ import {
   attachWriterProfileToDetail,
   publishedMonoDetailFromRow,
 } from '../published-monos/published-mono-common';
+import {
+  publishedMonoCatalogLocaleWhere,
+  resolveCatalogLanguageContext,
+} from '../published-monos/published-mono-catalog-locale';
 import { PUBLISHED_MONO_CATALOG_VISIBLE } from '../published-monos/published-mono-visibility';
 import type { PublishedMonoDetailDto } from '../published-monos/published-monos.dto';
 
@@ -46,48 +50,6 @@ export const MONO_FEED_LIST_PUBLISHED_MONO_SELECT = {
 
 const DEFAULT_LIMIT = 15;
 const MAX_LIMIT = 30;
-
-const DEFAULT_CONTENT_LOCALE = 'en';
-const DEFAULT_LEARNING_LANGUAGE = 'ja';
-
-function normalizeCode(v: string | null | undefined): string | null {
-  if (v == null) return null;
-  const t = String(v).trim().toLowerCase();
-  return t ? t : null;
-}
-
-function ensureAllowedContentLocale(
-  v: string | null,
-): 'en' | 'my' | 'ja' | null {
-  if (v == null) return null;
-  if (v === 'en' || v === 'my' || v === 'ja') return v;
-  throw new BadRequestException('contentLocale_invalid');
-}
-
-function ensureAllowedLearningLanguage(v: string | null): 'ja' | null {
-  if (v == null) return null;
-  if (v === 'ja') return v;
-  throw new BadRequestException('learningLanguage_invalid');
-}
-
-/**
- * User-preference values may be invalid if written by older clients; never take down the feed.
- */
-function safeStoredContentLocale(
-  raw: string | null | undefined,
-): 'en' | 'my' | 'ja' {
-  const n = normalizeCode(raw);
-  if (n === null) return DEFAULT_CONTENT_LOCALE;
-  if (n === 'en' || n === 'my' || n === 'ja') return n;
-  return DEFAULT_CONTENT_LOCALE;
-}
-
-function safeStoredLearningLanguage(raw: string | null | undefined): 'ja' {
-  const n = normalizeCode(raw);
-  if (n === null) return DEFAULT_LEARNING_LANGUAGE;
-  if (n === 'ja') return 'ja';
-  return DEFAULT_LEARNING_LANGUAGE;
-}
 
 export type MonoFeedCursorPayload = {
   /** ISO 8601 */
@@ -254,46 +216,16 @@ export class MonoFeedService {
     const levelF = options.level?.trim();
     const categoryF = options.category?.trim();
 
-    // Resolve preference defaults (auth) and apply query overrides.
-    const contentLocaleQ = ensureAllowedContentLocale(
-      normalizeCode(options.contentLocale),
-    );
-    const learningLanguageQ = ensureAllowedLearningLanguage(
-      normalizeCode(options.learningLanguage),
-    );
-    let effectiveContentLocale: 'en' | 'my' | 'ja' = DEFAULT_CONTENT_LOCALE;
-    let effectiveLearningLanguage: 'ja' = DEFAULT_LEARNING_LANGUAGE;
-    if (options.userId) {
-      const pref = await this.prisma.userPreference.findUnique({
-        where: { userId: options.userId },
-        select: { contentLocale: true, learningLanguage: true },
-      });
-      effectiveContentLocale = safeStoredContentLocale(pref?.contentLocale);
-      effectiveLearningLanguage = safeStoredLearningLanguage(pref?.learningLanguage);
-    }
-    if (contentLocaleQ) effectiveContentLocale = contentLocaleQ;
-    if (learningLanguageQ) effectiveLearningLanguage = learningLanguageQ;
+    const langCtx = await resolveCatalogLanguageContext(this.prisma, {
+      viewerUserId: options.userId,
+      contentLocaleQuery: options.contentLocale,
+      learningLanguageQuery: options.learningLanguage,
+    });
 
     const and: import('@prisma/client').Prisma.PublishedMonoWhereInput[] = [
       PUBLISHED_MONO_CATALOG_VISIBLE,
+      publishedMonoCatalogLocaleWhere(langCtx),
     ];
-    // Include legacy rows where locale tags are unset (null).
-    and.push({
-      AND: [
-        {
-          OR: [
-            { contentLocale: effectiveContentLocale },
-            { contentLocale: null },
-          ],
-        },
-        {
-          OR: [
-            { learningLanguage: effectiveLearningLanguage },
-            { learningLanguage: null },
-          ],
-        },
-      ],
-    });
     if (options.followingOnly) {
       const uid = options.userId ?? null;
       if (!uid) {

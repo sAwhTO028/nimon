@@ -19,7 +19,7 @@ export type CreatorMonoCollectionDto = {
   description: string | null;
   coverImageUrl: string | null;
   visibility: string;
-  /** Published monos that pass catalog visibility (not trashed, not dirty-hidden). */
+  /** Viewer-visible published monos (catalog + language filter on public APIs). */
   itemCount: number;
   createdAt: string;
   updatedAt: string;

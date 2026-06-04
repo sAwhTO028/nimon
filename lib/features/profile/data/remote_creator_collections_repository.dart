@@ -294,15 +294,22 @@ class RemoteCreatorCollectionsRepository {
       if (kDebugMode) {
         debugPrint('RemoteCreatorCollectionsRepository: GET $uri');
       }
+      final headers = await _mergeAuth({'Accept': 'application/json'});
       final resp = await _nimonAuthSend(
         uri,
-        () => _mergeAuth({'Accept': 'application/json'}),
+        () => Future.value(headers),
         (h) => _client.get(uri, headers: h),
       );
       _ensure2xx(resp, genericFallback: 'Could not load collections.');
       final m = _jsonObject(resp);
       final raw = m['collections'];
       final list = raw is List ? raw : const [];
+      if (kDebugMode) {
+        debugPrint(
+          'fetchPublicCollections: status=${resp.statusCode} count=${list.length} '
+          'authPresent=${headers.containsKey('Authorization')}',
+        );
+      }
       final out = <CreatorMonoCollection>[];
       for (final x in list) {
         if (x is! Map) continue;
@@ -341,14 +348,21 @@ class RemoteCreatorCollectionsRepository {
       if (kDebugMode) {
         debugPrint('RemoteCreatorCollectionsRepository: GET $uri');
       }
+      final headers = await _mergeAuth({'Accept': 'application/json'});
       final resp = await _nimonAuthSend(
         uri,
-        () => _mergeAuth({'Accept': 'application/json'}),
+        () => Future.value(headers),
         (h) => _client.get(uri, headers: h),
       );
       _ensure2xx(resp, genericFallback: 'Could not load stories.');
       final m = _jsonObject(resp);
       final rawItems = (m['items'] as List?) ?? const [];
+      if (kDebugMode) {
+        debugPrint(
+          'fetchPublicCollectionMonos: status=${resp.statusCode} itemCount=${rawItems.length} '
+          'authPresent=${headers.containsKey('Authorization')}',
+        );
+      }
       final items = <PublishedMonoListItemDto>[];
       for (final x in rawItems) {
         if (x is! Map) continue;
