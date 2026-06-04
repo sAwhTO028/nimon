@@ -488,7 +488,7 @@ export class CreatorCollectionsService {
   /** Public: collections visible on creator profile (viewer language filter). */
   async listPublicForUser(
     targetUserId: string,
-    viewer: CatalogLanguageResolveOptions = {},
+    viewer: CatalogLanguageResolveOptions = { viewerUserId: null },
   ): Promise<{
     collections: CreatorMonoCollectionDto[];
   }> {
@@ -529,7 +529,7 @@ export class CreatorCollectionsService {
     collectionId: string,
     limitRaw?: string,
     cursor?: string,
-    viewer: CatalogLanguageResolveOptions = {},
+    viewer: CatalogLanguageResolveOptions = { viewerUserId: null },
   ): Promise<CreatorMonoCollectionMonosResponseDto> {
     const coll = await this.prisma.creatorMonoCollection.findFirst({
       where: {

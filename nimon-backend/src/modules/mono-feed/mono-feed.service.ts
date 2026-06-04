@@ -217,7 +217,7 @@ export class MonoFeedService {
     const categoryF = options.category?.trim();
 
     const langCtx = await resolveCatalogLanguageContext(this.prisma, {
-      viewerUserId: options.userId,
+      viewerUserId: options.userId ?? null,
       contentLocaleQuery: options.contentLocale,
       learningLanguageQuery: options.learningLanguage,
     });
