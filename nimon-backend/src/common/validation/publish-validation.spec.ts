@@ -118,13 +118,80 @@ describe('publish-validation', () => {
     expect(hasBlockingIssues(r)).toBe(true);
   });
 
-  it('full learn: invalid furigana for kanji vocab', () => {
+  const enSentences = Array.from({ length: 24 }, () => ({
+    content: { japaneseText: 'a'.repeat(50) },
+  }));
+
+  const fullLearnModules = {
+    vocabulary_kanji: 'completed',
+    grammar: 'completed',
+    quiz: 'completed',
+    audio: 'completed',
+  };
+
+  const fullLearnQuiz = [
+    {
+      content: {
+        category: 'vocabulary',
+        prompt: 'Question text long enough here?',
+        options: ['a', 'b', 'c', 'd'],
+        correctIndex: 0,
+      },
+    },
+  ];
+
+  const fullLearnGrammar = [{ content: { headline: 'パターン' } }];
+
+  const enFullLearnVocab = (first: Record<string, unknown>) => [
+    { content: first },
+    ...Array.from({ length: 7 }, (_, i) => ({
+      content: {
+        termJapanese: `word${i}`,
+        type: 'vocabulary',
+        glosses: { my: 'm' },
+      },
+    })),
+  ];
+
+  const enFullLearnGrammar = Array.from({ length: 3 }, (_, i) => ({
+    content: { headline: `pattern${i}`.padEnd(3, 'あ') },
+  }));
+
+  const enFullLearnQuizzes = [
+    ...Array.from({ length: 5 }, (_, i) => ({
+      content: {
+        category: 'vocabulary',
+        prompt: `Vocab question ${i} long enough?`,
+        options: ['a', 'b', 'c', 'd'],
+        correctIndex: 0,
+      },
+    })),
+    ...Array.from({ length: 3 }, (_, i) => ({
+      content: {
+        category: 'grammar',
+        prompt: `Grammar question ${i} long enough?`,
+        options: ['a', 'b', 'c', 'd'],
+        correctIndex: 0,
+      },
+    })),
+    ...Array.from({ length: 3 }, (_, i) => ({
+      content: {
+        category: 'sample_sentence',
+        prompt: `Sentence question ${i} long enough?`,
+        options: ['a', 'b', 'c', 'd'],
+        correctIndex: 0,
+      },
+    })),
+  ];
+
+  it('full learn: invalid furigana for kanji vocab when learningLanguage=ja', () => {
     const r = validateStoryPublishInput(
       {
         title: 'Valid story title',
         description: 'd',
         levelRaw: 'n5',
         targetDurationBandKey: '3_5',
+        learningLanguage: 'ja',
         promptSourceNote: 'promptDataTab=AI_mode',
         sentences,
         vocabEntries: [
@@ -158,6 +225,110 @@ describe('publish-validation', () => {
       ValidationMode.FullLearnPublish,
     );
     expect(hasBlockingIssues(r)).toBe(true);
+  });
+
+  it('full learn: JA kanji vocab without reading blocks', () => {
+    const r = validateStoryPublishInput(
+      {
+        title: 'Valid story title',
+        description: 'd',
+        levelRaw: 'n5',
+        targetDurationBandKey: '3_5',
+        learningLanguage: 'ja',
+        promptSourceNote: 'promptDataTab=AI_mode',
+        sentences,
+        vocabEntries: [
+          {
+            content: {
+              termJapanese: '猫',
+              type: 'kanji',
+              glosses: { my: 'cat' },
+            },
+          },
+        ],
+        grammarEntries: fullLearnGrammar,
+        quizEntries: fullLearnQuiz,
+        moduleWorkflowStatuses: fullLearnModules,
+      },
+      ValidationMode.FullLearnPublish,
+    );
+    expect(hasBlockingIssues(r)).toBe(true);
+  });
+
+  it('full learn: legacy null learningLanguage still enforces furigana', () => {
+    const r = validateStoryPublishInput(
+      {
+        title: 'Valid story title',
+        description: 'd',
+        levelRaw: 'n5',
+        targetDurationBandKey: '3_5',
+        promptSourceNote: 'promptDataTab=AI_mode',
+        sentences,
+        vocabEntries: [
+          {
+            content: {
+              termJapanese: '猫',
+              type: 'kanji',
+              glosses: { my: 'cat' },
+            },
+          },
+        ],
+        grammarEntries: fullLearnGrammar,
+        quizEntries: fullLearnQuiz,
+        moduleWorkflowStatuses: fullLearnModules,
+      },
+      ValidationMode.FullLearnPublish,
+    );
+    expect(hasBlockingIssues(r)).toBe(true);
+  });
+
+  it('full learn: EN kanji vocab without reading passes', () => {
+    const r = validateStoryPublishInput(
+      {
+        title: 'Valid story title',
+        description: 'd',
+        levelRaw: 'n5',
+        targetDurationBandKey: '3_5',
+        learningLanguage: 'en',
+        promptSourceNote: 'promptDataTab=AI_mode',
+        sentences: enSentences,
+        vocabEntries: enFullLearnVocab({
+          termJapanese: '猫',
+          type: 'kanji',
+          glosses: { my: 'cat' },
+        }),
+        grammarEntries: enFullLearnGrammar,
+        quizEntries: enFullLearnQuizzes,
+        moduleWorkflowStatuses: fullLearnModules,
+      },
+      ValidationMode.FullLearnPublish,
+    );
+    expect(hasBlockingIssues(r)).toBe(false);
+  });
+
+  it('full learn: EN Latin reading on kanji vocab passes', () => {
+    const r = validateStoryPublishInput(
+      {
+        title: 'Valid story title',
+        description: 'd',
+        levelRaw: 'n5',
+        targetDurationBandKey: '3_5',
+        learningLanguage: 'en',
+        promptSourceNote: 'promptDataTab=AI_mode',
+        sentences: enSentences,
+        vocabEntries: enFullLearnVocab({
+          termJapanese: '猫',
+          type: 'kanji',
+          reading: 'invalidlatin',
+          glosses: { my: 'cat' },
+        }),
+        grammarEntries: enFullLearnGrammar,
+        quizEntries: enFullLearnQuizzes,
+        moduleWorkflowStatuses: fullLearnModules,
+      },
+      ValidationMode.FullLearnPublish,
+    );
+    expect(hasBlockingIssues(r)).toBe(false);
   });
 
   it('full learn: quiz missing correct answer', () => {
@@ -279,5 +450,14 @@ describe('publish-validation', () => {
     expect(input.levelRaw).toBe('n4');
     expect(input.sentences).toHaveLength(1);
     expect(input.promptSourceNote).toContain('AI_mode');
+  });
+
+  it('storyPublishInputFromDraftRow includes learningLanguage=en', () => {
+    const input = storyPublishInputFromDraftRow({
+      title: 'Hello',
+      learningLanguage: 'en',
+      sentences: [{ content: { japaneseText: 'test' } }],
+    });
+    expect(input.learningLanguage).toBe('en');
   });
 });

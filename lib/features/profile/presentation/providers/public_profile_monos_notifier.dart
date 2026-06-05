@@ -1,8 +1,10 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:nimon/core/settings/catalog_discovery_lens.dart';
 import 'package:nimon/features/mono/data/mono_feed_item_mapper.dart';
 import 'package:nimon/features/mono/mono_feed_models.dart';
 import 'package:nimon/features/profile/data/profile_public_providers.dart';
+import 'package:nimon/features/settings/presentation/providers/user_preferences_notifier.dart';
 
 const Object _unset = Object();
 
@@ -78,6 +80,11 @@ class PublicProfileMonosNotifier
 
   bool _matches(String userId) => userId.trim() == _familyUserId.trim();
 
+  CatalogDiscoveryLens? _catalogLens() =>
+      CatalogDiscoveryLens.tryFromPreferences(
+        _ref.read(userPreferencesNotifierProvider).prefs,
+      );
+
   Future<void> loadInitial(String userId) async {
     if (!_matches(userId)) return;
     final id = userId.trim();
@@ -93,7 +100,11 @@ class PublicProfileMonosNotifier
     );
     try {
       final repo = _ref.read(remotePublicCreatorProfileRepositoryProvider);
-      final page = await repo.fetchCreatorMonoPage(id, limit: pageLimit);
+      final page = await repo.fetchCreatorMonoPage(
+        id,
+        limit: pageLimit,
+        catalogLens: _catalogLens(),
+      );
       if (!_matches(userId)) return;
       state = state.copyWith(
         isInitialLoading: false,
@@ -119,7 +130,11 @@ class PublicProfileMonosNotifier
     );
     try {
       final repo = _ref.read(remotePublicCreatorProfileRepositoryProvider);
-      final page = await repo.fetchCreatorMonoPage(id, limit: pageLimit);
+      final page = await repo.fetchCreatorMonoPage(
+        id,
+        limit: pageLimit,
+        catalogLens: _catalogLens(),
+      );
       if (!_matches(userId)) return;
       state = state.copyWith(
         isRefreshing: false,
@@ -151,6 +166,7 @@ class PublicProfileMonosNotifier
         id,
         cursor: cursor,
         limit: pageLimit,
+        catalogLens: _catalogLens(),
       );
       if (!_matches(userId)) return;
       state = state.copyWith(

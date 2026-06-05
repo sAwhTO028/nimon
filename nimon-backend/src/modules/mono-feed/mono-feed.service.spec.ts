@@ -27,7 +27,7 @@ function mkPublicWeb(webBase = 'http://localhost:3000'): PublicWebBaseUrlService
 describe('MonoFeedService', () => {
   const feedLocaleWhere = (
     contentLocale: 'en' | 'my' | 'ja',
-    learningLanguage: 'ja',
+    learningLanguage: 'ja' | 'en',
   ) => ({
     AND: [
       {
@@ -47,6 +47,8 @@ describe('MonoFeedService', () => {
   const sampleRow = {
     id: id0,
     ownerId: 'cccccccc-cccc-cccc-cccc-cccccccccccc',
+    contentLocale: 'my' as string | null,
+    learningLanguage: 'en' as string | null,
     title: 'Test Mono',
     category: 'Love',
     level: 'N5',
@@ -181,9 +183,99 @@ describe('MonoFeedService', () => {
     expect(it.shareUrl).toContain(`/mono/${id0}`);
     expect(it.publishKind).toBe('read_only_v1');
     expect(it.accessType).toBe('public');
+    expect(it.contentLocale).toBe('my');
+    expect(it.learningLanguage).toBe('en');
     expect((it as any).content).toBeUndefined();
     expect(out.hasMore).toBe(false);
     expect(out.nextCursor).toBeNull();
+  });
+
+  describe('M23A-6D-3 feed summary locale pair', () => {
+    it('listFeed returns contentLocale and learningLanguage on summary items', async () => {
+      const { svc, findMany } = mkSvc();
+      findMany.mockResolvedValue([sampleRow]);
+      const out = await svc.listFeed({ limit: 15, userId: null });
+      expect(out.items[0]).toMatchObject({
+        contentLocale: 'my',
+        learningLanguage: 'en',
+      });
+    });
+
+    it('following feed returns locale pair on summary items', async () => {
+      const followedOwner = 'ffffffff-ffff-ffff-ffff-ffffffffffff';
+      const row = {
+        ...sampleRow,
+        contentLocale: 'en',
+        learningLanguage: 'ja',
+      };
+      const findMany = jest.fn().mockResolvedValue([row]);
+      const prisma = {
+        publishedMono: { findMany, findFirst: jest.fn() },
+        userPreference: { findUnique: jest.fn().mockResolvedValue(null) },
+        userFollow: {
+          findMany: jest
+            .fn()
+            .mockResolvedValue([{ followingId: followedOwner }]),
+        },
+        userProfile: { findUnique: jest.fn().mockResolvedValue(null) },
+        monoReaction: {
+          groupBy: jest.fn().mockResolvedValue([]),
+          count: jest.fn().mockResolvedValue(0),
+          findMany: jest.fn().mockResolvedValue([]),
+          findFirst: jest.fn().mockResolvedValue(null),
+        },
+        monoBookmark: {
+          findMany: jest.fn().mockResolvedValue([]),
+          count: jest.fn().mockResolvedValue(0),
+        },
+      } as any;
+      const svc = new MonoFeedService(prisma, mkMedia(), mkPublicWeb());
+      const out = await svc.listFeed({
+        limit: 15,
+        userId: 'viewer-1',
+        followingOnly: true,
+      });
+      expect(out.items[0]).toMatchObject({
+        contentLocale: 'en',
+        learningLanguage: 'ja',
+      });
+    });
+
+    it('writerId feed returns locale pair on summary items', async () => {
+      const { svc, findMany } = mkSvc();
+      findMany.mockResolvedValue([
+        {
+          ...sampleRow,
+          contentLocale: 'ja',
+          learningLanguage: 'en',
+        },
+      ]);
+      const out = await svc.listFeed({
+        limit: 15,
+        userId: null,
+        writerId: sampleRow.ownerId,
+      });
+      expect(out.items[0]).toMatchObject({
+        contentLocale: 'ja',
+        learningLanguage: 'en',
+      });
+    });
+
+    it('legacy null locale fields are preserved on summary items', async () => {
+      const { svc, findMany } = mkSvc();
+      findMany.mockResolvedValue([
+        {
+          ...sampleRow,
+          contentLocale: null,
+          learningLanguage: null,
+        },
+      ]);
+      const out = await svc.listFeed({ limit: 15, userId: null });
+      expect(out.items[0]).toMatchObject({
+        contentLocale: null,
+        learningLanguage: null,
+      });
+    });
   });
 
   it('default limit 15 uses take 16 for hasMore', async () => {
@@ -363,6 +455,157 @@ describe('MonoFeedService', () => {
     await expect(
       svc.listFeed({ limit: 15, userId: null, contentLocale: 'th' }),
     ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  describe('M23A-6A English catalog discovery', () => {
+    it('en+my viewer feed filter is my+en (not coerced to ja)', async () => {
+      const { svc, findMany } = mkSvc();
+      findMany.mockResolvedValue([]);
+      (svc as any).prisma.userPreference.findUnique.mockResolvedValue({
+        contentLocale: 'my',
+        learningLanguage: 'en',
+      });
+      await svc.listFeed({ limit: 15, userId: 'u-en' });
+      expect(findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: {
+            AND: expect.arrayContaining([feedLocaleWhere('my', 'en')]),
+          },
+        }),
+      );
+      const andClauses = findMany.mock.calls[0][0].where.AND as unknown[];
+      expect(andClauses).not.toEqual(
+        expect.arrayContaining([feedLocaleWhere('my', 'ja')]),
+      );
+    });
+
+    it('ja+my viewer feed filter excludes en+my lens', async () => {
+      const { svc, findMany } = mkSvc();
+      findMany.mockResolvedValue([]);
+      (svc as any).prisma.userPreference.findUnique.mockResolvedValue({
+        contentLocale: 'my',
+        learningLanguage: 'ja',
+      });
+      await svc.listFeed({ limit: 15, userId: 'u-ja' });
+      const andClauses = findMany.mock.calls[0][0].where.AND as unknown[];
+      expect(andClauses).toEqual(
+        expect.arrayContaining([feedLocaleWhere('my', 'ja')]),
+      );
+      expect(andClauses).not.toEqual(
+        expect.arrayContaining([feedLocaleWhere('my', 'en')]),
+      );
+    });
+
+    it('guest default feed filter is en+ja', async () => {
+      const { svc, findMany } = mkSvc();
+      findMany.mockResolvedValue([]);
+      await svc.listFeed({ limit: 15, userId: null });
+      expect(findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: {
+            AND: expect.arrayContaining([feedLocaleWhere('en', 'ja')]),
+          },
+        }),
+      );
+    });
+
+    it('query override learningLanguage=en contentLocale=my applies my+en filter', async () => {
+      const { svc, findMany } = mkSvc();
+      findMany.mockResolvedValue([]);
+      await svc.listFeed({
+        limit: 15,
+        userId: null,
+        learningLanguage: 'en',
+        contentLocale: 'my',
+      });
+      expect(findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: {
+            AND: expect.arrayContaining([feedLocaleWhere('my', 'en')]),
+          },
+        }),
+      );
+    });
+
+    it('invalid query learningLanguage=ko throws learningLanguage_invalid', async () => {
+      const { svc, findMany } = mkSvc();
+      await expect(
+        svc.listFeed({ limit: 15, userId: null, learningLanguage: 'ko' }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(findMany).not.toHaveBeenCalled();
+    });
+
+    it('following feed uses en+my lens for en+my viewer', async () => {
+      const followedOwner = 'ffffffff-ffff-ffff-ffff-ffffffffffff';
+      const findMany = jest.fn().mockResolvedValue([]);
+      const prisma = {
+        publishedMono: { findMany, findFirst: jest.fn() },
+        userPreference: {
+          findUnique: jest.fn().mockResolvedValue({
+            contentLocale: 'my',
+            learningLanguage: 'en',
+          }),
+        },
+        userFollow: {
+          findMany: jest.fn().mockResolvedValue([{ followingId: followedOwner }]),
+        },
+        userProfile: { findUnique: jest.fn().mockResolvedValue(null) },
+        monoReaction: {
+          groupBy: jest.fn().mockResolvedValue([]),
+          count: jest.fn().mockResolvedValue(0),
+          findMany: jest.fn().mockResolvedValue([]),
+          findFirst: jest.fn().mockResolvedValue(null),
+        },
+        monoBookmark: {
+          findMany: jest.fn().mockResolvedValue([]),
+          count: jest.fn().mockResolvedValue(0),
+        },
+      } as any;
+      const svc = new MonoFeedService(prisma, mkMedia(), mkPublicWeb());
+      await svc.listFeed({
+        limit: 15,
+        userId: 'u-en',
+        followingOnly: true,
+      });
+      expect(findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: {
+            AND: expect.arrayContaining([
+              feedLocaleWhere('my', 'en'),
+              { ownerId: { in: [followedOwner] } },
+            ]),
+          },
+        }),
+      );
+    });
+
+    it('writerId feed uses en+my lens for en+my viewer (public profile Monos)', async () => {
+      const { svc, findMany } = mkSvc();
+      findMany.mockResolvedValue([]);
+      (svc as any).prisma.userPreference.findUnique.mockResolvedValue({
+        contentLocale: 'my',
+        learningLanguage: 'en',
+      });
+      await svc.listFeed({
+        limit: 15,
+        userId: 'u-en',
+        writerId: sampleRow.ownerId,
+      });
+      expect(findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: {
+            AND: expect.arrayContaining([
+              feedLocaleWhere('my', 'en'),
+              { ownerId: sampleRow.ownerId },
+            ]),
+          },
+        }),
+      );
+      const andClauses = findMany.mock.calls[0][0].where.AND as unknown[];
+      expect(andClauses).not.toEqual(
+        expect.arrayContaining([feedLocaleWhere('my', 'ja')]),
+      );
+    });
   });
 
   it('PUBLISHED_MONO_CATALOG_VISIBLE excludes trashed rows', () => {

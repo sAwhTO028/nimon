@@ -342,16 +342,58 @@ void main() {
       expect(r.blockingErrors, isEmpty);
     });
 
-    test('J. English learning still blocked', () {
-      final r = validate(
-        fullLearnAiPayload(
-          metaOverride: meta(learningLanguage: 'English'),
-        ),
+    test('J. English read-only import enforces EN char minimum', () {
+      const enMyContext = NimonImportValidationContext(
+        learningLanguageCode: 'en',
+        contentLocaleCode: 'my',
+        authenticatedEmail: 'user@example.com',
       );
+      final payload = NimonImportRawPayload.fromJsonMap({
+        'nimonImportMeta': meta(
+          learningLanguage: 'English',
+          contentCommunity: 'Burmese',
+          publishKind: 'read_only_v1',
+        ),
+        'core': core(
+          level: 'N5',
+          targetDurationBandKey: '3_5',
+          sentences: storySentences(count: 24, charsPerSentence: 15),
+        ),
+      });
+      final r = validateNimonImportPayload(payload, enMyContext);
       expect(r.canImport, isFalse);
       expect(
         r.blockingErrors.map((e) => e.code),
-        contains('import.context.englishComingSoon'),
+        contains('import.htmlRules.storyCharsTooFew'),
+      );
+    });
+
+    test('J2. English read-only import passes with EN-sized story', () {
+      const enMyContext = NimonImportValidationContext(
+        learningLanguageCode: 'en',
+        contentLocaleCode: 'my',
+        authenticatedEmail: 'user@example.com',
+      );
+      final payload = NimonImportRawPayload.fromJsonMap({
+        'nimonImportMeta': meta(
+          learningLanguage: 'English',
+          contentCommunity: 'Burmese',
+          publishKind: 'read_only_v1',
+        ),
+        'core': core(
+          level: 'N5',
+          targetDurationBandKey: '3_5',
+          sentences: storySentences(count: 24, charsPerSentence: 50),
+        ),
+      });
+      final r = validateNimonImportPayload(payload, enMyContext);
+      expect(
+        r.blockingErrors.map((e) => e.code),
+        isNot(contains('import.context.englishComingSoon')),
+      );
+      expect(
+        r.blockingErrors.map((e) => e.code),
+        isNot(contains('import.htmlRules.storyCharsTooFew')),
       );
     });
 

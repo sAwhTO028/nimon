@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:nimon/features/create/creator_back_policy.dart';
+import 'package:nimon/features/create/creator_learning_language.dart';
 import 'package:nimon/features/create/creator_drawer_session.dart';
 import 'package:nimon/features/create/creator_navigation_debug.dart';
 import 'package:nimon/features/create/creator_reorder_handle.dart';
@@ -104,6 +105,8 @@ class StoryCreatorVocabKanjiEditorScreen extends ConsumerWidget {
     }
 
     final draft = ref.watch(storyCreatorDraftDataProvider);
+    final vocabModuleTitle = LearnModuleId.vocabularyKanji
+        .displayTitleForLearning(draft.basics.learningLanguage);
     final session = ref.watch(creatorDrawerSessionProvider);
     final progress = buildCreatorDrawerProgressModel(draft: draft);
     final publishModel = buildStoryReviewDisplayModel(draft);
@@ -139,7 +142,7 @@ class StoryCreatorVocabKanjiEditorScreen extends ConsumerWidget {
         },
         child: Scaffold(
           appBar: AppBar(
-            title: const Text('Vocabulary / Kanji'),
+            title: Text(vocabModuleTitle),
             leading: NimonBackButton(
               onPressed: handleCreatorBack,
             ),
@@ -505,11 +508,17 @@ class _VocabTermEditBottomSheetState
       setState(() => _error = 'Vocabulary text cannot be empty.');
       return;
     }
+    final draft = ref.read(storyCreatorDraftDataProvider);
+    final showJapaneseFurigana = isJapaneseLearningDraft(draft);
     ref.read(storyCreatorDraftProvider.notifier).updateVocabKanjiEntry(
           entryId: widget.existing.id,
-          type: _type,
+          type: showJapaneseFurigana
+              ? _type
+              : VocabularyKanjiEntryType.vocabulary,
           termJapanese: term,
-          readingRaw: _readingCtrl.text,
+          readingRaw: showJapaneseFurigana
+              ? _readingCtrl.text
+              : (widget.existing.reading ?? ''),
           meanings: widget.existing.glosses,
           examplePairs: widget.existing.examplePairs,
         );
@@ -524,6 +533,8 @@ class _VocabTermEditBottomSheetState
     final cs = theme.colorScheme;
     final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
     final fill = cs.surface;
+    final draft = ref.watch(storyCreatorDraftDataProvider);
+    final showJapaneseFurigana = isJapaneseLearningDraft(draft);
 
     return Padding(
       padding: EdgeInsets.fromLTRB(20, 8, 20, 16 + bottomInset),
@@ -540,8 +551,10 @@ class _VocabTermEditBottomSheetState
             ),
             const SizedBox(height: 8),
             Text(
-              'Update the headword, reading, and whether this item is treated as '
-              'vocabulary or kanji in Learn.',
+              showJapaneseFurigana
+                  ? 'Update the headword, reading, and whether this item is treated as '
+                      'vocabulary or kanji in Learn.'
+                  : 'Update the headword for this vocabulary item.',
               style: theme.textTheme.bodySmall?.copyWith(
                 color: cs.onSurfaceVariant,
                 height: 1.35,
@@ -552,7 +565,9 @@ class _VocabTermEditBottomSheetState
               controller: _termCtrl,
               decoration: InputDecoration(
                 labelText: 'Vocabulary text',
-                hintText: '例：図書館 / 静か / 環境',
+                hintText: showJapaneseFurigana
+                    ? '例：図書館 / 静か / 環境'
+                    : 'e.g. library / quiet / environment',
                 border: const OutlineInputBorder(),
                 alignLabelWithHint: true,
                 errorText: _error,
@@ -561,50 +576,53 @@ class _VocabTermEditBottomSheetState
               ),
               textCapitalization: TextCapitalization.none,
             ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _readingCtrl,
-              decoration: InputDecoration(
-                labelText: 'Reading / furigana (optional)',
-                hintText: '例：としょかん / しずか / かんきょう',
-                border: const OutlineInputBorder(),
-                alignLabelWithHint: true,
-                filled: true,
-                fillColor: fill,
-              ),
-              textCapitalization: TextCapitalization.none,
-            ),
-            const SizedBox(height: 18),
-            Text(
-              'Type',
-              style: theme.textTheme.titleSmall?.copyWith(
-                color: cs.onSurface,
-                fontWeight: FontWeight.w800,
-                height: 1.25,
-              ),
-            ),
-            const SizedBox(height: 8),
-            SegmentedButton<VocabularyKanjiEntryType>(
-              segments: const [
-                ButtonSegment(
-                  value: VocabularyKanjiEntryType.vocabulary,
-                  label: Text('Vocabulary'),
+            if (showJapaneseFurigana) ...[
+              const SizedBox(height: 12),
+              TextField(
+                controller: _readingCtrl,
+                decoration: InputDecoration(
+                  labelText: 'Reading / furigana (optional)',
+                  hintText: '例：としょかん / しずか / かんきょう',
+                  border: const OutlineInputBorder(),
+                  alignLabelWithHint: true,
+                  filled: true,
+                  fillColor: fill,
                 ),
-                ButtonSegment(
-                  value: VocabularyKanjiEntryType.kanji,
-                  label: Text('Kanji'),
-                ),
-              ],
-              selected: {_type},
-              onSelectionChanged: (s) {
-                setState(() => _type = s.first);
-              },
-              style: ButtonStyle(
-                visualDensity: VisualDensity.compact,
-                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                textCapitalization: TextCapitalization.none,
               ),
-            ),
-            const SizedBox(height: 20),
+              const SizedBox(height: 18),
+              Text(
+                'Type',
+                style: theme.textTheme.titleSmall?.copyWith(
+                  color: cs.onSurface,
+                  fontWeight: FontWeight.w800,
+                  height: 1.25,
+                ),
+              ),
+              const SizedBox(height: 8),
+              SegmentedButton<VocabularyKanjiEntryType>(
+                segments: const [
+                  ButtonSegment(
+                    value: VocabularyKanjiEntryType.vocabulary,
+                    label: Text('Vocabulary'),
+                  ),
+                  ButtonSegment(
+                    value: VocabularyKanjiEntryType.kanji,
+                    label: Text('Kanji'),
+                  ),
+                ],
+                selected: {_type},
+                onSelectionChanged: (s) {
+                  setState(() => _type = s.first);
+                },
+                style: ButtonStyle(
+                  visualDensity: VisualDensity.compact,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+              ),
+              const SizedBox(height: 20),
+            ] else
+              const SizedBox(height: 20),
             FilledButton(
               onPressed: _save,
               child: const Text('Save'),
@@ -668,6 +686,7 @@ Widget _vocabExampleJapanesePreview({
   required List<StorySentenceItem> storySentences,
   required ThemeData theme,
   required ColorScheme colorScheme,
+  required bool showJapaneseFurigana,
 }) {
   return ListenableBuilder(
     listenable: sourceCtrl,
@@ -678,7 +697,9 @@ Widget _vocabExampleJapanesePreview({
       final match =
           storySentenceMatchingTrimmedExampleLine(raw, storySentences);
       final displayText = match?.japaneseText ?? raw;
-      final spans = match?.furiganaSpans ?? <FuriganaSpan>[];
+      final spans = showJapaneseFurigana
+          ? (match?.furiganaSpans ?? <FuriganaSpan>[])
+          : const <FuriganaSpan>[];
 
       return Padding(
         padding: const EdgeInsets.only(bottom: 12),
@@ -1146,6 +1167,9 @@ class _VocabDetailsBottomSheetState
                 colorScheme: cs,
                 storySentences:
                     ref.watch(storyCreatorDraftDataProvider).sentences,
+                showJapaneseFurigana: isJapaneseLearningDraft(
+                  ref.watch(storyCreatorDraftDataProvider),
+                ),
                 englishExpanded: e.value.englishExpanded,
                 onToggleEnglish: () => setState(() {
                   e.value.englishExpanded = !e.value.englishExpanded;
@@ -1209,6 +1233,7 @@ class _PairedExampleBlockCard extends StatelessWidget {
     required this.theme,
     required this.colorScheme,
     required this.storySentences,
+    required this.showJapaneseFurigana,
     required this.englishExpanded,
     required this.onToggleEnglish,
     this.onRemove,
@@ -1219,6 +1244,7 @@ class _PairedExampleBlockCard extends StatelessWidget {
   final ThemeData theme;
   final ColorScheme colorScheme;
   final List<StorySentenceItem> storySentences;
+  final bool showJapaneseFurigana;
   final bool englishExpanded;
   final VoidCallback onToggleEnglish;
   final VoidCallback? onRemove;
@@ -1277,6 +1303,7 @@ class _PairedExampleBlockCard extends StatelessWidget {
               storySentences: storySentences,
               theme: theme,
               colorScheme: colorScheme,
+              showJapaneseFurigana: showJapaneseFurigana,
             ),
             TextField(
               controller: fields.sourceCtrl,
@@ -1415,6 +1442,9 @@ class StoryCreatorVocabKanjiModuleBody extends ConsumerWidget {
     final cs = theme.colorScheme;
     final bottomInset = MediaQuery.paddingOf(context).bottom;
     final items = draft.vocabularyKanji.entries;
+    final showJapaneseFurigana = isJapaneseLearningDraft(draft);
+    final moduleTitle = LearnModuleId.vocabularyKanji
+        .displayTitleForLearning(draft.basics.learningLanguage);
 
     final headerPadding =
         EdgeInsets.fromLTRB(padding.left, padding.top, padding.right, 0);
@@ -1432,7 +1462,7 @@ class StoryCreatorVocabKanjiModuleBody extends ConsumerWidget {
               if (useCompactModuleHeader) ...[
                 if (!hideWorkspaceModuleTitle) ...[
                   Text(
-                    'Vocabulary / Kanji',
+                    moduleTitle,
                     style: theme.textTheme.titleLarge?.copyWith(
                       color: cs.onSurface,
                       fontWeight: FontWeight.w800,
@@ -1495,14 +1525,16 @@ class StoryCreatorVocabKanjiModuleBody extends ConsumerWidget {
                         existingTerms: existingTerms,
                       );
                       if (selected == null || selected.trim().isEmpty) return;
-                      final reading = readingForVocabSelectionFromDraft(
-                        sentences: draft.sentences,
-                        selectedTerm: selected,
-                      );
+                      final reading = showJapaneseFurigana
+                          ? readingForVocabSelectionFromDraft(
+                              sentences: draft.sentences,
+                              selectedTerm: selected,
+                            )
+                          : null;
                       n.addVocabKanjiEntry(
                         type: VocabularyKanjiEntryType.vocabulary,
                         termJapanese: selected,
-                        readingRaw: reading ?? '',
+                        readingRaw: showJapaneseFurigana ? (reading ?? '') : '',
                         meanings: null,
                         examplePairs: const [],
                       );
@@ -1567,6 +1599,7 @@ class StoryCreatorVocabKanjiModuleBody extends ConsumerWidget {
                         index: i,
                         entry: e,
                         theme: theme,
+                        showJapaneseFurigana: showJapaneseFurigana,
                         onMoreOpened: () =>
                             FocusManager.instance.primaryFocus?.unfocus(),
                         onMoreCanceled: () {},
@@ -1959,6 +1992,7 @@ class _VocabKanjiEntryCard extends StatelessWidget {
     required this.index,
     required this.entry,
     required this.theme,
+    required this.showJapaneseFurigana,
     required this.onMoreOpened,
     required this.onMoreCanceled,
     required this.onDelete,
@@ -1970,6 +2004,7 @@ class _VocabKanjiEntryCard extends StatelessWidget {
   final int index;
   final VocabularyKanjiEntry entry;
   final ThemeData theme;
+  final bool showJapaneseFurigana;
   final VoidCallback onMoreOpened;
   final VoidCallback onMoreCanceled;
   final VoidCallback onDelete;
@@ -2041,25 +2076,27 @@ class _VocabKanjiEntryCard extends StatelessWidget {
                                   ),
                                 ),
                               ),
-                              const SizedBox(width: 8),
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 8,
-                                  vertical: 4,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: cs.surfaceContainerHighest
-                                      .withValues(alpha: 0.45),
-                                  borderRadius: BorderRadius.circular(999),
-                                ),
-                                child: Text(
-                                  entry.type.displayLabel,
-                                  style: theme.textTheme.labelSmall?.copyWith(
-                                    color: muted,
-                                    fontWeight: FontWeight.w800,
+                              if (showJapaneseFurigana) ...[
+                                const SizedBox(width: 8),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 4,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: cs.surfaceContainerHighest
+                                        .withValues(alpha: 0.45),
+                                    borderRadius: BorderRadius.circular(999),
+                                  ),
+                                  child: Text(
+                                    entry.type.displayLabel,
+                                    style: theme.textTheme.labelSmall?.copyWith(
+                                      color: muted,
+                                      fontWeight: FontWeight.w800,
+                                    ),
                                   ),
                                 ),
-                              ),
+                              ],
                             ],
                           ),
                         ),
@@ -2101,7 +2138,9 @@ class _VocabKanjiEntryCard extends StatelessWidget {
                       ),
                     ],
                   ),
-                  if (reading != null && reading.isNotEmpty) ...[
+                  if (showJapaneseFurigana &&
+                      reading != null &&
+                      reading.isNotEmpty) ...[
                     const SizedBox(height: 6),
                     Text(
                       reading,

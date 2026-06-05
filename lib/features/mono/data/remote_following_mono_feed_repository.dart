@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart' show kDebugMode, debugPrint;
 import 'package:http/http.dart' as http;
 import 'package:nimon/core/pagination/page_request.dart';
 import 'package:nimon/core/pagination/page_result.dart';
+import 'package:nimon/core/settings/catalog_discovery_lens.dart';
 import 'package:nimon/features/mono/data/mono_feed_repository.dart';
 import 'package:nimon/features/mono/data/mono_feed_summary_dto.dart';
 import 'package:nimon/features/mono/data/remote_mono_feed_repository.dart';
@@ -90,21 +91,26 @@ class RemoteFollowingMonoFeedRepository implements MonoFeedRepository {
     PageRequest request, {
     String? level,
     String? category,
+    CatalogDiscoveryLens? catalogLens,
   }) async {
-    final qp = {
-      ...request.toQueryParameters(),
-      'following': 'true',
+    final authHeaders = <String, String>{
+      ...await _authHeadersOrThrow(),
+      'Accept': 'application/json',
     };
+    final qp = Map<String, String>.from(request.toQueryParameters())
+      ..['following'] = 'true';
+    CatalogDiscoveryLens.mergeIntoQueryIfAuthenticated(
+      qp,
+      catalogLens,
+      authHeaders,
+    );
     final uri = _u('/v1/mono/feed').replace(queryParameters: qp);
     if (kDebugMode) {
       debugPrint('RemoteFollowingMonoFeedRepository.fetchFeedPage: GET $uri');
     }
     final resp = await _nimonAuthSend(
       uri,
-      () async => <String, String>{
-        ...await _authHeadersOrThrow(),
-        'Accept': 'application/json',
-      },
+      () async => authHeaders,
       (h) => _client.get(uri, headers: h),
     );
     if (resp.statusCode < 200 || resp.statusCode >= 300) _mapHttpError(resp);

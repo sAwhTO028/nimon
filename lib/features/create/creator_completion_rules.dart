@@ -124,6 +124,7 @@ HtmlCreatorReadinessContext? resolveHtmlCreatorReadinessContext(
     mode: resolveHtmlPromptModeForDraft(draft),
     duration: duration,
     level: level,
+    language: resolveHtmlLearningLanguageFromWire(draft.basics.learningLanguage),
   );
 }
 

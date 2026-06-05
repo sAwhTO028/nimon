@@ -30,6 +30,7 @@ import 'package:nimon/features/create/data/remote_backend_config.dart';
 import 'package:nimon/features/mono/data/mono_feed_item_mapper.dart';
 import 'package:nimon/features/mono/data/mono_feed_providers.dart';
 import 'package:nimon/features/mono/mono_feed_models.dart';
+import 'package:nimon/features/mono/widgets/mono_feed_footer_locale_chips.dart';
 import 'package:nimon/features/mono/saved_only_ux_policy.dart';
 import 'package:nimon/features/mono/share_mono_link.dart';
 import 'package:nimon/features/profile/saved_library_copy.dart';
@@ -4294,6 +4295,8 @@ class _ReadingFeedPostState extends State<_ReadingFeedPost>
                     level: item.level,
                     publishedAccess: item.publishedAccess,
                     title: item.title,
+                    contentLocale: item.contentLocale,
+                    learningLanguage: item.learningLanguage,
                     ink: widget.readingInk,
                     inkMuted: widget.readingInkMuted,
                     onTapCreator: () {
@@ -4440,6 +4443,8 @@ class _ReadingFeedPostState extends State<_ReadingFeedPost>
                   level: item.level,
                   publishedAccess: item.publishedAccess,
                   title: item.title,
+                  contentLocale: item.contentLocale,
+                  learningLanguage: item.learningLanguage,
                   ink: widget.readingInk,
                   inkMuted: widget.readingInkMuted,
                   onTapCreator: () {
@@ -4845,6 +4850,8 @@ class _PostFooterMeta extends StatelessWidget {
   final String level;
   final PublishedMonoAccess? publishedAccess;
   final String? title;
+  final String? contentLocale;
+  final String? learningLanguage;
   final Color ink;
   final Color inkMuted;
   final VoidCallback? onTapCreator;
@@ -4857,6 +4864,8 @@ class _PostFooterMeta extends StatelessWidget {
     required this.level,
     required this.publishedAccess,
     this.title,
+    this.contentLocale,
+    this.learningLanguage,
     required this.ink,
     required this.inkMuted,
     this.onTapCreator,
@@ -4972,12 +4981,23 @@ class _PostFooterMeta extends StatelessWidget {
                   ),
                 ),
               const SizedBox(height: _metaTitleToChipGap),
-              _MonoStatusChip(
-                label: _statusLabel(),
-                ink: tc.textSecondary,
-                border: tc.border,
-                background:
-                    tc.surface.withValues(alpha: _MonoStatusChip.kSurfaceAlpha),
+              Wrap(
+                spacing: 6,
+                runSpacing: 4,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  _MonoStatusChip(
+                    label: _statusLabel(),
+                    ink: tc.textSecondary,
+                    border: tc.border,
+                    background: tc.surface
+                        .withValues(alpha: _MonoStatusChip.kSurfaceAlpha),
+                  ),
+                  MonoFeedFooterLocaleChip(
+                    learningLanguage: learningLanguage,
+                    contentLocale: contentLocale,
+                  ),
+                ],
               ),
             ],
           ),

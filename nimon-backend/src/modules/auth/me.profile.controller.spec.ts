@@ -601,7 +601,7 @@ describe('MeController preferences', () => {
     await nest.close();
   });
 
-  it('PATCH rejects invalid learningLanguage', async () => {
+  it('PATCH rejects invalid learningLanguage wire code', async () => {
     const nest = app.createNestApplication();
     nest.useGlobalPipes(
       new ValidationPipe({ transform: true, whitelist: true, forbidNonWhitelisted: true }),
@@ -610,8 +610,73 @@ describe('MeController preferences', () => {
     await request(nest.getHttpServer())
       .patch('/v1/me/preferences')
       .set('Authorization', 'Bearer t')
+      .send({ learningLanguage: 'ko' })
+      .expect(400);
+    await nest.close();
+  });
+
+  it('PATCH accepts learningLanguage en when contentLocale is my', async () => {
+    const nest = app.createNestApplication();
+    nest.useGlobalPipes(
+      new ValidationPipe({ transform: true, whitelist: true, forbidNonWhitelisted: true }),
+    );
+    await nest.init();
+
+    const prisma = nest.get('PRISMA') as any;
+    prisma.user.findUnique.mockResolvedValue({ id: 'u1' });
+    prisma.userPreference.findUnique.mockResolvedValue({
+      appLocale: null,
+      contentLocale: 'my',
+      learningLanguage: 'ja',
+      themeMode: null,
+      readingTextSize: null,
+      showExplanations: null,
+    });
+    prisma.userPreference.upsert.mockResolvedValue({
+      appLocale: null,
+      contentLocale: 'my',
+      learningLanguage: 'en',
+      themeMode: null,
+      readingTextSize: null,
+      showExplanations: null,
+    });
+
+    const res = await request(nest.getHttpServer())
+      .patch('/v1/me/preferences')
+      .set('Authorization', 'Bearer t')
+      .send({ learningLanguage: 'en' })
+      .expect(200);
+
+    expect(res.body.learningLanguage).toBe('en');
+    expect(res.body.contentLocale).toBe('my');
+    await nest.close();
+  });
+
+  it('PATCH rejects en+en language pair', async () => {
+    const nest = app.createNestApplication();
+    nest.useGlobalPipes(
+      new ValidationPipe({ transform: true, whitelist: true, forbidNonWhitelisted: true }),
+    );
+    await nest.init();
+
+    const prisma = nest.get('PRISMA') as any;
+    prisma.user.findUnique.mockResolvedValue({ id: 'u1' });
+    prisma.userPreference.findUnique.mockResolvedValue({
+      appLocale: null,
+      contentLocale: 'en',
+      learningLanguage: 'ja',
+      themeMode: null,
+      readingTextSize: null,
+      showExplanations: null,
+    });
+
+    await request(nest.getHttpServer())
+      .patch('/v1/me/preferences')
+      .set('Authorization', 'Bearer t')
       .send({ learningLanguage: 'en' })
       .expect(400);
+
+    expect(prisma.userPreference.upsert).not.toHaveBeenCalled();
     await nest.close();
   });
 

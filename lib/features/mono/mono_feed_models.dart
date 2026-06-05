@@ -80,6 +80,9 @@ class MonoFeedItem {
   /// Community / audience from catalog row (`en` | `my` | `ja`); null = legacy.
   final String? contentLocale;
 
+  /// Learning target from catalog row (`ja` | `en`); null = legacy.
+  final String? learningLanguage;
+
   const MonoFeedItem({
     required this.id,
     this.writerId,
@@ -105,6 +108,7 @@ class MonoFeedItem {
     this.catalogCategory,
     this.readDurationLabel,
     this.contentLocale,
+    this.learningLanguage,
   });
 
   /// Id for **`/learn/...`** and [catalogPublishedMonoDetailProvider] — never includes

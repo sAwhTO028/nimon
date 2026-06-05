@@ -18,6 +18,7 @@ CreatorStoryV1 _baseDraft({
   int quizSentence = 0,
   int quizKanji = 0,
   bool withAudio = false,
+  String? learningLanguage,
 }) {
   final t = 'あ' * charsPerSentence;
   final sentences = List.generate(
@@ -105,6 +106,7 @@ CreatorStoryV1 _baseDraft({
       targetDurationBandKey: targetDurationBandKey,
       coverImageUrl: null,
       creatorOwnerId: ownerId,
+      learningLanguage: learningLanguage,
       createdAt: DateTime.utc(2026),
       updatedAt: DateTime.utc(2026),
     ),
@@ -307,6 +309,49 @@ void main() {
       final ro = computeReadOnlyReady(d);
       expect(ro.ready, isFalse);
       expect(ro.unmetMessages, isNotEmpty);
+    });
+
+    test('H. ReadOnly EN uses EN char minimum (1200 for AI N5 3_5)', () {
+      final d = _baseDraft(
+        ownerId: ownerId,
+        level: 'N5',
+        targetDurationBandKey: '3_5',
+        promptSourceNote: 'promptDataTab=AI_mode',
+        sentenceCount: 24,
+        charsPerSentence: 15,
+        learningLanguage: 'en',
+      );
+      final ro = computeReadOnlyReady(d);
+      expect(ro.ready, isFalse);
+      expect(ro.unmetMessages.join(' | '), contains('Need at least 1200'));
+    });
+
+    test('I. ReadOnly EN valid char band is ready', () {
+      final d = _baseDraft(
+        ownerId: ownerId,
+        level: 'N5',
+        targetDurationBandKey: '3_5',
+        promptSourceNote: 'promptDataTab=AI_mode',
+        sentenceCount: 24,
+        charsPerSentence: 50,
+        learningLanguage: 'en',
+      );
+      final ro = computeReadOnlyReady(d);
+      expect(ro.ready, isTrue, reason: ro.unmetMessages.join(' | '));
+    });
+
+    test('J. missing learningLanguage falls back to JP limits', () {
+      final d = _baseDraft(
+        ownerId: ownerId,
+        level: 'N5',
+        targetDurationBandKey: '3_5',
+        promptSourceNote: 'promptDataTab=AI_mode',
+        sentenceCount: 24,
+        charsPerSentence: 50,
+      );
+      final ro = computeReadOnlyReady(d);
+      expect(ro.ready, isFalse);
+      expect(ro.unmetMessages.join(' | '), contains('Too many Japanese chars'));
     });
   });
 

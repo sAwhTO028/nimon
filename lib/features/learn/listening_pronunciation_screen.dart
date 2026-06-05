@@ -166,8 +166,10 @@ class ListeningPronunciationScreen extends ConsumerWidget {
             }
 
             final explicit = lines;
-            final fromCore =
-                listeningTranscriptLinesFromPublishedCore(detail.content);
+            final fromCore = listeningTranscriptLinesFromPublishedCore(
+              detail.content,
+              learningLanguage: detail.learningLanguage,
+            );
             final catalogLines =
                 (explicit != null && explicit.isNotEmpty) ? explicit : fromCore;
             final transcriptEmpty = catalogLines.isEmpty;

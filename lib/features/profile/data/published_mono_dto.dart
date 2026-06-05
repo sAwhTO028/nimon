@@ -117,6 +117,8 @@ class PublishedMonoDetailDto {
     this.writerDisplayName,
     this.writerHandle,
     this.writerAvatarUrl,
+    this.contentLocale,
+    this.learningLanguage,
   });
 
   final String id;
@@ -150,6 +152,12 @@ class PublishedMonoDetailDto {
   final String? writerDisplayName;
   final String? writerHandle;
   final String? writerAvatarUrl;
+
+  /// Community / audience (`en` | `my` | `ja`); null = legacy.
+  final String? contentLocale;
+
+  /// Target learning language (`ja` | `en`); null = legacy.
+  final String? learningLanguage;
 }
 
 /// Linked story-draft id from owner Published Mono API JSON.

@@ -29,6 +29,10 @@ export type MonoFeedSummaryItemDto = {
   publishKind: string | null;
   /** V1: all rows in `published_monos` treated as public catalog. */
   accessType: 'public';
+  /** Story Basics community (`en` | `my` | `ja`); null = legacy. */
+  contentLocale: string | null;
+  /** Learning target (`ja` | `en`); null = legacy. */
+  learningLanguage: string | null;
 };
 
 export type MonoFeedListResponseDto = {

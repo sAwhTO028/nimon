@@ -73,6 +73,15 @@ export function normalizeHtmlLanguage(
   return null;
 }
 
+/** V1 prefs/draft wire (`ja` / `en`) → HTML limit table language. Unknown → `jp`. */
+export function resolveHtmlLearningLanguageFromWire(
+  raw: string | null | undefined,
+): HtmlLearningLanguage {
+  const t = String(raw ?? '').trim().toLowerCase();
+  if (t === 'en') return 'en';
+  return 'jp';
+}
+
 export function normalizeHtmlPromptMode(
   input: string | null | undefined,
 ): HtmlPromptMode | null {

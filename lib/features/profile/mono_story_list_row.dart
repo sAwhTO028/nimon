@@ -1,6 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:nimon/features/profile/public_profile_widgets.dart';
 import 'package:nimon/ui/widgets/community_badge.dart';
+import 'package:nimon/ui/widgets/language_pair_badge.dart';
+
+/// Which compact locale chip [MonoStoryListRow] shows in the chip row.
+enum MonoStoryListBadgeMode {
+  none,
+  community,
+  languagePair,
+}
 
 /// Thumbnail size for [MonoStoryListRow] (profile, public profile, collections, etc.).
 const double kMonoStoryListThumbSize = 76;
@@ -22,8 +30,10 @@ class MonoStoryListRow extends StatelessWidget {
     this.categoryText,
     this.durationText,
     this.publishBadgeText,
+    this.badgeMode = MonoStoryListBadgeMode.none,
     this.showCommunityBadge = false,
     this.contentLocale,
+    this.learningLanguage,
   });
 
   final String title;
@@ -43,11 +53,23 @@ class MonoStoryListRow extends StatelessWidget {
   /// e.g. `Read only` / `Full learn` (Published Mono contract v1).
   final String? publishBadgeText;
 
-  /// When true, shows [CommunityBadge] in the chip row (owner surfaces).
+  /// Preferred badge mode; [showCommunityBadge] maps to [MonoStoryListBadgeMode.community] when this is [MonoStoryListBadgeMode.none].
+  final MonoStoryListBadgeMode badgeMode;
+
+  /// Legacy flag — prefer [badgeMode]. Collection cards and older call sites.
   final bool showCommunityBadge;
 
-  /// `en` | `my` | `ja`; null renders legacy `—` when [showCommunityBadge] is true.
+  /// `en` | `my` | `ja`; used by community or language-pair badges.
   final String? contentLocale;
+
+  /// `ja` | `en`; used when [badgeMode] is [MonoStoryListBadgeMode.languagePair].
+  final String? learningLanguage;
+
+  MonoStoryListBadgeMode get _effectiveBadgeMode {
+    if (badgeMode != MonoStoryListBadgeMode.none) return badgeMode;
+    if (showCommunityBadge) return MonoStoryListBadgeMode.community;
+    return MonoStoryListBadgeMode.none;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -110,7 +132,7 @@ class MonoStoryListRow extends StatelessWidget {
                     ],
                   ],
                 ),
-                if (showCommunityBadge ||
+                if (_effectiveBadgeMode != MonoStoryListBadgeMode.none ||
                     (publishBadgeText != null &&
                         publishBadgeText!.trim().isNotEmpty)) ...[
                   const SizedBox(height: 4),
@@ -119,8 +141,15 @@ class MonoStoryListRow extends StatelessWidget {
                     runSpacing: 4,
                     crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
-                      if (showCommunityBadge)
+                      if (_effectiveBadgeMode ==
+                          MonoStoryListBadgeMode.community)
                         CommunityBadge(contentLocale: contentLocale),
+                      if (_effectiveBadgeMode ==
+                          MonoStoryListBadgeMode.languagePair)
+                        LanguagePairBadge(
+                          learningLanguage: learningLanguage,
+                          contentLocale: contentLocale,
+                        ),
                       if (publishBadgeText != null &&
                           publishBadgeText!.trim().isNotEmpty)
                         DecoratedBox(

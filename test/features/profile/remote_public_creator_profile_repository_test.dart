@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
+import 'package:nimon/core/settings/catalog_discovery_lens.dart';
 import 'package:nimon/features/profile/data/remote_public_creator_profile_repository.dart';
 
 void main() {
@@ -84,12 +85,22 @@ void main() {
     final repo = RemotePublicCreatorProfileRepository(
       apiBaseUrl: 'http://127.0.0.1:9',
       client: client,
-      authHeaderBuilder: () async => <String, String>{},
+      authHeaderBuilder: () async => {'Authorization': 'Bearer t'},
     );
 
-    final page = await repo.fetchCreatorMonoPage('u1', cursor: 'c', limit: 7);
+    final page = await repo.fetchCreatorMonoPage(
+      'u1',
+      cursor: 'c',
+      limit: 7,
+      catalogLens: const CatalogDiscoveryLens(
+        contentLocale: 'my',
+        learningLanguage: 'en',
+      ),
+    );
     expect(captured!.url.path, '/v1/mono/feed');
     expect(captured!.url.queryParameters['writerId'], 'u1');
+    expect(captured!.url.queryParameters['contentLocale'], 'my');
+    expect(captured!.url.queryParameters['learningLanguage'], 'en');
     expect(page.items, hasLength(1));
     expect(page.items.single.writerId, 'u1');
   });

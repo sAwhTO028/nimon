@@ -83,6 +83,7 @@ class _OneShortItem {
   final String? targetDurationText;
   final String? publishBadgeText;
   final String? contentLocale;
+  final String? learningLanguage;
 
   const _OneShortItem({
     required this.id,
@@ -97,6 +98,7 @@ class _OneShortItem {
     this.targetDurationText,
     this.publishBadgeText,
     this.contentLocale,
+    this.learningLanguage,
   });
 }
 
@@ -639,6 +641,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
             displayKindFromApi(m.displayPublishKind),
           ),
           contentLocale: m.contentLocale,
+          learningLanguage: m.learningLanguage,
         ),
     ];
   }
@@ -2961,8 +2964,11 @@ class _FolderGroupListState extends State<_FolderGroupList> {
                     categoryText: it.categoryText,
                     durationText: it.targetDurationText,
                     publishBadgeText: it.publishBadgeText,
-                    showCommunityBadge: it.isBackendPublished,
+                    badgeMode: it.isBackendPublished
+                        ? MonoStoryListBadgeMode.languagePair
+                        : MonoStoryListBadgeMode.none,
                     contentLocale: it.contentLocale,
+                    learningLanguage: it.learningLanguage,
                   ),
                 ),
                 if (_selecting)

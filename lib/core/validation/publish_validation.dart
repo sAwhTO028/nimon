@@ -1,4 +1,5 @@
 import 'package:nimon/core/limits/html_generator_limits.dart';
+import 'package:nimon/core/settings/language_pair.dart';
 import 'package:nimon/core/validation/learn_validators.dart'
     show
         FuriganaKind,
@@ -28,6 +29,7 @@ class StoryPublishData {
     required this.grammarEntries,
     required this.quizEntries,
     required this.moduleWorkflowStatuses,
+    this.learningLanguage,
   });
 
   final String? title;
@@ -43,6 +45,9 @@ class StoryPublishData {
   final List<Map<String, Object?>> grammarEntries;
   final List<Map<String, Object?>> quizEntries;
   final Map<String, String> moduleWorkflowStatuses;
+
+  /// Draft/prefs wire (`ja` / `en`); drives HTML limit tables at publish time.
+  final String? learningLanguage;
 }
 
 ValidationIssue _warn(String field, String code, String messageKey,
@@ -252,6 +257,8 @@ ValidationResult validateStoryPublishData(
   );
   final htmlDuration = normalizeHtmlDuration(bandKey);
   final htmlMode = resolveHtmlPromptModeFromSourceNote(input.promptSourceNote);
+  final htmlLanguage =
+      resolveHtmlLearningLanguageFromWire(input.learningLanguage);
 
   if (htmlLevel == null) {
     pieces.add(resultFromIssues([
@@ -286,7 +293,7 @@ ValidationResult validateStoryPublishData(
   if (htmlLevel != null && htmlDuration != null && metrics.validCount > 0) {
     final limits = HtmlGeneratorLimits.sentenceLimit(
       mode: htmlMode,
-      language: HtmlLearningLanguage.jp,
+      language: htmlLanguage,
       duration: htmlDuration,
       level: htmlLevel,
     );
@@ -348,12 +355,12 @@ ValidationResult validateStoryPublishData(
 
     if (htmlLevel != null && htmlDuration != null) {
       final vocabLimit = HtmlGeneratorLimits.vocabularyLimit(
-        language: HtmlLearningLanguage.jp,
+        language: htmlLanguage,
         duration: htmlDuration,
         level: htmlLevel,
       );
       final grammarLimit = HtmlGeneratorLimits.grammarLimit(
-        language: HtmlLearningLanguage.jp,
+        language: htmlLanguage,
         duration: htmlDuration,
         level: htmlLevel,
       );
@@ -438,7 +445,7 @@ ValidationResult validateStoryPublishData(
       final selected = htmlMode == HtmlPromptMode.ai
           ? HtmlGeneratorLimits.selectedFullLearnLimits(
               mode: HtmlPromptMode.ai,
-              language: HtmlLearningLanguage.jp,
+              language: htmlLanguage,
               duration: htmlDuration,
               level: htmlLevel,
               preset: HtmlLimitPreset.defaultValue,
@@ -589,11 +596,13 @@ ValidationResult validateStoryPublishData(
           ValidationMode.fullLearnPublish,
         ),
       );
-      final furiganaKind =
-          v.isKanjiType ? FuriganaKind.kanji : FuriganaKind.kana;
-      pieces.add(
-        validateFurigana(v.reading, v.termJapanese, furiganaKind),
-      );
+      if (isJapaneseLearningWireCode(input.learningLanguage)) {
+        final furiganaKind =
+            v.isKanjiType ? FuriganaKind.kanji : FuriganaKind.kana;
+        pieces.add(
+          validateFurigana(v.reading, v.termJapanese, furiganaKind),
+        );
+      }
     }
 
     for (final row in input.grammarEntries) {

@@ -78,7 +78,7 @@ Future<bool> _preflightCreatorPublish({
               duration != null)
           ? HtmlGeneratorLimits.selectedFullLearnLimits(
               mode: HtmlPromptMode.ai,
-              language: HtmlLearningLanguage.jp,
+              language: resolveHtmlLearningLanguageFromWire(data.learningLanguage),
               duration: duration,
               level: level,
               preset: HtmlLimitPreset.defaultValue,

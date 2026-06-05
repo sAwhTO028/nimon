@@ -67,7 +67,7 @@ class StoryCreatorProgressChecklist extends StatelessWidget {
             SizedBox(height: compact ? 8 : 10),
             for (final id in LearnModuleId.values)
               _ChecklistRow(
-                label: id.displayTitle,
+                label: id.displayTitleForLearning(story.basics.learningLanguage),
                 status: story.learnModuleProgressStatus(id),
                 hint: compact ? null : story.learnModuleProgressHint(id),
               ),

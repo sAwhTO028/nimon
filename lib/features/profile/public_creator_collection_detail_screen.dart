@@ -8,7 +8,9 @@ import 'package:nimon/features/mono/mono_feed_models.dart';
 import 'package:nimon/features/mono/mono_reader_menu_origin.dart';
 import 'package:nimon/features/profile/data/creator_mono_collection.dart';
 import 'package:nimon/features/profile/mono_story_list_row.dart';
+import 'package:nimon/core/settings/catalog_discovery_lens.dart';
 import 'package:nimon/features/profile/presentation/providers/my_creator_collections_notifier.dart';
+import 'package:nimon/features/settings/presentation/providers/user_preferences_notifier.dart';
 import 'package:nimon/ui/widgets/nimon_circle_nav_button.dart';
 
 /// Route extra for [PublicCreatorCollectionDetailScreen] (no public GET-one endpoint).
@@ -75,10 +77,14 @@ class _PublicCreatorCollectionDetailScreenState
     });
     try {
       final repo = ref.read(remoteCreatorCollectionsRepositoryProvider);
+      final lens = CatalogDiscoveryLens.tryFromPreferences(
+        ref.read(userPreferencesNotifierProvider).prefs,
+      );
       final page = await repo.fetchPublicCollectionMonos(
         widget.args.userId,
         widget.args.collection.id,
         limit: 24,
+        catalogLens: lens,
       );
       if (!mounted) return;
       final a = widget.args;
@@ -116,11 +122,15 @@ class _PublicCreatorCollectionDetailScreenState
     });
     try {
       final repo = ref.read(remoteCreatorCollectionsRepositoryProvider);
+      final lens = CatalogDiscoveryLens.tryFromPreferences(
+        ref.read(userPreferencesNotifierProvider).prefs,
+      );
       final page = await repo.fetchPublicCollectionMonos(
         widget.args.userId,
         widget.args.collection.id,
         cursor: c,
         limit: 24,
+        catalogLens: lens,
       );
       if (!mounted) return;
       final a = widget.args;

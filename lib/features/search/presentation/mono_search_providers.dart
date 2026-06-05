@@ -1,5 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:nimon/core/settings/catalog_discovery_lens.dart';
 import 'package:nimon/features/auth/auth_providers.dart';
+import 'package:nimon/features/settings/presentation/providers/user_preferences_notifier.dart';
 import 'package:nimon/features/create/data/remote_backend_config.dart';
 import 'package:nimon/features/search/data/remote_mono_search_repository.dart';
 import 'package:nimon/features/search/presentation/mono_search_notifier.dart';
@@ -20,6 +22,9 @@ final monoSearchNotifierProvider =
   (ref) {
     return MonoSearchNotifier(
       ref.watch(remoteMonoSearchRepositoryProvider),
+      catalogLens: () => CatalogDiscoveryLens.tryFromPreferences(
+        ref.read(userPreferencesNotifierProvider).prefs,
+      ),
     );
   },
 );

@@ -12,6 +12,8 @@ import {
   ValidateNested,
 } from 'class-validator';
 
+import { V1_LEARNING_LANGUAGES } from '../../../common/validation/language-pair-validation';
+
 class CreateDraftBasicsDto {
   @IsOptional()
   storyId?: string;
@@ -49,7 +51,7 @@ class CreateDraftBasicsDto {
   contentLocale?: string | null;
 
   @IsOptional()
-  @IsIn(['ja'])
+  @IsIn([...V1_LEARNING_LANGUAGES])
   learningLanguage?: string | null;
 }
 
@@ -111,7 +113,7 @@ class StoryDraftBasicsWriteDto {
   contentLocale?: string | null;
 
   @IsOptional()
-  @IsIn(['ja'])
+  @IsIn([...V1_LEARNING_LANGUAGES])
   learningLanguage?: string | null;
 }
 

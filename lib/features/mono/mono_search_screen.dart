@@ -10,11 +10,14 @@ import 'package:nimon/features/mono/data/mono_feed_item_mapper.dart';
 import 'package:nimon/features/mono/mono_feed_models.dart';
 import 'package:nimon/features/mono/mono_reader_menu_origin.dart';
 import 'package:nimon/features/profile/data/published_mono_display_contract.dart';
-import 'package:nimon/features/profile/mono_story_list_row.dart';
+import 'package:nimon/features/profile/mono_story_list_row.dart'
+    show MonoStoryListBadgeMode, MonoStoryListRow;
 import 'package:nimon/features/search/data/mono_search_result.dart';
 import 'package:nimon/features/search/mono_search_catalog_facets.dart';
+import 'package:nimon/features/search/presentation/mono_search_notifier.dart';
 import 'package:nimon/features/search/presentation/mono_search_providers.dart';
 import 'package:nimon/features/search/presentation/mono_search_state.dart';
+import 'package:nimon/features/settings/presentation/providers/user_preferences_notifier.dart';
 import 'package:nimon/l10n/app_localizations.dart';
 import 'package:nimon/ui/widgets/nimon_circle_nav_button.dart';
 
@@ -109,6 +112,17 @@ class _MonoSearchScreenState extends ConsumerState<MonoSearchScreen> {
     final l10n = AppLocalizations.of(context)!;
     final s = ref.watch(monoSearchNotifierProvider);
     final notifier = ref.read(monoSearchNotifierProvider.notifier);
+
+    ref.listen(userPreferencesNotifierProvider, (prev, next) {
+      if (prev == null) return;
+      if (prev.prefs.contentLocale == next.prefs.contentLocale &&
+          prev.prefs.learningLanguage == next.prefs.learningLanguage) {
+        return;
+      }
+      final current = ref.read(monoSearchNotifierProvider);
+      if (!MonoSearchNotifier.shouldFetchRemote(current)) return;
+      unawaited(notifier.refresh());
+    });
 
     return Scaffold(
       appBar: AppBar(
@@ -527,6 +541,9 @@ class _SearchResultsBody extends StatelessWidget {
                         categoryText: feed.catalogCategory,
                         durationText: feed.readDurationLabel,
                         publishBadgeText: _publishBadgeForRow(feed),
+                        badgeMode: MonoStoryListBadgeMode.languagePair,
+                        contentLocale: r.listItem.contentLocale,
+                        learningLanguage: r.listItem.learningLanguage,
                         onMenuTap: null,
                       ),
                     ],

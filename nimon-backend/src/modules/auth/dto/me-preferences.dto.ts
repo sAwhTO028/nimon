@@ -1,6 +1,8 @@
 import { Transform } from 'class-transformer';
 import { IsBoolean, IsIn, IsOptional, ValidateIf } from 'class-validator';
 
+import { V1_LEARNING_LANGUAGES } from '../../../common/validation/language-pair-validation';
+
 function trimOrNull(v: unknown): string | null | undefined {
   if (v === undefined) return undefined;
   if (v === null) return null;
@@ -15,7 +17,8 @@ export type AppLocale = (typeof APP_LOCALES)[number];
 export const CONTENT_LOCALES = ['my', 'en', 'ja'] as const;
 export type ContentLocale = (typeof CONTENT_LOCALES)[number];
 
-export const LEARNING_LANGUAGES = ['ja'] as const;
+/** Mirrors [V1_LEARNING_LANGUAGES] — single allow-list for prefs PATCH. */
+export const LEARNING_LANGUAGES = V1_LEARNING_LANGUAGES;
 export type LearningLanguage = (typeof LEARNING_LANGUAGES)[number];
 
 export const THEME_MODES = ['system', 'light', 'dark'] as const;

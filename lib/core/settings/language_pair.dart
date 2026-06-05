@@ -2,6 +2,28 @@
 
 import 'package:nimon/core/settings/content_community.dart';
 
+/// V1 learning-language wire codes (must match backend `V1_LEARNING_LANGUAGES`).
+const Set<String> v1LearningLanguageWireCodes = {'ja', 'en'};
+
+const String _defaultLearningLanguageWire = 'ja';
+
+/// Normalizes stored/API learning language to `ja` or `en`; unknown → `ja`.
+String safeLearningLanguageWireCode(String? raw) {
+  final t = (raw ?? '').trim().toLowerCase();
+  if (v1LearningLanguageWireCodes.contains(t)) return t;
+  return _defaultLearningLanguageWire;
+}
+
+/// Whether Japanese-specific rules (furigana / kana reading) apply at publish time.
+///
+/// Only explicit `en` opts out. `null`, empty, `ja`, and unknown codes keep furigana
+/// validation so legacy drafts without a stored tag behave as today.
+bool isJapaneseLearningWireCode(String? raw) {
+  final t = (raw ?? '').trim().toLowerCase();
+  if (t == 'en') return false;
+  return true;
+}
+
 /// Returns true when [contentLocale] and [learningLanguage] are both set and equal.
 bool isSameLanguagePair({
   required String contentLocale,

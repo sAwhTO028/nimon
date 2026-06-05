@@ -177,7 +177,33 @@ void main() {
       );
     });
 
-    test('English learning is blocked with englishComingSoon', () {
+    test('English learning passes when prefs match en+my', () {
+      final payload = NimonImportRawPayload.fromJsonMap({
+        'nimonImportMeta': meta(
+          learningLanguage: 'English',
+          contentCommunity: 'Burmese',
+        ),
+        'core': coreWithSentences(),
+      });
+      final r = validateNimonImportPayload(
+        payload,
+        const NimonImportValidationContext(
+          learningLanguageCode: 'en',
+          contentLocaleCode: 'my',
+          authenticatedEmail: 'user@example.com',
+        ),
+      );
+      expect(
+        r.blockingErrors.map((e) => e.code),
+        isNot(contains('import.context.englishComingSoon')),
+      );
+      expect(
+        r.blockingErrors.map((e) => e.code),
+        isNot(contains('import.context.learningLanguageMismatch')),
+      );
+    });
+
+    test('English import blocked when prefs learning is ja', () {
       final r = validate({
         'nimonImportMeta': meta(learningLanguage: 'English'),
         'core': coreWithSentences(),
@@ -185,7 +211,7 @@ void main() {
       expect(r.canImport, isFalse);
       expect(
         r.blockingErrors.map((e) => e.code),
-        contains('import.context.englishComingSoon'),
+        contains('import.context.learningLanguageMismatch'),
       );
     });
 

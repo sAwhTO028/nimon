@@ -1,4 +1,4 @@
-import { HttpStatus, Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { Prisma, PublishState } from '@prisma/client';
 import {
   normalizeStoryDraftTextFields,
@@ -291,12 +291,23 @@ export class StoryDraftsService {
       where: { userId: ownerId },
       select: { contentLocale: true, learningLanguage: true },
     });
-    return resolvePublishLanguageTags({
-      draftContentLocale,
-      draftLearningLanguage,
-      prefContentLocale: pref?.contentLocale,
-      prefLearningLanguage: pref?.learningLanguage,
-    });
+    try {
+      return resolvePublishLanguageTags({
+        draftContentLocale,
+        draftLearningLanguage,
+        prefContentLocale: pref?.contentLocale,
+        prefLearningLanguage: pref?.learningLanguage,
+      });
+    } catch (e) {
+      if (e instanceof BadRequestException) {
+        throw apiError(
+          HttpStatus.BAD_REQUEST,
+          'language_pair_same_not_allowed',
+          'contentLocale and learningLanguage must differ',
+        );
+      }
+      throw e;
+    }
   }
 
   private async resolvePublishLanguageTagsForDraft(

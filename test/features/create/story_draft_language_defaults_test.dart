@@ -22,4 +22,15 @@ void main() {
     expect(back.basics.contentLocale, 'en');
     expect(back.basics.learningLanguage, 'ja');
   });
+
+  test('basics DTO round-trip preserves en+my', () {
+    final draft = CreatorStoryV1.empty(
+      contentLocale: 'my',
+      learningLanguage: 'en',
+    );
+    final dto = StoryDraftMapper.fromDomain(draft);
+    final back = StoryDraftMapper.toDomain(dto);
+    expect(back.basics.contentLocale, 'my');
+    expect(back.basics.learningLanguage, 'en');
+  });
 }

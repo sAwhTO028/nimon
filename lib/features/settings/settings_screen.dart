@@ -86,6 +86,7 @@ class _SettingsBody extends ConsumerWidget {
 
   static String _learningLanguageLabel(String code) => switch (code) {
         'ja' => 'Japanese',
+        'en' => 'English',
         _ => 'Japanese',
       };
 
@@ -268,12 +269,16 @@ class _SettingsBody extends ConsumerWidget {
         title: Text(l10n.settingsContentCommunity),
         children: [
           _radio(ctx, title: l10n.settingsMyanmar, value: 'my', group: current),
-          _radio(
-            ctx,
-            title: l10n.settingsInternationalEnglish,
-            value: 'en',
-            group: current,
-          ),
+          if (!isSameLanguagePair(
+            contentLocale: 'en',
+            learningLanguage: learningLanguage,
+          ))
+            _radio(
+              ctx,
+              title: l10n.settingsInternationalEnglish,
+              value: 'en',
+              group: current,
+            ),
           if (!isSameLanguagePair(
             contentLocale: 'ja',
             learningLanguage: learningLanguage,
@@ -313,15 +318,24 @@ class _SettingsBody extends ConsumerWidget {
         children: [
           _radio(ctx,
               title: l10n.settingsJapanese, value: 'ja', group: current),
-          ListTile(
-            title: const Text('More languages'),
-            subtitle: Text(l10n.settingsComingSoon),
-            enabled: false,
-          ),
+          _radio(ctx,
+              title: l10n.settingsEnglish, value: 'en', group: current),
         ],
       ),
     );
     if (picked == null || picked == current) return;
+    final prefs = ref.read(userPreferencesNotifierProvider).prefs;
+    if (isSameLanguagePair(
+      contentLocale: prefs.contentLocale,
+      learningLanguage: picked,
+    )) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(languagePairBlockedMessage())),
+        );
+      }
+      return;
+    }
     await ref
         .read(userPreferencesNotifierProvider.notifier)
         .updateLearningLanguage(picked);

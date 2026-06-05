@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart' show debugPrint, kDebugMode;
 import 'package:http/http.dart' as http;
+import 'package:nimon/core/settings/catalog_discovery_lens.dart';
 import 'package:nimon/core/validation/http_validation_failed_exception.dart';
 import 'package:nimon/core/validation/quota_exceeded_from_json.dart';
 import 'package:nimon/core/validation/validation_issue_from_json.dart';
@@ -300,16 +301,24 @@ class RemoteCreatorCollectionsRepository {
 
   /// Public; optional auth headers (guest-safe).
   Future<List<CreatorMonoCollection>> fetchPublicCollections(
-    String userId,
-  ) async {
+    String userId, {
+    CatalogDiscoveryLens? catalogLens,
+  }) async {
     final uid = userId.trim();
     if (uid.isEmpty) throw ArgumentError('userId is empty');
     try {
-      final uri = _u('/v1/users/$uid/creator-collections');
+      final headers = await _mergeAuth({'Accept': 'application/json'});
+      final qp = <String, String>{};
+      CatalogDiscoveryLens.mergeIntoQueryIfAuthenticated(
+        qp,
+        catalogLens,
+        headers,
+      );
+      final base = _u('/v1/users/$uid/creator-collections');
+      final uri = qp.isEmpty ? base : base.replace(queryParameters: qp);
       if (kDebugMode) {
         debugPrint('RemoteCreatorCollectionsRepository: GET $uri');
       }
-      final headers = await _mergeAuth({'Accept': 'application/json'});
       final resp = await _nimonAuthSend(
         uri,
         () => Future.value(headers),
@@ -348,22 +357,28 @@ class RemoteCreatorCollectionsRepository {
     String collectionId, {
     String? cursor,
     int? limit,
+    CatalogDiscoveryLens? catalogLens,
   }) async {
     final uid = userId.trim();
     final cid = collectionId.trim();
     if (uid.isEmpty) throw ArgumentError('userId is empty');
     if (cid.isEmpty) throw ArgumentError('collectionId is empty');
     try {
+      final headers = await _mergeAuth({'Accept': 'application/json'});
       final qp = <String, String>{};
       final c = cursor?.trim();
       if (c != null && c.isNotEmpty) qp['cursor'] = c;
       if (limit != null) qp['limit'] = '$limit';
+      CatalogDiscoveryLens.mergeIntoQueryIfAuthenticated(
+        qp,
+        catalogLens,
+        headers,
+      );
       final base = _u('/v1/users/$uid/creator-collections/$cid/monos');
       final uri = qp.isEmpty ? base : base.replace(queryParameters: qp);
       if (kDebugMode) {
         debugPrint('RemoteCreatorCollectionsRepository: GET $uri');
       }
-      final headers = await _mergeAuth({'Accept': 'application/json'});
       final resp = await _nimonAuthSend(
         uri,
         () => Future.value(headers),

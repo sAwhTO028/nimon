@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:nimon/core/pagination/page_request.dart';
 import 'package:nimon/features/mono/data/mono_feed_summary_dto.dart';
+import 'package:nimon/core/settings/catalog_discovery_lens.dart';
 import 'package:nimon/features/mono/data/remote_mono_feed_repository.dart';
 import 'package:nimon/features/profile/data/published_mono_catalog_visibility_exception.dart';
 
@@ -75,6 +76,8 @@ void main() {
               'shareUrl': null,
               'publishKind': '',
               'accessType': 'public',
+              'contentLocale': 'my',
+              'learningLanguage': 'en',
             },
           ],
           'nextCursor': 'next',
@@ -97,6 +100,8 @@ void main() {
     expect(page.items, hasLength(1));
     expect(page.items.single, isA<MonoFeedSummaryDto>());
     expect(page.items.single.monoId, 'id1');
+    expect(page.items.single.contentLocale, 'my');
+    expect(page.items.single.learningLanguage, 'en');
     expect(page.nextCursor, 'next');
     expect(page.hasMore, true);
   });
@@ -155,6 +160,64 @@ void main() {
       repo.fetchMonoDetail('mid'),
       throwsA(isA<PublishedMonoHiddenWhileEditingException>()),
     );
+  });
+
+  test('fetchFeedPage sends catalog lens query when auth and lens provided',
+      () async {
+    http.BaseRequest? captured;
+    final client = MockClient((request) async {
+      captured = request;
+      return http.Response(
+        jsonEncode({'items': <Object>[], 'hasMore': false}),
+        200,
+        headers: {'content-type': 'application/json'},
+      );
+    });
+
+    final repo = RemoteMonoFeedRepository(
+      apiBaseUrl: 'http://127.0.0.1:9',
+      client: client,
+      authHeaderBuilder: () async => {'Authorization': 'Bearer tok'},
+    );
+
+    await repo.fetchFeedPage(
+      PageRequest(limit: 15, sort: 'recent'),
+      catalogLens: const CatalogDiscoveryLens(
+        contentLocale: 'my',
+        learningLanguage: 'en',
+      ),
+    );
+
+    expect(captured!.url.queryParameters['contentLocale'], 'my');
+    expect(captured!.url.queryParameters['learningLanguage'], 'en');
+  });
+
+  test('fetchFeedPage omits catalog lens query for guest', () async {
+    http.BaseRequest? captured;
+    final client = MockClient((request) async {
+      captured = request;
+      return http.Response(
+        jsonEncode({'items': <Object>[], 'hasMore': false}),
+        200,
+        headers: {'content-type': 'application/json'},
+      );
+    });
+
+    final repo = RemoteMonoFeedRepository(
+      apiBaseUrl: 'http://127.0.0.1:9',
+      client: client,
+    );
+
+    await repo.fetchFeedPage(
+      PageRequest(limit: 15, sort: 'recent'),
+      catalogLens: const CatalogDiscoveryLens(
+        contentLocale: 'my',
+        learningLanguage: 'en',
+      ),
+    );
+
+    expect(captured!.url.queryParameters.containsKey('learningLanguage'), isFalse);
+    expect(captured!.url.queryParameters.containsKey('contentLocale'), isFalse);
   });
 
   test('optional auth headers merged when builder returns Bearer', () async {

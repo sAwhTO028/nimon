@@ -3,29 +3,36 @@ import 'dart:async' show Timer, unawaited;
 import 'package:flutter/foundation.dart' show debugPrint, kDebugMode;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:nimon/core/pagination/pagination_defaults.dart';
+import 'package:nimon/core/settings/catalog_discovery_lens.dart';
 import 'package:nimon/features/search/data/mono_search_remote.dart';
 import 'package:nimon/features/search/presentation/mono_search_state.dart';
 
 /// Search list + filters for published mono search (M18B/M18C).
+typedef CatalogDiscoveryLensReader = CatalogDiscoveryLens? Function();
+
 class MonoSearchNotifier extends StateNotifier<MonoSearchState> {
   MonoSearchNotifier(
     this._repo, {
     int pageLimit = PaginationDefaults.defaultPageLimit,
     Duration? debounce,
+    CatalogDiscoveryLensReader? catalogLens,
   })  : _pageLimit = pageLimit,
         _debounce = debounce ??
             const Duration(milliseconds: PaginationDefaults.searchDebounceMs),
+        _catalogLens = catalogLens ?? (() => null),
         super(const MonoSearchState());
 
   final MonoSearchRemote _repo;
   final int _pageLimit;
   final Duration _debounce;
+  final CatalogDiscoveryLensReader _catalogLens;
 
   Timer? _queryDebounce;
 
   int get pageLimit => _pageLimit;
 
-  static bool _shouldFetchRemote(MonoSearchState s) {
+  /// True when query/level/category warrant a remote search (M18B/M23A-6D-1).
+  static bool shouldFetchRemote(MonoSearchState s) {
     if (s.query.trim().isNotEmpty) return true;
     final lv = s.selectedLevel?.trim();
     if (lv != null && lv.isNotEmpty) return true;
@@ -100,7 +107,7 @@ class MonoSearchNotifier extends StateNotifier<MonoSearchState> {
       error: null,
     );
 
-    if (!_shouldFetchRemote(state)) {
+    if (!shouldFetchRemote(state)) {
       if (state.requestEpoch != myEpoch) return;
       state = state.copyWith(
         isLoadingFirstPage: false,
@@ -121,6 +128,7 @@ class MonoSearchNotifier extends StateNotifier<MonoSearchState> {
         sort: state.sort,
         limit: _pageLimit,
         cursor: null,
+        catalogLens: _catalogLens(),
       );
       if (state.requestEpoch != myEpoch) return;
       state = state.copyWith(
@@ -166,6 +174,7 @@ class MonoSearchNotifier extends StateNotifier<MonoSearchState> {
         sort: state.sort,
         limit: _pageLimit,
         cursor: cursor,
+        catalogLens: _catalogLens(),
       );
       if (state.requestEpoch != myEpoch) return;
       final existingIds = state.items.map((e) => e.id).toSet();

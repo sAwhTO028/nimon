@@ -21,6 +21,8 @@ export class SearchController {
     @Query('sort') sort?: string,
     @Query('limit') limit?: string,
     @Query('cursor') cursor?: string,
+    @Query('contentLocale') contentLocale?: string,
+    @Query('learningLanguage') learningLanguage?: string,
     @Req() req?: { user?: JwtValidatedUser },
   ) {
     return await this.search.searchPublishedMonos({
@@ -30,6 +32,8 @@ export class SearchController {
       sort,
       limitRaw: limit,
       cursor,
+      contentLocale: contentLocale?.trim(),
+      learningLanguage: learningLanguage?.trim(),
       viewerUserId: req?.user?.userId ?? null,
     });
   }

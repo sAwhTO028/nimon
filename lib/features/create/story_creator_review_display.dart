@@ -1,3 +1,4 @@
+import 'package:nimon/core/settings/language_pair.dart';
 import 'package:nimon/features/create/creator_completion_rules.dart';
 import 'package:nimon/features/create/creator_readiness.dart';
 import 'package:nimon/features/create/story_creator_models.dart';
@@ -98,14 +99,17 @@ StoryReviewPublishMode resolveDefaultStoryReviewMode({
 /// Unmet lines for the **selected** publish type only.
 List<String> storyReviewUnmetForMode(
   StoryReviewPublishMode mode,
-  StoryReviewDisplayModel model,
-) {
+  StoryReviewDisplayModel model, {
+  String? learningLanguage,
+}) {
   final raw = switch (mode) {
     StoryReviewPublishMode.readingOnly => model.readOnly.unmetMessages,
     StoryReviewPublishMode.fullLearn => model.fullLearn.unmetMessages,
   };
   return _dedupeHumanized(
-    raw.map(_humanizeReviewUnmet).where((s) => s.trim().isNotEmpty),
+    raw
+        .map((m) => _humanizeReviewUnmet(m, learningLanguage: learningLanguage))
+        .where((s) => s.trim().isNotEmpty),
   );
 }
 
@@ -122,13 +126,15 @@ List<String> _dedupeHumanized(Iterable<String> items) {
 }
 
 /// Maps internal completion strings to concise, user-facing copy.
-String _humanizeReviewUnmet(String raw) {
+String _humanizeReviewUnmet(String raw, {String? learningLanguage}) {
   final t = raw.trim();
   if (t.isEmpty) return t;
   final lower = t.toLowerCase();
 
   if (lower.contains('vocabulary')) {
-    return 'Complete Vocabulary / Kanji';
+    return isJapaneseLearningWireCode(learningLanguage)
+        ? 'Complete Vocabulary / Kanji'
+        : 'Complete Vocabulary';
   }
   if (lower.contains('grammar')) {
     return 'Complete Grammar';

@@ -68,6 +68,7 @@ StoryPublishData _base({
   int grammarCount = 0,
   List<Map<String, Object?>> quiz = const [],
   Map<String, String> moduleStatuses = const {},
+  String? learningLanguage,
 }) {
   return StoryPublishData(
     title: 'Hello title ok long enough',
@@ -75,6 +76,7 @@ StoryPublishData _base({
     levelRaw: levelRaw,
     targetDurationBandKey: targetBand,
     durationSeconds: null,
+    learningLanguage: learningLanguage,
     promptSourceNote: promptSourceNote,
     sentences: _sentences(count: sentenceCount, charsPerSentence: charsPerSentence),
     vocabEntries: _vocab(vocabCount),
@@ -278,13 +280,75 @@ void main() {
       expect(high.issues.map((i) => i.code), contains('publish.htmlRules.vocabularyCountMismatch'));
     });
 
-    test('M. English still not enabled (no EN mode added)', () {
-      // There is no language field on StoryPublishData in V1; publish preflight always uses JP.
+    test('M. EN read-only below EN char min fails', () {
       final r = validateStoryPublishData(
-        _base(mode: ValidationMode.readOnlyPublish),
+        _base(
+          mode: ValidationMode.readOnlyPublish,
+          levelRaw: 'N5',
+          targetBand: '3_5',
+          sentenceCount: 24,
+          charsPerSentence: 15,
+          learningLanguage: 'en',
+        ),
         ValidationMode.readOnlyPublish,
       );
-      expect(hasBlockingIssues(r), isFalse);
+      expect(hasBlockingIssues(r), isTrue);
+      expect(
+        r.issues.map((i) => i.code),
+        contains('publish.htmlRules.storyCharsTooFew'),
+      );
+    });
+
+    test('N. EN read-only within EN band passes (above JP max)', () {
+      final r = validateStoryPublishData(
+        _base(
+          mode: ValidationMode.readOnlyPublish,
+          levelRaw: 'N5',
+          targetBand: '3_5',
+          sentenceCount: 24,
+          charsPerSentence: 50,
+          learningLanguage: 'en',
+        ),
+        ValidationMode.readOnlyPublish,
+      );
+      expect(hasBlockingIssues(r), isFalse, reason: r.toString());
+    });
+
+    test('O. same EN-sized body fails JP char max when learningLanguage=ja', () {
+      final r = validateStoryPublishData(
+        _base(
+          mode: ValidationMode.readOnlyPublish,
+          levelRaw: 'N5',
+          targetBand: '3_5',
+          sentenceCount: 24,
+          charsPerSentence: 50,
+          learningLanguage: 'ja',
+        ),
+        ValidationMode.readOnlyPublish,
+      );
+      expect(hasBlockingIssues(r), isTrue);
+      expect(
+        r.issues.map((i) => i.code),
+        contains('publish.htmlRules.storyCharsTooMany'),
+      );
+    });
+
+    test('P. missing learningLanguage falls back to JP limits', () {
+      final r = validateStoryPublishData(
+        _base(
+          mode: ValidationMode.readOnlyPublish,
+          levelRaw: 'N5',
+          targetBand: '3_5',
+          sentenceCount: 24,
+          charsPerSentence: 50,
+        ),
+        ValidationMode.readOnlyPublish,
+      );
+      expect(hasBlockingIssues(r), isTrue);
+      expect(
+        r.issues.map((i) => i.code),
+        contains('publish.htmlRules.storyCharsTooMany'),
+      );
     });
   });
 }

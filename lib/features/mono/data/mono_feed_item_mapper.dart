@@ -61,6 +61,8 @@ MonoFeedItem monoFeedItemFromMonoFeedSummary(MonoFeedSummaryDto dto) {
     catalogCategory:
         dto.category.trim().isNotEmpty ? dto.category.trim() : null,
     readDurationLabel: null,
+    contentLocale: dto.contentLocale,
+    learningLanguage: dto.learningLanguage,
   );
 }
 
@@ -79,6 +81,7 @@ MonoFeedItem monoFeedItemMergePublishedDetail(
     d.id,
     d.title,
     d.content,
+    learningLanguage: d.learningLanguage,
   );
   final coverUrl = (d.coverImageUrl ?? '').trim();
   final cover = coverUrl.isNotEmpty ? coverUrl : base.coverImageUrl;
@@ -151,6 +154,8 @@ MonoFeedItem monoFeedItemMergePublishedDetail(
     shareUrl: shareUrlOut ?? base.shareUrl,
     catalogCategory: catalogCategoryOut,
     readDurationLabel: readDurationLabelOut,
+    contentLocale: base.contentLocale ?? d.contentLocale,
+    learningLanguage: base.learningLanguage ?? d.learningLanguage,
   );
 }
 
@@ -222,6 +227,7 @@ MonoFeedItem monoFeedItemFromPublishedMonoListItemDto(
     isBookmarkedByMe: isBookmarkedByMe,
     myReaction: myReaction,
     contentLocale: dto.contentLocale,
+    learningLanguage: dto.learningLanguage,
   );
 }
 

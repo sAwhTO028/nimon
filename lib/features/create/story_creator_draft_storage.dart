@@ -1,5 +1,7 @@
 import 'dart:convert';
 
+import 'package:nimon/core/settings/content_community.dart';
+import 'package:nimon/core/settings/language_pair.dart';
 import 'package:nimon/features/create/story_creator_models.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -222,6 +224,10 @@ abstract final class StoryCreatorDraftStorage {
       'promptSourceNote': b.promptSourceNote,
       'targetDurationBandKey': b.targetDurationBandKey,
       'coverImageUrl': b.coverImageUrl,
+      if (b.contentLocale != null && b.contentLocale!.trim().isNotEmpty)
+        'contentLocale': b.contentLocale!.trim(),
+      if (b.learningLanguage != null && b.learningLanguage!.trim().isNotEmpty)
+        'learningLanguage': b.learningLanguage!.trim(),
       'creatorOwnerId': b.creatorOwnerId,
       'createdAt': b.createdAt.toIso8601String(),
       'updatedAt': b.updatedAt.toIso8601String(),
@@ -426,6 +432,20 @@ abstract final class StoryCreatorDraftStorage {
     return null;
   }
 
+  static String? _contentLocaleFromBasicsJson(Object? raw) {
+    if (raw == null) return null;
+    final t = raw.toString().trim();
+    if (t.isEmpty) return null;
+    return normalizeContentLocaleWireCode(t);
+  }
+
+  static String? _learningLanguageFromBasicsJson(Object? raw) {
+    if (raw == null) return null;
+    final t = raw.toString().trim();
+    if (t.isEmpty) return null;
+    return safeLearningLanguageWireCode(t);
+  }
+
   static StoryBasics _fromJsonBasics(Map<String, Object?> m) {
     DateTime parseDt(Object? v) {
       final s = (v as String?)?.trim();
@@ -446,6 +466,8 @@ abstract final class StoryCreatorDraftStorage {
       coverImageUrl: (m['coverImageUrl'] as String?)?.trim().isEmpty == true
           ? null
           : (m['coverImageUrl'] as String?),
+      contentLocale: _contentLocaleFromBasicsJson(m['contentLocale']),
+      learningLanguage: _learningLanguageFromBasicsJson(m['learningLanguage']),
       creatorOwnerId: (m['creatorOwnerId'] as String?) ?? '',
       createdAt: parseDt(m['createdAt']),
       updatedAt: parseDt(m['updatedAt']),

@@ -4,7 +4,8 @@ import { BadRequestException } from '@nestjs/common';
 export type V1ContentLocale = 'en' | 'my' | 'ja';
 
 /** V1 wire codes — target language being learned. */
-export type V1LearningLanguage = 'ja';
+export const V1_LEARNING_LANGUAGES = ['ja', 'en'] as const;
+export type V1LearningLanguage = (typeof V1_LEARNING_LANGUAGES)[number];
 
 const DEFAULT_CONTENT_LOCALE: V1ContentLocale = 'en';
 const DEFAULT_LEARNING_LANGUAGE: V1LearningLanguage = 'ja';
@@ -26,6 +27,7 @@ export function normalizeV1LearningLanguage(
   const t = String(raw).trim().toLowerCase();
   if (!t) return null;
   if (t === 'ja') return 'ja';
+  if (t === 'en') return 'en';
   return null;
 }
 
@@ -37,6 +39,18 @@ export function safeV1LearningLanguage(
   raw: string | null | undefined,
 ): V1LearningLanguage {
   return normalizeV1LearningLanguage(raw) ?? DEFAULT_LEARNING_LANGUAGE;
+}
+
+/**
+ * Whether Japanese-specific rules (furigana / kana reading) apply at publish time.
+ *
+ * Only explicit `en` opts out. `null`, empty, `ja`, and unknown codes keep furigana
+ * validation so legacy drafts without a stored tag behave as today.
+ */
+export function isJapaneseLearningWireCode(raw: string | null | undefined): boolean {
+  const t = String(raw ?? '').trim().toLowerCase();
+  if (t === 'en') return false;
+  return true;
 }
 
 /**

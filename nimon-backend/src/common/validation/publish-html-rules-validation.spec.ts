@@ -1,4 +1,7 @@
-import { validateStoryPublishInput } from './publish-validation';
+import {
+  storyPublishInputFromDraftRow,
+  validateStoryPublishInput,
+} from './publish-validation';
 import { ValidationMode } from './validation-mode';
 import { hasBlockingIssues } from './validation-result';
 
@@ -352,6 +355,88 @@ describe('publish validation (HTML generator rules)', () => {
         },
       },
       ValidationMode.FullLearnPublish,
+    );
+    expect(hasBlockingIssues(r)).toBe(false);
+  });
+
+  it('M. EN read-only below EN char min fails', () => {
+    const r = validateStoryPublishInput(
+      {
+        title: 'Valid story title',
+        description: 'desc',
+        levelRaw: 'N5',
+        targetDurationBandKey: '3_5',
+        promptSourceNote: 'promptDataTab=AI_mode',
+        learningLanguage: 'en',
+        sentences: sentences(24, 15),
+        vocabEntries: [],
+        grammarEntries: [],
+        quizEntries: [],
+        moduleWorkflowStatuses: {},
+      },
+      ValidationMode.ReadOnlyPublish,
+    );
+    expect(hasBlockingIssues(r)).toBe(true);
+    expect(r.issues.map((i) => i.code)).toContain('publish.htmlRules.storyCharsTooFew');
+  });
+
+  it('N. EN read-only within EN band passes (above JP max)', () => {
+    const r = validateStoryPublishInput(
+      {
+        title: 'Valid story title',
+        description: 'desc',
+        levelRaw: 'N5',
+        targetDurationBandKey: '3_5',
+        promptSourceNote: 'promptDataTab=AI_mode',
+        learningLanguage: 'en',
+        sentences: sentences(24, 50),
+        vocabEntries: [],
+        grammarEntries: [],
+        quizEntries: [],
+        moduleWorkflowStatuses: {},
+      },
+      ValidationMode.ReadOnlyPublish,
+    );
+    expect(hasBlockingIssues(r)).toBe(false);
+  });
+
+  it('O. EN-sized body fails JP char max when learningLanguage=ja', () => {
+    const r = validateStoryPublishInput(
+      {
+        title: 'Valid story title',
+        description: 'desc',
+        levelRaw: 'N5',
+        targetDurationBandKey: '3_5',
+        promptSourceNote: 'promptDataTab=AI_mode',
+        learningLanguage: 'ja',
+        sentences: sentences(24, 50),
+        vocabEntries: [],
+        grammarEntries: [],
+        quizEntries: [],
+        moduleWorkflowStatuses: {},
+      },
+      ValidationMode.ReadOnlyPublish,
+    );
+    expect(hasBlockingIssues(r)).toBe(true);
+    expect(r.issues.map((i) => i.code)).toContain('publish.htmlRules.storyCharsTooMany');
+  });
+
+  it('P. learningLanguage=ja regression still passes JP fixture', () => {
+    const r = validateStoryPublishInput(
+      {
+        title: 'Valid story title',
+        description: 'desc',
+        levelRaw: 'N4',
+        targetDurationBandKey: '5_7',
+        promptSourceNote: 'promptDataTab=AI_mode',
+        learningLanguage: 'ja',
+        sentences: sentences(42, 18),
+        vocabEntries: [],
+        grammarEntries: [],
+        quizEntries: [],
+        moduleWorkflowStatuses: {},
+      },
+      ValidationMode.ReadOnlyPublish,
     );
     expect(hasBlockingIssues(r)).toBe(false);
   });

@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import 'package:nimon/features/auth/auth_strict_unauthorized.dart';
 import 'package:nimon/features/auth/authenticated_http.dart';
 import 'package:nimon/core/settings/content_community.dart';
+import 'package:nimon/core/settings/language_pair.dart';
 import 'package:nimon/features/create/data/remote_backend_config.dart';
 
 typedef PreferencesAuthHeaderBuilder = Future<Map<String, String>> Function();
@@ -21,7 +22,7 @@ class UserPreferences {
 
   final String appLocale; // system|en|ja|my
   final String contentLocale; // en|my|ja
-  final String learningLanguage; // ja
+  final String learningLanguage; // ja | en
   final String themeMode; // system|light|dark
   final String readingTextSize; // small|standard|large
   final bool showExplanations;
@@ -107,8 +108,9 @@ UserPreferences _parsePreferences(Map<String, Object?> m) {
   return UserPreferences(
     appLocale: pick('appLocale', UserPreferences.defaults.appLocale),
     contentLocale: contentLocale,
-    learningLanguage:
-        pick('learningLanguage', UserPreferences.defaults.learningLanguage),
+    learningLanguage: safeLearningLanguageWireCode(
+      pick('learningLanguage', UserPreferences.defaults.learningLanguage),
+    ),
     themeMode: pick('themeMode', UserPreferences.defaults.themeMode),
     readingTextSize:
         pick('readingTextSize', UserPreferences.defaults.readingTextSize),

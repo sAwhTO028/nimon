@@ -23,6 +23,55 @@ function mkPublicWeb(web = 'http://localhost:3000'): PublicWebBaseUrlService {
   } as unknown as PublicWebBaseUrlService;
 }
 
+const catalogLocaleWhere = (
+  contentLocale: 'en' | 'my' | 'ja',
+  learningLanguage: 'ja' | 'en',
+) => ({
+  AND: [
+    {
+      OR: [{ contentLocale }, { contentLocale: null }],
+    },
+    {
+      OR: [{ learningLanguage }, { learningLanguage: null }],
+    },
+  ],
+});
+
+function mkSearchPrisma(
+  prefs?: { contentLocale: string; learningLanguage: string } | null,
+) {
+  const findMany = jest.fn().mockResolvedValue([]);
+  const count = jest.fn().mockResolvedValue(0);
+  const prisma = {
+    publishedMono: { findMany, count },
+    userPreference: {
+      findUnique: jest.fn().mockResolvedValue(prefs ?? null),
+    },
+    monoReaction: {
+      groupBy: jest.fn().mockResolvedValue([]),
+      findMany: jest.fn().mockResolvedValue([]),
+    },
+    monoBookmark: { findMany: jest.fn().mockResolvedValue([]) },
+  } as any;
+  return { prisma, findMany, count };
+}
+
+function findKeywordBlock(and: unknown[]): Record<string, unknown> | undefined {
+  return and.find((x) => {
+    if (typeof x !== 'object' || x === null || !('AND' in (x as object))) {
+      return false;
+    }
+    const inner = (x as { AND: unknown[] }).AND;
+    return inner.some((clause) => {
+      if (typeof clause !== 'object' || clause === null || !('OR' in clause)) {
+        return false;
+      }
+      const or = (clause as { OR: unknown[] }).OR;
+      return or.some((o) => typeof o === 'object' && o !== null && 'title' in o);
+    });
+  }) as Record<string, unknown> | undefined;
+}
+
 function sampleRow(
   id: string,
   ownerId: string,
@@ -57,36 +106,23 @@ function sampleRow(
 }
 
 describe('SearchService.searchPublishedMonos (M18A)', () => {
-  it('empty q uses catalog visibility only (no keyword AND)', async () => {
-    const findMany = jest.fn().mockResolvedValue([]);
-    const count = jest.fn().mockResolvedValue(0);
-    const prisma = {
-      publishedMono: { findMany, count },
-      monoReaction: { groupBy: jest.fn().mockResolvedValue([]), findMany: jest.fn().mockResolvedValue([]) },
-      monoBookmark: { findMany: jest.fn().mockResolvedValue([]) },
-    } as any;
-
+  it('empty q uses catalog visibility + guest locale lens (no keyword AND)', async () => {
+    const { prisma, findMany } = mkSearchPrisma();
     await new SearchService(prisma, mkMedia(), mkPublicWeb()).searchPublishedMonos({});
 
     expect(findMany).toHaveBeenCalledTimes(1);
     const where = findMany.mock.calls[0][0].where;
-    expect(where).toEqual(PUBLISHED_MONO_CATALOG_VISIBLE);
+    expect(where).toEqual({
+      AND: [PUBLISHED_MONO_CATALOG_VISIBLE, catalogLocaleWhere('en', 'ja')],
+    });
   });
 
   it('q matches title case-insensitively in Prisma where', async () => {
-    const findMany = jest.fn().mockResolvedValue([]);
-    const count = jest.fn().mockResolvedValue(0);
-    const prisma = {
-      publishedMono: { findMany, count },
-      monoReaction: { groupBy: jest.fn().mockResolvedValue([]), findMany: jest.fn().mockResolvedValue([]) },
-      monoBookmark: { findMany: jest.fn().mockResolvedValue([]) },
-    } as any;
-
+    const { prisma, findMany } = mkSearchPrisma();
     await new SearchService(prisma, mkMedia(), mkPublicWeb()).searchPublishedMonos({ q: 'Hello' });
 
     const where = findMany.mock.calls[0][0].where as { AND: unknown[] };
-    expect(where.AND).toHaveLength(2);
-    expect(where.AND[1]).toEqual({
+    expect(findKeywordBlock(where.AND)).toEqual({
       AND: [
         {
           OR: expect.arrayContaining([
@@ -109,33 +145,24 @@ describe('SearchService.searchPublishedMonos (M18A)', () => {
   });
 
   it('q matches description in OR clause', async () => {
-    const findMany = jest.fn().mockResolvedValue([]);
-    const count = jest.fn().mockResolvedValue(0);
-    const prisma = {
-      publishedMono: { findMany, count },
-      monoReaction: { groupBy: jest.fn().mockResolvedValue([]), findMany: jest.fn().mockResolvedValue([]) },
-      monoBookmark: { findMany: jest.fn().mockResolvedValue([]) },
-    } as any;
-
+    const { prisma, findMany } = mkSearchPrisma();
     await new SearchService(prisma, mkMedia(), mkPublicWeb()).searchPublishedMonos({ q: 'Tokyo' });
-    const or = (findMany.mock.calls[0][0].where as { AND: any[] }).AND[1].AND[0].OR;
+    const kw = findKeywordBlock(
+      (findMany.mock.calls[0][0].where as { AND: unknown[] }).AND,
+    )!;
+    const or = (kw.AND as any[])[0].OR;
     expect(or).toEqual(
       expect.arrayContaining([{ description: { contains: 'Tokyo', mode: 'insensitive' } }]),
     );
   });
 
   it('q matches creator display name and handle in profile OR', async () => {
-    const findMany = jest.fn().mockResolvedValue([]);
-    const count = jest.fn().mockResolvedValue(0);
-    const prisma = {
-      publishedMono: { findMany, count },
-      monoReaction: { groupBy: jest.fn().mockResolvedValue([]), findMany: jest.fn().mockResolvedValue([]) },
-      monoBookmark: { findMany: jest.fn().mockResolvedValue([]) },
-    } as any;
-
+    const { prisma, findMany } = mkSearchPrisma();
     await new SearchService(prisma, mkMedia(), mkPublicWeb()).searchPublishedMonos({ q: 'alice' });
-    const profileOr = (findMany.mock.calls[0][0].where as { AND: any[] }).AND[1].AND[0].OR[2].owner.profile
-      .OR;
+    const kw = findKeywordBlock(
+      (findMany.mock.calls[0][0].where as { AND: unknown[] }).AND,
+    )!;
+    const profileOr = (kw.AND as any[])[0].OR[2].owner.profile.OR;
     expect(profileOr).toEqual([
       { displayName: { contains: 'alice', mode: 'insensitive' } },
       { handle: { contains: 'alice', mode: 'insensitive' } },
@@ -143,42 +170,23 @@ describe('SearchService.searchPublishedMonos (M18A)', () => {
   });
 
   it('level filter adds exact level predicate', async () => {
-    const findMany = jest.fn().mockResolvedValue([]);
-    const count = jest.fn().mockResolvedValue(0);
-    const prisma = {
-      publishedMono: { findMany, count },
-      monoReaction: { groupBy: jest.fn().mockResolvedValue([]), findMany: jest.fn().mockResolvedValue([]) },
-      monoBookmark: { findMany: jest.fn().mockResolvedValue([]) },
-    } as any;
-
+    const { prisma, findMany } = mkSearchPrisma();
     await new SearchService(prisma, mkMedia(), mkPublicWeb()).searchPublishedMonos({ level: 'N3' });
     const where = findMany.mock.calls[0][0].where as { AND: unknown[] };
     expect(where.AND).toContainEqual({ level: 'N3' });
   });
 
   it('category filter adds exact category predicate', async () => {
-    const findMany = jest.fn().mockResolvedValue([]);
-    const count = jest.fn().mockResolvedValue(0);
-    const prisma = {
-      publishedMono: { findMany, count },
-      monoReaction: { groupBy: jest.fn().mockResolvedValue([]), findMany: jest.fn().mockResolvedValue([]) },
-      monoBookmark: { findMany: jest.fn().mockResolvedValue([]) },
-    } as any;
-
-    await new SearchService(prisma, mkMedia(), mkPublicWeb()).searchPublishedMonos({ category: 'Horror' });
+    const { prisma, findMany } = mkSearchPrisma();
+    await new SearchService(prisma, mkMedia(), mkPublicWeb()).searchPublishedMonos({
+      category: 'Horror',
+    });
     const where = findMany.mock.calls[0][0].where as { AND: unknown[] };
     expect(where.AND).toContainEqual({ category: 'Horror' });
   });
 
   it('q + level + category combine with AND', async () => {
-    const findMany = jest.fn().mockResolvedValue([]);
-    const count = jest.fn().mockResolvedValue(0);
-    const prisma = {
-      publishedMono: { findMany, count },
-      monoReaction: { groupBy: jest.fn().mockResolvedValue([]), findMany: jest.fn().mockResolvedValue([]) },
-      monoBookmark: { findMany: jest.fn().mockResolvedValue([]) },
-    } as any;
-
+    const { prisma, findMany } = mkSearchPrisma();
     await new SearchService(prisma, mkMedia(), mkPublicWeb()).searchPublishedMonos({
       q: 'x',
       level: 'N5',
@@ -187,35 +195,21 @@ describe('SearchService.searchPublishedMonos (M18A)', () => {
     const and = (findMany.mock.calls[0][0].where as { AND: unknown[] }).AND;
     expect(and).toContainEqual({ level: 'N5' });
     expect(and).toContainEqual({ category: 'Cat' });
-    expect(and.some((x) => typeof x === 'object' && x !== null && 'AND' in (x as object))).toBe(true);
+    expect(findKeywordBlock(and)).toBeDefined();
   });
 
   it('where includes trashedAt null (catalog)', async () => {
-    const findMany = jest.fn().mockResolvedValue([]);
-    const count = jest.fn().mockResolvedValue(0);
-    const prisma = {
-      publishedMono: { findMany, count },
-      monoReaction: { groupBy: jest.fn().mockResolvedValue([]), findMany: jest.fn().mockResolvedValue([]) },
-      monoBookmark: { findMany: jest.fn().mockResolvedValue([]) },
-    } as any;
-
+    const { prisma, findMany } = mkSearchPrisma();
     await new SearchService(prisma, mkMedia(), mkPublicWeb()).searchPublishedMonos({ q: 'z' });
     const and = (findMany.mock.calls[0][0].where as { AND: unknown[] }).AND;
     expect(and[0]).toMatchObject({ trashedAt: null });
   });
 
   it('where includes NOT drafts with unpublished core changes', async () => {
-    const findMany = jest.fn().mockResolvedValue([]);
-    const count = jest.fn().mockResolvedValue(0);
-    const prisma = {
-      publishedMono: { findMany, count },
-      monoReaction: { groupBy: jest.fn().mockResolvedValue([]), findMany: jest.fn().mockResolvedValue([]) },
-      monoBookmark: { findMany: jest.fn().mockResolvedValue([]) },
-    } as any;
-
+    const { prisma, findMany } = mkSearchPrisma();
     await new SearchService(prisma, mkMedia(), mkPublicWeb()).searchPublishedMonos({});
-    const w = findMany.mock.calls[0][0].where as { NOT?: unknown };
-    expect(w.NOT).toEqual(PUBLISHED_MONO_CATALOG_VISIBLE.NOT);
+    const and = (findMany.mock.calls[0][0].where as { AND: unknown[] }).AND;
+    expect(and[0].NOT).toEqual(PUBLISHED_MONO_CATALOG_VISIBLE.NOT);
   });
 
   it('limit=20 with 21 rows returns 20 items, hasMore, nextCursor, totalCount 35', async () => {
@@ -228,13 +222,9 @@ describe('SearchService.searchPublishedMonos (M18A)', () => {
         }),
       );
     }
-    const findMany = jest.fn().mockResolvedValue(rows);
-    const count = jest.fn().mockResolvedValue(35);
-    const prisma = {
-      publishedMono: { findMany, count },
-      monoReaction: { groupBy: jest.fn().mockResolvedValue([]), findMany: jest.fn().mockResolvedValue([]) },
-      monoBookmark: { findMany: jest.fn().mockResolvedValue([]) },
-    } as any;
+    const { prisma, findMany } = mkSearchPrisma();
+    findMany.mockResolvedValue(rows);
+    prisma.publishedMono.count = jest.fn().mockResolvedValue(35);
 
     const out = await new SearchService(prisma, mkMedia(), mkPublicWeb()).searchPublishedMonos({
       limitRaw: '20',
@@ -248,20 +238,20 @@ describe('SearchService.searchPublishedMonos (M18A)', () => {
   });
 
   it('page 2 with cursor returns next slice and totalCount null', async () => {
-    const r0 = sampleRow('30000000-0000-4000-8000-000000000001', 'u', { updatedMs: Date.UTC(2026, 2, 1, 0, 0, 2) });
-    const r1 = sampleRow('30000000-0000-4000-8000-000000000002', 'u', { updatedMs: Date.UTC(2026, 2, 1, 0, 0, 1) });
+    const r0 = sampleRow('30000000-0000-4000-8000-000000000001', 'u', {
+      updatedMs: Date.UTC(2026, 2, 1, 0, 0, 2),
+    });
+    const r1 = sampleRow('30000000-0000-4000-8000-000000000002', 'u', {
+      updatedMs: Date.UTC(2026, 2, 1, 0, 0, 1),
+    });
     const page1 = Array.from({ length: 21 }, (_, i) =>
       sampleRow(`30000000-0000-4000-8000-${(0x300 + i).toString(16)}`, 'u', {
         updatedMs: Date.UTC(2026, 2, 1, 0, 0, 100 - i),
       }),
     );
-    const findMany = jest.fn().mockResolvedValueOnce(page1).mockResolvedValueOnce([r0, r1]);
-    const count = jest.fn().mockResolvedValue(22);
-    const prisma = {
-      publishedMono: { findMany, count },
-      monoReaction: { groupBy: jest.fn().mockResolvedValue([]), findMany: jest.fn().mockResolvedValue([]) },
-      monoBookmark: { findMany: jest.fn().mockResolvedValue([]) },
-    } as any;
+    const { prisma, findMany } = mkSearchPrisma();
+    findMany.mockResolvedValueOnce(page1).mockResolvedValueOnce([r0, r1]);
+    prisma.publishedMono.count = jest.fn().mockResolvedValue(22);
     const svc = new SearchService(prisma, mkMedia(), mkPublicWeb());
 
     const first = await svc.searchPublishedMonos({ limitRaw: '20' });
@@ -279,11 +269,7 @@ describe('SearchService.searchPublishedMonos (M18A)', () => {
   });
 
   it('invalid cursor throws before findMany', async () => {
-    const prisma = {
-      publishedMono: { findMany: jest.fn(), count: jest.fn() },
-      monoReaction: { groupBy: jest.fn(), findMany: jest.fn() },
-      monoBookmark: { findMany: jest.fn() },
-    } as any;
+    const { prisma } = mkSearchPrisma();
     await expect(
       new SearchService(prisma, mkMedia(), mkPublicWeb()).searchPublishedMonos({ cursor: '%%%' }),
     ).rejects.toBeInstanceOf(BadRequestException);
@@ -291,16 +277,11 @@ describe('SearchService.searchPublishedMonos (M18A)', () => {
   });
 
   it('multi-token q adds AND of per-token clauses', async () => {
-    const findMany = jest.fn().mockResolvedValue([]);
-    const count = jest.fn().mockResolvedValue(0);
-    const prisma = {
-      publishedMono: { findMany, count },
-      monoReaction: { groupBy: jest.fn().mockResolvedValue([]), findMany: jest.fn().mockResolvedValue([]) },
-      monoBookmark: { findMany: jest.fn().mockResolvedValue([]) },
-    } as any;
-
+    const { prisma, findMany } = mkSearchPrisma();
     await new SearchService(prisma, mkMedia(), mkPublicWeb()).searchPublishedMonos({ q: 'foo bar' });
-    const kw = (findMany.mock.calls[0][0].where as { AND: any[] }).AND[1];
+    const kw = findKeywordBlock(
+      (findMany.mock.calls[0][0].where as { AND: any[] }).AND,
+    )!;
     expect(kw.AND).toHaveLength(2);
     expect(kw.AND[0].OR).toEqual(
       expect.arrayContaining([{ title: { contains: 'foo', mode: 'insensitive' } }]),
@@ -311,11 +292,7 @@ describe('SearchService.searchPublishedMonos (M18A)', () => {
   });
 
   it('invalid level throws BadRequestException', async () => {
-    const prisma = {
-      publishedMono: { findMany: jest.fn(), count: jest.fn() },
-      monoReaction: { groupBy: jest.fn(), findMany: jest.fn() },
-      monoBookmark: { findMany: jest.fn() },
-    } as any;
+    const { prisma } = mkSearchPrisma();
     await expect(
       new SearchService(prisma, mkMedia(), mkPublicWeb()).searchPublishedMonos({ level: 'N0' }),
     ).rejects.toBeInstanceOf(BadRequestException);
@@ -323,11 +300,7 @@ describe('SearchService.searchPublishedMonos (M18A)', () => {
   });
 
   it('unsupported sort throws BadRequestException', async () => {
-    const prisma = {
-      publishedMono: { findMany: jest.fn(), count: jest.fn() },
-      monoReaction: { groupBy: jest.fn(), findMany: jest.fn() },
-      monoBookmark: { findMany: jest.fn() },
-    } as any;
+    const { prisma } = mkSearchPrisma();
     await expect(
       new SearchService(prisma, mkMedia(), mkPublicWeb()).searchPublishedMonos({ sort: 'popular' }),
     ).rejects.toBeInstanceOf(BadRequestException);
@@ -335,25 +308,25 @@ describe('SearchService.searchPublishedMonos (M18A)', () => {
 
   it('optional viewer loads bookmarks and reactions for page ids', async () => {
     const row = sampleRow('40000000-0000-4000-8000-000000000099', 'u', {});
-    const findMany = jest.fn().mockResolvedValue([row]);
-    const count = jest.fn().mockResolvedValue(1);
-    const bookmarkFind = jest.fn().mockResolvedValue([{ publishedMonoId: row.id }]);
-    const reactionFind = jest.fn().mockResolvedValue([{ publishedMonoId: row.id }]);
-    const prisma = {
-      publishedMono: { findMany, count },
-      monoReaction: {
-        groupBy: jest.fn().mockResolvedValue([{ publishedMonoId: row.id, _count: { _all: 3 } }]),
-        findMany: reactionFind,
-      },
-      monoBookmark: { findMany: bookmarkFind },
-    } as any;
+    const { prisma, findMany } = mkSearchPrisma();
+    findMany.mockResolvedValue([row]);
+    prisma.publishedMono.count = jest.fn().mockResolvedValue(1);
+    prisma.monoBookmark.findMany = jest
+      .fn()
+      .mockResolvedValue([{ publishedMonoId: row.id }]);
+    prisma.monoReaction.findMany = jest
+      .fn()
+      .mockResolvedValue([{ publishedMonoId: row.id }]);
+    prisma.monoReaction.groupBy = jest
+      .fn()
+      .mockResolvedValue([{ publishedMonoId: row.id, _count: { _all: 3 } }]);
 
     const out = await new SearchService(prisma, mkMedia(), mkPublicWeb()).searchPublishedMonos({
       viewerUserId: 'viewer-uuid-0000-0000-0000-000000000001',
     });
 
-    expect(bookmarkFind).toHaveBeenCalled();
-    expect(reactionFind).toHaveBeenCalled();
+    expect(prisma.monoBookmark.findMany).toHaveBeenCalled();
+    expect(prisma.monoReaction.findMany).toHaveBeenCalled();
     expect(out.items[0]!.isBookmarkedByMe).toBe(true);
     expect(out.items[0]!.myReaction).toBe('heart');
     expect(out.items[0]!.likesCount).toBe(3);
@@ -361,13 +334,101 @@ describe('SearchService.searchPublishedMonos (M18A)', () => {
 
   it('maps shareUrl on items', async () => {
     const row = sampleRow('50000000-0000-4000-8000-000000000088', 'u', {});
-    const prisma = {
-      publishedMono: { findMany: jest.fn().mockResolvedValue([row]), count: jest.fn().mockResolvedValue(1) },
-      monoReaction: { groupBy: jest.fn().mockResolvedValue([]), findMany: jest.fn().mockResolvedValue([]) },
-      monoBookmark: { findMany: jest.fn().mockResolvedValue([]) },
-    } as any;
+    const { prisma, findMany } = mkSearchPrisma();
+    findMany.mockResolvedValue([row]);
+    prisma.publishedMono.count = jest.fn().mockResolvedValue(1);
 
     const out = await new SearchService(prisma, mkMedia(), mkPublicWeb()).searchPublishedMonos({});
     expect(out.items[0]!.shareUrl).toBe(`http://localhost:3000/mono/${row.id}`);
+  });
+});
+
+describe('SearchService.searchPublishedMonos (M23A-6D-1 feed lens)', () => {
+  it('en+my viewer search uses my+en lens only', async () => {
+    const { prisma, findMany } = mkSearchPrisma({
+      contentLocale: 'my',
+      learningLanguage: 'en',
+    });
+    await new SearchService(prisma, mkMedia(), mkPublicWeb()).searchPublishedMonos({
+      q: 'match',
+      viewerUserId: 'u-en-my',
+    });
+    const and = findMany.mock.calls[0][0].where.AND as unknown[];
+    expect(and).toEqual(expect.arrayContaining([catalogLocaleWhere('my', 'en')]));
+    expect(and).not.toEqual(expect.arrayContaining([catalogLocaleWhere('my', 'ja')]));
+  });
+
+  it('ja+my viewer search uses my+ja lens only', async () => {
+    const { prisma, findMany } = mkSearchPrisma({
+      contentLocale: 'my',
+      learningLanguage: 'ja',
+    });
+    await new SearchService(prisma, mkMedia(), mkPublicWeb()).searchPublishedMonos({
+      q: 'match',
+      viewerUserId: 'u-ja-my',
+    });
+    const and = findMany.mock.calls[0][0].where.AND as unknown[];
+    expect(and).toEqual(expect.arrayContaining([catalogLocaleWhere('my', 'ja')]));
+    expect(and).not.toEqual(expect.arrayContaining([catalogLocaleWhere('my', 'en')]));
+  });
+
+  it('guest default search lens is en+ja (ja learning, en content)', async () => {
+    const { prisma, findMany } = mkSearchPrisma();
+    await new SearchService(prisma, mkMedia(), mkPublicWeb()).searchPublishedMonos({
+      q: 'match',
+      viewerUserId: null,
+    });
+    expect(findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          AND: expect.arrayContaining([catalogLocaleWhere('en', 'ja')]),
+        },
+      }),
+    );
+    const and = findMany.mock.calls[0][0].where.AND as unknown[];
+    expect(and).not.toEqual(expect.arrayContaining([catalogLocaleWhere('my', 'en')]));
+  });
+
+  it('query override learningLanguage=en contentLocale=my applies my+en lens', async () => {
+    const { prisma, findMany } = mkSearchPrisma();
+    await new SearchService(prisma, mkMedia(), mkPublicWeb()).searchPublishedMonos({
+      q: 'match',
+      learningLanguage: 'en',
+      contentLocale: 'my',
+      viewerUserId: null,
+    });
+    expect(findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          AND: expect.arrayContaining([catalogLocaleWhere('my', 'en')]),
+        },
+      }),
+    );
+  });
+
+  it('invalid query learningLanguage=ko throws learningLanguage_invalid', async () => {
+    const { prisma, findMany } = mkSearchPrisma();
+    await expect(
+      new SearchService(prisma, mkMedia(), mkPublicWeb()).searchPublishedMonos({
+        learningLanguage: 'ko',
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(findMany).not.toHaveBeenCalled();
+  });
+
+  it('legacy null contentLocale and learningLanguage included via OR-null lens', async () => {
+    const { prisma, findMany } = mkSearchPrisma();
+    await new SearchService(prisma, mkMedia(), mkPublicWeb()).searchPublishedMonos({
+      q: 'legacy',
+      viewerUserId: null,
+    });
+    const localeWhere = findMany.mock.calls[0][0].where.AND[1];
+    expect(localeWhere).toEqual(catalogLocaleWhere('en', 'ja'));
+    expect(localeWhere.AND[0].OR).toEqual(
+      expect.arrayContaining([{ contentLocale: 'en' }, { contentLocale: null }]),
+    );
+    expect(localeWhere.AND[1].OR).toEqual(
+      expect.arrayContaining([{ learningLanguage: 'ja' }, { learningLanguage: null }]),
+    );
   });
 });

@@ -10,6 +10,10 @@ import {
   publishedMonoListItemFromRow,
   type WriterProfileSlice,
 } from '../published-monos/published-mono-common';
+import {
+  publishedMonoCatalogLocaleWhere,
+  resolveCatalogLanguageContext,
+} from '../published-monos/published-mono-catalog-locale';
 import { PUBLISHED_MONO_CATALOG_VISIBLE } from '../published-monos/published-mono-visibility';
 
 import type {
@@ -132,6 +136,8 @@ export class SearchService {
     sort?: string;
     limitRaw?: string;
     cursor?: string;
+    contentLocale?: string;
+    learningLanguage?: string;
     viewerUserId?: string | null;
   }): Promise<SearchPublishedMonosResponseDto> {
     parseSearchSort(options.sort);
@@ -147,7 +153,16 @@ export class SearchService {
 
     const tokens = tokenizeSearchQuery(options.q ?? '');
 
-    const and: Prisma.PublishedMonoWhereInput[] = [PUBLISHED_MONO_CATALOG_VISIBLE];
+    const langCtx = await resolveCatalogLanguageContext(this.prisma, {
+      viewerUserId: options.viewerUserId ?? null,
+      contentLocaleQuery: options.contentLocale,
+      learningLanguageQuery: options.learningLanguage,
+    });
+
+    const and: Prisma.PublishedMonoWhereInput[] = [
+      PUBLISHED_MONO_CATALOG_VISIBLE,
+      publishedMonoCatalogLocaleWhere(langCtx),
+    ];
 
     if (levelRaw) {
       and.push({ level: levelRaw });

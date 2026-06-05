@@ -137,6 +137,8 @@ export class MonoFeedService {
     row: {
       id: string;
       ownerId: string;
+      contentLocale: string | null;
+      learningLanguage: string | null;
       title: string;
       category: string;
       level: string;
@@ -188,6 +190,8 @@ export class MonoFeedService {
       shareUrl: this.publicWeb.monoShareUrl(row.id),
       publishKind,
       accessType: 'public',
+      contentLocale: row.contentLocale,
+      learningLanguage: row.learningLanguage,
     };
   }
 

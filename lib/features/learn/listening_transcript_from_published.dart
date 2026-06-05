@@ -7,12 +7,14 @@ import 'package:nimon/features/profile/data/published_mono_detail_parser.dart';
 /// Delegates to [buildMonoContentFromPublishedCore] so furigana / meanings match
 /// Mono reader parsing.
 List<ListeningTranscriptLine> listeningTranscriptLinesFromPublishedCore(
-  Object? contentRoot,
-) {
+  Object? contentRoot, {
+  String? learningLanguage,
+}) {
   final mono = buildMonoContentFromPublishedCore(
     'listening_fallback',
     null,
     contentRoot,
+    learningLanguage: learningLanguage,
   );
   if (mono == null) {
     return const [];

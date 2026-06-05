@@ -7,7 +7,7 @@ export const DEFAULT_CATALOG_CONTENT_LOCALE = 'en' as const;
 export const DEFAULT_CATALOG_LEARNING_LANGUAGE = 'ja' as const;
 
 export type CatalogContentLocale = 'en' | 'my' | 'ja';
-export type CatalogLearningLanguage = 'ja';
+export type CatalogLearningLanguage = 'ja' | 'en';
 
 export type CatalogLanguageContext = {
   effectiveContentLocale: CatalogContentLocale;
@@ -38,7 +38,7 @@ export function ensureAllowedLearningLanguageQuery(
   v: string | null,
 ): CatalogLearningLanguage | null {
   if (v == null) return null;
-  if (v === 'ja') return v;
+  if (v === 'ja' || v === 'en') return v;
   throw new BadRequestException('learningLanguage_invalid');
 }
 
@@ -58,6 +58,7 @@ export function safeStoredLearningLanguage(
   const n = normalizeCode(raw);
   if (n === null) return DEFAULT_CATALOG_LEARNING_LANGUAGE;
   if (n === 'ja') return 'ja';
+  if (n === 'en') return 'en';
   return DEFAULT_CATALOG_LEARNING_LANGUAGE;
 }
 

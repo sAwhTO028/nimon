@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:nimon/core/pagination/page_request.dart';
 import 'package:nimon/core/pagination/page_result.dart';
+import 'package:nimon/core/settings/catalog_discovery_lens.dart';
 import 'package:nimon/features/mono/data/mono_feed_providers.dart';
 import 'package:nimon/features/mono/data/mono_feed_repository.dart';
 import 'package:nimon/features/mono/data/mono_feed_summary_dto.dart';
@@ -22,6 +23,7 @@ class _MutableMonoFeedRepo implements MonoFeedRepository {
     PageRequest request, {
     String? level,
     String? category,
+    CatalogDiscoveryLens? catalogLens,
   }) async {
     feedCalls++;
     lastRequest = request;
@@ -51,6 +53,7 @@ class _PagedMonoFeedRepo implements MonoFeedRepository {
     PageRequest request, {
     String? level,
     String? category,
+    CatalogDiscoveryLens? catalogLens,
   }) async {
     feedCalls++;
     requests.add(request);

@@ -197,7 +197,12 @@ void main() {
       expect(mapped.audio.storyAudio, isNull);
 
       final repo = _IntentTrackingRepo();
-      final notifier = StoryCreatorDraftNotifier(repo, _ownerId);
+      final notifier = StoryCreatorDraftNotifier(
+        repo,
+        _ownerId,
+        defaultContentLocale: 'my',
+        defaultLearningLanguage: 'ja',
+      );
       await notifier.importMappedDraft(mapped);
 
       expect(notifier.state.draft.id, mapped.id);
@@ -240,18 +245,25 @@ void main() {
       // imported ReadOnly draft (import rules are validated earlier).
     });
 
-    test('English learning is blocked before map/notifier', () {
+    test('English learning accepted when context is en+my', () {
       final payload = NimonImportRawPayload.fromJsonMap(
         readOnlyImportJson(learningLanguage: 'English'),
       );
-      final validation = validateNimonImportPayload(payload, _jaMyContext);
+      const enMyContext = NimonImportValidationContext(
+        learningLanguageCode: 'en',
+        contentLocaleCode: 'my',
+        authenticatedEmail: 'user@example.com',
+      );
+      final validation = validateNimonImportPayload(payload, enMyContext);
 
-      expect(validation.canImport, isFalse);
       expect(
         validation.blockingErrors.map((e) => e.code),
-        contains('import.context.englishComingSoon'),
+        isNot(contains('import.context.englishComingSoon')),
       );
-      // Production import flow stops here; mapper/notifier are not invoked.
+      expect(
+        validation.blockingErrors.map((e) => e.code),
+        isNot(contains('import.context.learningLanguageMismatch')),
+      );
     });
 
     test('contentCommunity mismatch is blocked before map/notifier', () {

@@ -3,6 +3,8 @@ import 'dart:async' show unawaited;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:nimon/core/pagination/page_request.dart';
 import 'package:nimon/core/pagination/paginated_state.dart';
+import 'package:nimon/core/settings/catalog_discovery_lens.dart';
+import 'package:nimon/features/settings/presentation/providers/user_preferences_notifier.dart';
 import 'package:nimon/features/auth/auth_providers.dart';
 import 'package:nimon/features/create/data/remote_backend_config.dart';
 import 'package:nimon/features/mono/data/mono_feed_repository.dart';
@@ -49,13 +51,21 @@ final remoteUserFollowRepositoryProvider =
 
 final monoFeedPagerProvider =
     StateNotifierProvider<MonoFeedPager, PaginatedState<MonoFeedSummaryDto>>(
-  (ref) => MonoFeedPager(ref.watch(remoteMonoFeedRepositoryProvider)),
+  (ref) => MonoFeedPager(
+    ref.watch(remoteMonoFeedRepositoryProvider),
+    catalogLens: () => CatalogDiscoveryLens.tryFromPreferences(
+      ref.read(userPreferencesNotifierProvider).prefs,
+    ),
+  ),
 );
 
 final followingMonoFeedPagerProvider = StateNotifierProvider<
     FollowingMonoFeedPager, PaginatedState<MonoFeedSummaryDto>>(
   (ref) => FollowingMonoFeedPager(
     ref.watch(remoteFollowingMonoFeedRepositoryProvider),
+    catalogLens: () => CatalogDiscoveryLens.tryFromPreferences(
+      ref.read(userPreferencesNotifierProvider).prefs,
+    ),
   ),
 );
 
@@ -67,12 +77,18 @@ abstract final class MonoReelsPaginationPolicy {
 }
 
 /// Pager for `GET /v1/mono/feed`. Filters are optional (M3c can wire UI).
+typedef CatalogDiscoveryLensReader = CatalogDiscoveryLens? Function();
+
 class MonoFeedPager extends StateNotifier<PaginatedState<MonoFeedSummaryDto>> {
-  MonoFeedPager(this._repo)
-      : super(const PaginatedState<MonoFeedSummaryDto>(
+  MonoFeedPager(
+    this._repo, {
+    CatalogDiscoveryLensReader? catalogLens,
+  })  : _catalogLens = catalogLens ?? (() => null),
+        super(const PaginatedState<MonoFeedSummaryDto>(
             items: <MonoFeedSummaryDto>[]));
 
   final MonoFeedRepository _repo;
+  final CatalogDiscoveryLensReader _catalogLens;
 
   String? _filterLevel;
   String? _filterCategory;
@@ -121,6 +137,7 @@ class MonoFeedPager extends StateNotifier<PaginatedState<MonoFeedSummaryDto>> {
         ),
         level: _filterLevel,
         category: _filterCategory,
+        catalogLens: _catalogLens(),
       );
       if (state.requestEpoch != myEpoch) return;
       state = state.copyWith(
@@ -157,6 +174,7 @@ class MonoFeedPager extends StateNotifier<PaginatedState<MonoFeedSummaryDto>> {
         ),
         level: _filterLevel,
         category: _filterCategory,
+        catalogLens: _catalogLens(),
       );
       if (state.requestEpoch != myEpoch) return;
       state = state.copyWith(
@@ -190,6 +208,7 @@ class MonoFeedPager extends StateNotifier<PaginatedState<MonoFeedSummaryDto>> {
         ),
         level: _filterLevel,
         category: _filterCategory,
+        catalogLens: _catalogLens(),
       );
       if (state.requestEpoch != myEpoch) return;
       final seen = <String>{for (final it in state.items) it.monoId};
@@ -215,11 +234,15 @@ class MonoFeedPager extends StateNotifier<PaginatedState<MonoFeedSummaryDto>> {
 /// Pager for `GET /v1/mono/feed?following=true` (auth required).
 class FollowingMonoFeedPager
     extends StateNotifier<PaginatedState<MonoFeedSummaryDto>> {
-  FollowingMonoFeedPager(this._repo)
-      : super(const PaginatedState<MonoFeedSummaryDto>(
+  FollowingMonoFeedPager(
+    this._repo, {
+    CatalogDiscoveryLensReader? catalogLens,
+  })  : _catalogLens = catalogLens ?? (() => null),
+        super(const PaginatedState<MonoFeedSummaryDto>(
             items: <MonoFeedSummaryDto>[]));
 
   final MonoFeedRepository _repo;
+  final CatalogDiscoveryLensReader _catalogLens;
 
   String? _lastLoadMoreCursor;
 
@@ -251,6 +274,7 @@ class FollowingMonoFeedPager
           limit: MonoReelsPaginationPolicy.initialLimit,
           sort: 'recent',
         ),
+        catalogLens: _catalogLens(),
       );
       if (state.requestEpoch != myEpoch) return;
       state = state.copyWith(
@@ -282,6 +306,7 @@ class FollowingMonoFeedPager
           limit: MonoReelsPaginationPolicy.initialLimit,
           sort: 'recent',
         ),
+        catalogLens: _catalogLens(),
       );
       if (state.requestEpoch != myEpoch) return;
       state = state.copyWith(
@@ -310,6 +335,7 @@ class FollowingMonoFeedPager
           limit: MonoReelsPaginationPolicy.nextLimit,
           sort: 'recent',
         ),
+        catalogLens: _catalogLens(),
       );
       if (state.requestEpoch != myEpoch) return;
       final seen = <String>{for (final it in state.items) it.monoId};

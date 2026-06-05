@@ -9,7 +9,8 @@ import 'package:nimon/core/validation/protected_action_guard.dart';
 import 'package:nimon/l10n/nimon_app_strings.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:nimon/features/profile/mono_story_list_row.dart';
+import 'package:nimon/features/profile/mono_story_list_row.dart'
+    show MonoStoryListBadgeMode, MonoStoryListRow;
 import 'package:nimon/features/profile/public_profile_data.dart';
 import 'package:nimon/features/profile/public_profile_widgets.dart';
 import 'package:nimon/features/auth/auth_providers.dart';
@@ -27,6 +28,7 @@ import 'package:nimon/features/profile/presentation/providers/my_creator_collect
 import 'package:nimon/features/mono/data/mono_feed_providers.dart'
     show remoteUserFollowRepositoryProvider, followingMonoFeedPagerProvider;
 import 'package:nimon/features/profile/presentation/providers/profile_following_pager.dart';
+import 'package:nimon/core/settings/catalog_discovery_lens.dart';
 import 'package:nimon/features/settings/presentation/providers/user_preferences_notifier.dart';
 import 'package:nimon/ui/widgets/nimon_circle_nav_button.dart';
 
@@ -84,6 +86,9 @@ class _PublicProfileScreenState extends ConsumerState<PublicProfileScreen>
   /// True after the first successful [fetchPublicCollections] for this profile session.
   bool _publicCollectionsLoaded = false;
 
+  /// When prefs change while not on Monos tab, refresh on next Monos visit.
+  bool _publicMonosNeedsRefresh = false;
+
   bool? _followOptimistic;
   int? _followersCountOptimistic;
 
@@ -139,12 +144,25 @@ class _PublicProfileScreenState extends ConsumerState<PublicProfileScreen>
     if (!mounted) return;
     if (_useRemoteProfile && _remoteProfile != null) {
       final c = _tabController;
+      if (!c.indexIsChanging && c.index == 0 && _publicMonosNeedsRefresh) {
+        _publicMonosNeedsRefresh = false;
+        unawaited(
+          ref
+              .read(publicProfileMonosProvider(_routeUserId).notifier)
+              .refresh(_routeUserId),
+        );
+      }
       if (!c.indexIsChanging && c.index == 1) {
         unawaited(_loadPublicCollections());
       }
     }
     setState(() {});
   }
+
+  CatalogDiscoveryLens? _catalogDiscoveryLens() =>
+      CatalogDiscoveryLens.tryFromPreferences(
+        ref.read(userPreferencesNotifierProvider).prefs,
+      );
 
   void _measureHeaderSection() {
     final ctx = _profileHeaderSectionKey.currentContext;
@@ -280,7 +298,10 @@ class _PublicProfileScreenState extends ConsumerState<PublicProfileScreen>
     });
     try {
       final repo = ref.read(remoteCreatorCollectionsRepositoryProvider);
-      final list = await repo.fetchPublicCollections(_routeUserId);
+      final list = await repo.fetchPublicCollections(
+        _routeUserId,
+        catalogLens: _catalogDiscoveryLens(),
+      );
       if (!mounted) return;
       setState(() {
         _publicCollections
@@ -450,10 +471,16 @@ class _PublicProfileScreenState extends ConsumerState<PublicProfileScreen>
         final nextLearn = next.prefs.learningLanguage;
         if (prevLocale == nextLocale && prevLearn == nextLearn) return;
         _publicCollectionsLoaded = false;
+        _publicMonosNeedsRefresh = true;
         if (_tabController.index == 1) {
           unawaited(_loadPublicCollections(force: true));
-        } else if (mounted) {
-          setState(() {});
+        } else if (_tabController.index == 0) {
+          _publicMonosNeedsRefresh = false;
+          unawaited(
+            ref
+                .read(publicProfileMonosProvider(_routeUserId).notifier)
+                .refresh(_routeUserId),
+          );
         }
       });
     }
@@ -581,6 +608,9 @@ class _PublicProfileScreenState extends ConsumerState<PublicProfileScreen>
                             : monos[i].bodyText.trim(),
                         jlptLevel: monos[i].level.trim(),
                         thumbnailUrl: monos[i].coverImageUrl,
+                        badgeMode: MonoStoryListBadgeMode.languagePair,
+                        contentLocale: monos[i].contentLocale,
+                        learningLanguage: monos[i].learningLanguage,
                       ),
                     ),
                   ),

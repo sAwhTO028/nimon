@@ -22,6 +22,7 @@ MonoFeedItem monoFeedItemFromPublishedMonoDetail(
     d.id,
     d.title,
     d.content,
+    learningLanguage: d.learningLanguage,
   );
   final cover =
       (d.coverImageUrl ?? '').trim().isEmpty ? null : d.coverImageUrl!.trim();

@@ -1,3 +1,4 @@
+import 'package:nimon/core/settings/language_pair.dart';
 import 'package:nimon/features/create/story_creator_models.dart';
 
 /// V1 publish validation derived from the existing completion rules in [CreatorStoryV1].
@@ -17,13 +18,18 @@ enum PublishMissingItem {
 }
 
 extension PublishMissingItemLabels on PublishMissingItem {
-  String get label => switch (this) {
+  String get label => labelForLearning(null);
+
+  String labelForLearning(String? learningLanguage) => switch (this) {
         PublishMissingItem.title => 'Title',
         PublishMissingItem.category => 'Category',
         PublishMissingItem.level => 'Level',
         PublishMissingItem.description => 'Description',
         PublishMissingItem.validSentence => 'At least one valid sentence',
-        PublishMissingItem.vocabKanji => 'Vocabulary / Kanji',
+        PublishMissingItem.vocabKanji =>
+          isJapaneseLearningWireCode(learningLanguage)
+              ? 'Vocabulary / Kanji'
+              : 'Vocabulary',
         PublishMissingItem.grammar => 'Grammar',
         PublishMissingItem.quiz => 'Quiz',
         PublishMissingItem.audio => 'Listening / Audio',
@@ -73,7 +79,9 @@ extension CreatorStoryV1PublishValidation on CreatorStoryV1 {
 
   /// Compact labels for incomplete learn modules (for warning/reminder UI).
   String incompleteLearnModulesLabel({int maxNames = 3}) {
-    final list = incompleteLearnModulesV1().map((e) => e.displayTitle).toList();
+    final lang = basics.learningLanguage;
+    final list =
+        incompleteLearnModulesV1().map((e) => e.displayTitleForLearning(lang)).toList();
     if (list.isEmpty) return '';
     if (list.length <= maxNames) return list.join(' · ');
     return '${list.take(maxNames).join(' · ')} · +${list.length - maxNames} more';
@@ -83,19 +91,19 @@ extension CreatorStoryV1PublishValidation on CreatorStoryV1 {
   String blockedReasonReadingOnly() {
     final missing = missingForReadingOnly();
     if (missing.isEmpty) return '';
-    return 'Complete ${_joinLabels(missing)} to publish Reading Only.';
+    return 'Complete ${_joinLabels(missing, basics.learningLanguage)} to publish Reading Only.';
   }
 
   /// Concise creator-friendly reason string for a blocked publish attempt.
   String blockedReasonFullLearn() {
     final missing = missingForFullLearn();
     if (missing.isEmpty) return '';
-    return 'Complete ${_joinLabels(missing)} to publish Full Learn.';
+    return 'Complete ${_joinLabels(missing, basics.learningLanguage)} to publish Full Learn.';
   }
 }
 
-String _joinLabels(List<PublishMissingItem> items) {
-  final labels = items.map((x) => x.label).toList();
+String _joinLabels(List<PublishMissingItem> items, String? learningLanguage) {
+  final labels = items.map((x) => x.labelForLearning(learningLanguage)).toList();
   if (labels.length <= 2) return labels.join(' and ');
   return '${labels.sublist(0, labels.length - 1).join(', ')}, and ${labels.last}';
 }

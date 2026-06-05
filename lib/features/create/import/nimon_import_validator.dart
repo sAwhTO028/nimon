@@ -299,11 +299,6 @@ void _validateHtmlGeneratorRules(
     return;
   }
 
-  // English learning remains blocked by existing rule in _validateAppContext.
-  if (learningLanguage == HtmlLearningLanguage.en) {
-    return;
-  }
-
   final lim = HtmlGeneratorLimits.sentenceLimit(
     mode: promptMode,
     language: learningLanguage,
@@ -396,7 +391,6 @@ void _validateHtmlGeneratorFullLearnRules(
   final promptMode = _promptModeFromMeta(meta);
   final learningLanguage = _learningLanguageFromMeta(meta);
   if (promptMode == null || learningLanguage == null) return;
-  if (learningLanguage == HtmlLearningLanguage.en) return;
 
   final rawLevel = _optStr(core['level']);
   final level = normalizeHtmlLevel(rawLevel);
@@ -775,15 +769,6 @@ void _validateAppContext(
       'Import createdForEmail does not match the signed-in account.',
       path: 'nimonImportMeta.createdForEmail',
     );
-  }
-
-  if (meta.learningLanguage == NimonLearningLanguage.english) {
-    block(
-      'import.context.englishComingSoon',
-      'English learning import is coming soon.',
-      path: 'nimonImportMeta.learningLanguage',
-    );
-    return;
   }
 
   final expectedLearning = context.learningLanguageCode.trim().toLowerCase();

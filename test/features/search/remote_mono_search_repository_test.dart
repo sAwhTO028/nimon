@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
+import 'package:nimon/core/settings/catalog_discovery_lens.dart';
 import 'package:nimon/features/search/data/remote_mono_search_repository.dart';
 
 void main() {
@@ -159,5 +160,62 @@ void main() {
 
     await repo.searchMonos(limit: 999);
     expect(captured!.url.queryParameters['limit'], '50');
+  });
+
+  test('searchMonos sends catalog lens when authenticated', () async {
+    http.BaseRequest? captured;
+    final client = MockClient((request) async {
+      captured = request;
+      return http.Response(
+        jsonEncode({'items': <Object>[], 'hasMore': false}),
+        200,
+        headers: {'content-type': 'application/json'},
+      );
+    });
+
+    final repo = RemoteMonoSearchRepository(
+      apiBaseUrl: 'http://127.0.0.1:9',
+      client: client,
+      authHeaderBuilder: () async => {'Authorization': 'Bearer search-token'},
+    );
+
+    await repo.searchMonos(
+      q: 'hello',
+      catalogLens: const CatalogDiscoveryLens(
+        contentLocale: 'my',
+        learningLanguage: 'en',
+      ),
+    );
+
+    expect(captured!.url.queryParameters['contentLocale'], 'my');
+    expect(captured!.url.queryParameters['learningLanguage'], 'en');
+    expect(captured!.url.queryParameters['q'], 'hello');
+  });
+
+  test('searchMonos omits catalog lens for guest', () async {
+    http.BaseRequest? captured;
+    final client = MockClient((request) async {
+      captured = request;
+      return http.Response(
+        jsonEncode({'items': <Object>[], 'hasMore': false}),
+        200,
+        headers: {'content-type': 'application/json'},
+      );
+    });
+
+    final repo = RemoteMonoSearchRepository(
+      apiBaseUrl: 'http://127.0.0.1:9',
+      client: client,
+    );
+
+    await repo.searchMonos(
+      catalogLens: const CatalogDiscoveryLens(
+        contentLocale: 'my',
+        learningLanguage: 'en',
+      ),
+    );
+
+    expect(captured!.url.queryParameters.containsKey('contentLocale'), isFalse);
+    expect(captured!.url.queryParameters.containsKey('learningLanguage'), isFalse);
   });
 }

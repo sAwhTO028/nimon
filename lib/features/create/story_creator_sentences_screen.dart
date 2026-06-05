@@ -26,6 +26,7 @@ import 'package:nimon/features/create/story_creator_review_display.dart';
 import 'package:nimon/features/create/story_creator_quiz_editor_screen.dart';
 import 'package:nimon/features/create/story_creator_vocab_kanji_editor_screen.dart';
 import 'package:nimon/features/create/story_creator_grammar_overlays.dart';
+import 'package:nimon/features/create/creator_learning_language.dart';
 import 'package:nimon/features/create/story_creator_furigana_tokens.dart';
 import 'package:nimon/features/create/widgets/creator_fit_info_bottom_sheet.dart';
 import 'package:nimon/features/create/widgets/creator_info_bottom_sheet.dart';
@@ -832,6 +833,7 @@ class _StoryCreatorSentencesScreenState
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
     final draft = ref.read(storyCreatorDraftDataProvider);
+    final showJapaneseFurigana = isJapaneseLearningDraft(draft);
     final sentences = List<StorySentenceItem>.from(draft.sentences)
       ..sort((a, b) => a.orderIndex.compareTo(b.orderIndex));
 
@@ -890,7 +892,9 @@ class _StoryCreatorSentencesScreenState
                         children: [
                           NimonJapaneseSentenceLine(
                             text: s.japaneseText,
-                            spans: s.furiganaSpans,
+                            spans: showJapaneseFurigana
+                                ? s.furiganaSpans
+                                : const <FuriganaSpan>[],
                             theme: theme,
                           ),
                           if (s.meanings != null) ...[
@@ -1127,6 +1131,7 @@ class _StoryCreatorSentencesScreenState
     final lines = storyPlaintextNonEmptyLines(_body.text);
     final count = lines.length;
     final draft = loadedDraft;
+    final showJapaneseFurigana = isJapaneseLearningDraft(draft);
     // Same merge [applySentences] uses: stable ids per plaintext line even when
     // Riverpod has not applied the last body edit yet (reorder/web frame timing).
     final sentenceRowMergePreview = storySentencesFromPlaintextMerge(
@@ -1268,8 +1273,9 @@ class _StoryCreatorSentencesScreenState
                                           i < sentenceRowMergePreview.length
                                               ? sentenceRowMergePreview[i]
                                               : null;
-                                      final spans = (s != null &&
-                                              s.japaneseText == lines[i])
+                                      final spans = showJapaneseFurigana &&
+                                              (s != null &&
+                                                  s.japaneseText == lines[i])
                                           ? s.furiganaSpans
                                           : const <FuriganaSpan>[];
                                       return Padding(
@@ -1343,17 +1349,23 @@ class _StoryCreatorSentencesScreenState
                           _sendComposerLine();
                         }
                       },
-                      canManageFurigana:
-                          isEditing && (_editingSentenceId != null),
+                      canManageFurigana: showJapaneseFurigana &&
+                          isEditing &&
+                          (_editingSentenceId != null),
                       managingFurigana: _managingFurigana,
                       onOpenManageFurigana: () {
-                        if (!isEditing || _editingSentenceId == null) return;
+                        if (!showJapaneseFurigana ||
+                            !isEditing ||
+                            _editingSentenceId == null) {
+                          return;
+                        }
                         setState(() => _managingFurigana = true);
                       },
                       onExitManageFurigana: () {
                         setState(() => _managingFurigana = false);
                       },
-                      furiganaManagePanel: (isEditing &&
+                      furiganaManagePanel: (showJapaneseFurigana &&
+                              isEditing &&
                               _managingFurigana &&
                               _editingSentenceId != null)
                           ? _buildFuriganaManagePanel(theme)

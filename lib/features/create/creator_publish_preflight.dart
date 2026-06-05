@@ -81,6 +81,7 @@ StoryPublishData storyPublishDataFromCreator(CreatorStoryV1 d) {
     levelRaw: draft.level,
     targetDurationBandKey: draft.basics.targetDurationBandKey,
     durationSeconds: null,
+    learningLanguage: draft.basics.learningLanguage,
     // Must match [resolveHtmlPromptModeForDraft] / creator readiness (effective note).
     promptSourceNote: effectiveCreatorDraftPromptSourceNote(draft),
     sentences: draft.sentences

@@ -310,8 +310,9 @@ class _OwnerCreatorCollectionDetailScreenState
                                     : _items[i].bodyText.trim(),
                             jlptLevel: _items[i].level.trim(),
                             thumbnailUrl: _items[i].coverImageUrl,
-                            showCommunityBadge: true,
+                            badgeMode: MonoStoryListBadgeMode.languagePair,
                             contentLocale: _items[i].contentLocale,
+                            learningLanguage: _items[i].learningLanguage,
                             onMenuTap: () =>
                                 unawaited(_showItemMenu(_items[i])),
                           ),

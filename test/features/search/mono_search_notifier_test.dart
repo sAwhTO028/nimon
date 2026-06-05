@@ -1,9 +1,11 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nimon/core/pagination/page_result.dart';
 import 'package:nimon/features/profile/data/published_mono_dto.dart';
+import 'package:nimon/core/settings/catalog_discovery_lens.dart';
 import 'package:nimon/features/search/data/mono_search_remote.dart';
 import 'package:nimon/features/search/data/mono_search_result.dart';
 import 'package:nimon/features/search/presentation/mono_search_notifier.dart';
+import 'package:nimon/features/search/presentation/mono_search_state.dart';
 
 MonoSearchResult _row(String id,
     {String updatedAt = '2020-01-01T00:00:00.000Z'}) {
@@ -27,15 +29,6 @@ MonoSearchResult _row(String id,
   );
 }
 
-typedef _SearchHandler = Future<PaginatedPage<MonoSearchResult>> Function({
-  String? q,
-  String? level,
-  String? category,
-  String sort,
-  int limit,
-  String? cursor,
-});
-
 class _ThrowIfCalledRemote implements MonoSearchRemote {
   int calls = 0;
 
@@ -47,6 +40,7 @@ class _ThrowIfCalledRemote implements MonoSearchRemote {
     String sort = 'latest',
     int limit = 20,
     String? cursor,
+    CatalogDiscoveryLens? catalogLens,
   }) async {
     calls++;
     throw StateError('unexpected search');
@@ -56,7 +50,15 @@ class _ThrowIfCalledRemote implements MonoSearchRemote {
 class _FakeSearchRemote implements MonoSearchRemote {
   _FakeSearchRemote(this._handler);
 
-  final _SearchHandler _handler;
+  final Future<PaginatedPage<MonoSearchResult>> Function({
+    String? q,
+    String? level,
+    String? category,
+    String sort,
+    int limit,
+    String? cursor,
+    CatalogDiscoveryLens? catalogLens,
+  }) _handler;
 
   int callCount = 0;
 
@@ -68,6 +70,7 @@ class _FakeSearchRemote implements MonoSearchRemote {
     String sort = 'latest',
     int limit = 20,
     String? cursor,
+    CatalogDiscoveryLens? catalogLens,
   }) async {
     callCount++;
     return _handler(
@@ -77,6 +80,7 @@ class _FakeSearchRemote implements MonoSearchRemote {
       sort: sort,
       limit: limit,
       cursor: cursor,
+      catalogLens: catalogLens,
     );
   }
 }
@@ -101,6 +105,7 @@ void main() {
       String sort = 'latest',
       int limit = 20,
       String? cursor,
+      CatalogDiscoveryLens? catalogLens,
     }) async {
       expect(cursor, isNull);
       return PaginatedPage<MonoSearchResult>(
@@ -130,6 +135,7 @@ void main() {
       String sort = 'latest',
       int limit = 20,
       String? cursor,
+      CatalogDiscoveryLens? catalogLens,
     }) async {
       lastQ = q;
       if (q == 'one') {
@@ -168,6 +174,7 @@ void main() {
       String sort = 'latest',
       int limit = 20,
       String? cursor,
+      CatalogDiscoveryLens? catalogLens,
     }) async {
       if (level == 'N4') {
         return PaginatedPage<MonoSearchResult>(
@@ -203,6 +210,7 @@ void main() {
       String sort = 'latest',
       int limit = 20,
       String? cursor,
+      CatalogDiscoveryLens? catalogLens,
     }) async {
       if (category == 'verbs') {
         return PaginatedPage<MonoSearchResult>(
@@ -235,6 +243,7 @@ void main() {
       String sort = 'latest',
       int limit = 20,
       String? cursor,
+      CatalogDiscoveryLens? catalogLens,
     }) async {
       if (cursor == null) {
         return PaginatedPage<MonoSearchResult>(
@@ -269,6 +278,7 @@ void main() {
       String sort = 'latest',
       int limit = 20,
       String? cursor,
+      CatalogDiscoveryLens? catalogLens,
     }) async {
       if (cursor == null) {
         return PaginatedPage<MonoSearchResult>(
@@ -302,6 +312,7 @@ void main() {
       String sort = 'latest',
       int limit = 20,
       String? cursor,
+      CatalogDiscoveryLens? catalogLens,
     }) async {
       if (cursor == null) {
         return PaginatedPage<MonoSearchResult>(
@@ -330,6 +341,7 @@ void main() {
       String sort = 'latest',
       int limit = 20,
       String? cursor,
+      CatalogDiscoveryLens? catalogLens,
     }) async {
       return PaginatedPage<MonoSearchResult>(
         items: [_row('only')],
@@ -355,6 +367,7 @@ void main() {
       String sort = 'latest',
       int limit = 20,
       String? cursor,
+      CatalogDiscoveryLens? catalogLens,
     }) async {
       return PaginatedPage<MonoSearchResult>(
         items: [if (q != null) _row(q!) else _row('empty')],
@@ -386,6 +399,7 @@ void main() {
       String sort = 'latest',
       int limit = 20,
       String? cursor,
+      CatalogDiscoveryLens? catalogLens,
     }) async {
       return PaginatedPage<MonoSearchResult>(
         items: [
@@ -423,5 +437,89 @@ void main() {
     expect(n.state.items.single.isBookmarkedByMe, isTrue);
     expect(n.state.items.single.myReaction, 'heart');
     expect(n.state.items.single.likesCount, 9);
+  });
+
+  test('active search passes catalog lens from reader', () async {
+    const lens = CatalogDiscoveryLens(
+      contentLocale: 'my',
+      learningLanguage: 'en',
+    );
+    CatalogDiscoveryLens? captured;
+    final remote = _FakeSearchRemote(({
+      String? q,
+      String? level,
+      String? category,
+      String sort = 'latest',
+      int limit = 20,
+      String? cursor,
+      CatalogDiscoveryLens? catalogLens,
+    }) async {
+      captured = catalogLens;
+      return PaginatedPage<MonoSearchResult>(
+        items: [_row('a')],
+        hasMore: false,
+        nextCursor: null,
+        totalCount: 1,
+      );
+    });
+    final n = MonoSearchNotifier(
+      remote,
+      debounce: Duration.zero,
+      catalogLens: () => lens,
+    );
+    addTearDown(n.dispose);
+
+    await n.setQueryAndReload('hi');
+    expect(captured, lens);
+  });
+
+  test('empty search does not call remote when catalog lens reader changes',
+      () async {
+    final remote = _ThrowIfCalledRemote();
+    var lens = const CatalogDiscoveryLens(
+      contentLocale: 'my',
+      learningLanguage: 'en',
+    );
+    final n = MonoSearchNotifier(
+      remote,
+      debounce: Duration.zero,
+      catalogLens: () => lens,
+    );
+    addTearDown(n.dispose);
+
+    await n.refresh();
+    expect(remote.calls, 0);
+
+    lens = const CatalogDiscoveryLens(
+      contentLocale: 'en',
+      learningLanguage: 'ja',
+    );
+    await n.refresh();
+    expect(remote.calls, 0);
+  });
+
+  test('shouldFetchRemote is true for query level or category only', () {
+    expect(
+      MonoSearchNotifier.shouldFetchRemote(const MonoSearchState()),
+      isFalse,
+    );
+    expect(
+      MonoSearchNotifier.shouldFetchRemote(
+        const MonoSearchState(query: '  x '),
+      ),
+      isTrue,
+    );
+    expect(
+      MonoSearchNotifier.shouldFetchRemote(
+        const MonoSearchState(selectedLevel: 'N3'),
+      ),
+      isTrue,
+    );
+    expect(
+      MonoSearchNotifier.shouldFetchRemote(
+        const MonoSearchState(selectedCategory: 'Horror'),
+      ),
+      isTrue,
+    );
   });
 }

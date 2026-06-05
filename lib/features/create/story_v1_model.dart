@@ -1,3 +1,4 @@
+import 'package:nimon/core/settings/language_pair.dart';
 import 'package:uuid/uuid.dart';
 
 // -----------------------------------------------------------------------------
@@ -28,8 +29,14 @@ enum LearnModuleId {
 }
 
 extension LearnModuleIdLabels on LearnModuleId {
-  String get displayTitle => switch (this) {
-        LearnModuleId.vocabularyKanji => 'Vocabulary / Kanji',
+  String get displayTitle => displayTitleForLearning(null);
+
+  /// User-facing module title; LM1 is **Vocabulary** for English learning drafts.
+  String displayTitleForLearning(String? learningLanguage) => switch (this) {
+        LearnModuleId.vocabularyKanji =>
+          isJapaneseLearningWireCode(learningLanguage)
+              ? 'Vocabulary / Kanji'
+              : 'Vocabulary',
         LearnModuleId.grammar => 'Grammar',
         LearnModuleId.quiz => 'Quiz',
         LearnModuleId.audio => 'Listening / Audio',

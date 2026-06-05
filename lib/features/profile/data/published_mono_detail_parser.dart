@@ -1,4 +1,5 @@
 import 'package:characters/characters.dart';
+import 'package:nimon/core/settings/language_pair.dart';
 import 'package:nimon/features/mono/mono_content_model.dart';
 
 String? _japaneseFromSentenceContent(Object? raw) {
@@ -151,11 +152,38 @@ String plainBodyFromPublishedCore(Object? contentRoot) {
 }
 
 /// One page, one line per sentence; tokens empty → plain [MonoSentenceLine].
+/// Reads `learningLanguage` from published content root when present.
+String? learningLanguageFromPublishedRoot(Object? contentRoot) {
+  if (contentRoot is! Map) return null;
+  final c = <String, Object?>{
+    for (var e in contentRoot.entries) e.key.toString(): e.value,
+  };
+  final direct = c['learningLanguage'];
+  if (direct is String && direct.trim().isNotEmpty) {
+    return direct.trim().toLowerCase();
+  }
+  final basics = c['basics'];
+  if (basics is Map) {
+    final bm = <String, Object?>{
+      for (var e in basics.entries) e.key.toString(): e.value,
+    };
+    final b = bm['learningLanguage'];
+    if (b is String && b.trim().isNotEmpty) {
+      return b.trim().toLowerCase();
+    }
+  }
+  return null;
+}
+
 MonoContent? buildMonoContentFromPublishedCore(
   String id,
   String? title,
-  Object? contentRoot,
-) {
+  Object? contentRoot, {
+  String? learningLanguage,
+}) {
+  final effectiveLearning =
+      learningLanguage ?? learningLanguageFromPublishedRoot(contentRoot);
+  final showRuby = isJapaneseLearningWireCode(effectiveLearning);
   if (contentRoot is! Map) {
     return null;
   }
@@ -183,7 +211,9 @@ MonoContent? buildMonoContentFromPublishedCore(
     final jp = _japaneseFromSentenceContent(cont) ?? '';
     if (jp.isEmpty) continue;
 
-    final tokens = rubyTokensFromPublishedSentenceContent(jp, cont);
+    final tokens = showRuby
+        ? rubyTokensFromPublishedSentenceContent(jp, cont)
+        : const <MonoRubyToken>[];
     final explanation = explanationFromPublishedSentenceContent(cont);
 
     lines.add(

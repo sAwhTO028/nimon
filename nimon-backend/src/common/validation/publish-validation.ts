@@ -13,9 +13,11 @@ import { ValidationSeverity } from './validation-severity';
 import { combine, resultFromIssues } from './validation-result';
 import type { ValidationResult } from './validation-result';
 import { charLength } from './text-normalization';
+import { isJapaneseLearningWireCode } from './language-pair-validation';
 import {
   normalizeHtmlDuration,
   normalizeHtmlLevel,
+  resolveHtmlLearningLanguageFromWire,
   sentenceLimit,
   selectedFullLearnLimits,
   vocabularyLimit,
@@ -38,6 +40,8 @@ export type StoryPublishValidationInput = {
   grammarEntries: Array<{ content: unknown }>;
   quizEntries: Array<{ content: unknown }>;
   moduleWorkflowStatuses: Record<string, string> | null;
+  /** Draft row wire (`ja` / `en`); drives HTML limit tables at publish time. */
+  learningLanguage?: string | null;
 };
 
 function warn(field: string, code: string, messageKey: string, params?: Record<string, unknown>): ValidationIssue {
@@ -237,7 +241,7 @@ export function validateStoryPublishInput(
   const htmlLevel = normalizeHtmlLevel(input.levelRaw);
   const htmlDuration = normalizeHtmlDuration(band);
   const promptMode = resolveHtmlPromptMode(input);
-  const language: HtmlLearningLanguage = 'jp';
+  const language = resolveHtmlLearningLanguageFromWire(input.learningLanguage);
   const preset: HtmlLimitPreset = 'default';
 
   if (!htmlLevel) {
@@ -545,10 +549,12 @@ export function validateStoryPublishInput(
 
       pieces.push(validateVocabularyMeaning(v.meaningPrimary, ValidationMode.FullLearnPublish));
 
-      const furiganaKind: FuriganaKind = v.isKanjiType ? 'kanji' : 'kana';
-      pieces.push(
-        validateFuriganaReading(v.reading, v.termJapanese, furiganaKind),
-      );
+      if (isJapaneseLearningWireCode(input.learningLanguage)) {
+        const furiganaKind: FuriganaKind = v.isKanjiType ? 'kanji' : 'kana';
+        pieces.push(
+          validateFuriganaReading(v.reading, v.termJapanese, furiganaKind),
+        );
+      }
     }
 
     for (const row of input.grammarEntries) {
@@ -586,6 +592,7 @@ export function storyPublishInputFromDraftRow(draft: {
   level?: string | null;
   targetDurationBandKey?: string | null;
   promptSourceNote?: string | null;
+  learningLanguage?: string | null;
   moduleWorkflowStatuses?: unknown;
   sentences?: Array<{ content: unknown }>;
   vocabEntries?: Array<{ content: unknown }>;
@@ -615,5 +622,6 @@ export function storyPublishInputFromDraftRow(draft: {
     grammarEntries: draft.grammarEntries ?? [],
     quizEntries: draft.quizEntries ?? [],
     moduleWorkflowStatuses,
+    learningLanguage: draft.learningLanguage ?? null,
   };
 }

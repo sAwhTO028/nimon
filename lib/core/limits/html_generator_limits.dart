@@ -66,6 +66,18 @@ HtmlLearningLanguage? normalizeHtmlLanguage(String? input) {
   return null;
 }
 
+/// V1 prefs/draft wire (`ja` / `en`) → HTML limit table language.
+///
+/// Fallback to [HtmlLearningLanguage.jp] for null/unknown — validation context only;
+/// does not mutate stored draft fields.
+HtmlLearningLanguage resolveHtmlLearningLanguageFromWire(
+  String? learningLanguageWire,
+) {
+  final t = (learningLanguageWire ?? '').trim().toLowerCase();
+  if (t == 'en') return HtmlLearningLanguage.en;
+  return HtmlLearningLanguage.jp;
+}
+
 HtmlPromptMode? normalizeHtmlPromptMode(String? input) {
   final raw = (input ?? '').trim();
   if (raw.isEmpty) return null;

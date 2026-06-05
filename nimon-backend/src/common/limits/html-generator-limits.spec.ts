@@ -13,6 +13,7 @@ import {
   isSliderEnabled,
   normalizeHtmlDuration,
   normalizeHtmlLanguage,
+  resolveHtmlLearningLanguageFromWire,
   normalizeHtmlLevel,
   normalizeHtmlPromptMode,
   normalizeHtmlPublishKind,
@@ -31,6 +32,13 @@ describe('html-generator-limits normalization', () => {
   it('duration normalization', () => {
     expect(normalizeHtmlDuration('2. 5-7 mins')).toBe('5-7 mins');
     expect(normalizeHtmlDuration('5_7')).toBe('5-7 mins');
+  });
+
+  it('resolveHtmlLearningLanguageFromWire maps ja/en and falls back to jp', () => {
+    expect(resolveHtmlLearningLanguageFromWire('ja')).toBe('jp');
+    expect(resolveHtmlLearningLanguageFromWire('en')).toBe('en');
+    expect(resolveHtmlLearningLanguageFromWire(null)).toBe('jp');
+    expect(resolveHtmlLearningLanguageFromWire('ko')).toBe('jp');
   });
 
   it('language normalization (config lookup only)', () => {

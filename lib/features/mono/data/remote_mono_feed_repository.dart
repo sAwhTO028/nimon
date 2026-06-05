@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import 'package:nimon/core/pagination/page_request.dart';
 import 'package:nimon/core/pagination/page_result.dart';
 import 'package:nimon/core/pagination/pagination_defaults.dart';
+import 'package:nimon/core/settings/catalog_discovery_lens.dart';
 import 'package:nimon/features/mono/data/mono_feed_repository.dart';
 import 'package:nimon/features/mono/data/mono_feed_summary_dto.dart';
 import 'package:nimon/features/profile/data/published_mono_catalog_visibility_exception.dart';
@@ -119,17 +120,23 @@ class RemoteMonoFeedRepository implements MonoFeedRepository {
     PageRequest request, {
     String? level,
     String? category,
+    CatalogDiscoveryLens? catalogLens,
   }) async {
     final effective =
         _effectiveRequest(request, level: level, category: category);
-    final qp = effective.toQueryParameters();
+    final headers = await _mergeOptionalAuth({
+      'Accept': 'application/json',
+    });
+    final qp = Map<String, String>.from(effective.toQueryParameters());
+    CatalogDiscoveryLens.mergeIntoQueryIfAuthenticated(
+      qp,
+      catalogLens,
+      headers,
+    );
     final uri = _u('/v1/mono/feed').replace(queryParameters: qp);
     if (kDebugMode) {
       debugPrint('RemoteMonoFeedRepository.fetchFeedPage: GET $uri');
     }
-    final headers = await _mergeOptionalAuth({
-      'Accept': 'application/json',
-    });
     final resp = await _client.get(uri, headers: headers);
     if (kDebugMode) {
       final authPresent = headers.containsKey('Authorization');
@@ -220,6 +227,8 @@ class RemoteMonoFeedRepository implements MonoFeedRepository {
       writerDisplayName: _optStr(m['writerDisplayName']),
       writerHandle: _optStr(m['writerHandle']),
       writerAvatarUrl: _optStr(m['writerAvatarUrl']),
+      contentLocale: _optStr(m['contentLocale']),
+      learningLanguage: _optStr(m['learningLanguage']),
     );
   }
 }

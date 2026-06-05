@@ -530,6 +530,8 @@ class RemotePublishedMonoRepository {
       likesCount: _jsonInt(it['likesCount']),
       isBookmarkedByMe: it['isBookmarkedByMe'] == true,
       myReaction: _optStr(it['myReaction']),
+      contentLocale: _optStr(it['contentLocale']),
+      learningLanguage: _optStr(it['learningLanguage']),
     );
   }
 

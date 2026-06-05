@@ -488,11 +488,8 @@ export class AuthService {
       appLocale: this.resolvePreference(row.appLocale, DEFAULT_ME_PREFERENCES.appLocale, {
         treatDefaultStringAsNull: 'system',
       }),
-      contentLocale: this.resolvePreference(row.contentLocale, DEFAULT_ME_PREFERENCES.contentLocale),
-      learningLanguage: this.resolvePreference(
-        row.learningLanguage,
-        DEFAULT_ME_PREFERENCES.learningLanguage,
-      ),
+      contentLocale: safeV1ContentLocale(row.contentLocale),
+      learningLanguage: safeV1LearningLanguage(row.learningLanguage),
       themeMode: this.resolvePreference(row.themeMode, DEFAULT_ME_PREFERENCES.themeMode, {
         treatDefaultStringAsNull: 'system',
       }),
@@ -637,11 +634,8 @@ export class AuthService {
       appLocale: this.resolvePreference(out.appLocale, DEFAULT_ME_PREFERENCES.appLocale, {
         treatDefaultStringAsNull: 'system',
       }),
-      contentLocale: this.resolvePreference(out.contentLocale, DEFAULT_ME_PREFERENCES.contentLocale),
-      learningLanguage: this.resolvePreference(
-        out.learningLanguage,
-        DEFAULT_ME_PREFERENCES.learningLanguage,
-      ),
+      contentLocale: safeV1ContentLocale(out.contentLocale),
+      learningLanguage: safeV1LearningLanguage(out.learningLanguage),
       themeMode: this.resolvePreference(out.themeMode, DEFAULT_ME_PREFERENCES.themeMode, {
         treatDefaultStringAsNull: 'system',
       }),

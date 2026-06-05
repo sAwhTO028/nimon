@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart' show kDebugMode, debugPrint;
 import 'package:http/http.dart' as http;
 import 'package:nimon/core/pagination/page_result.dart';
 import 'package:nimon/core/pagination/pagination_defaults.dart';
+import 'package:nimon/core/settings/catalog_discovery_lens.dart';
 import 'package:nimon/features/auth/authenticated_http.dart';
 import 'package:nimon/features/create/data/remote_backend_config.dart';
 import 'package:nimon/features/search/data/mono_search_remote.dart';
@@ -124,6 +125,8 @@ class RemoteMonoSearchRepository implements MonoSearchRemote {
     required String sort,
     required int limit,
     String? cursor,
+    CatalogDiscoveryLens? catalogLens,
+    Map<String, String>? authHeaders,
   }) {
     final qp = <String, String>{
       'sort': sort,
@@ -137,6 +140,11 @@ class RemoteMonoSearchRepository implements MonoSearchRemote {
     if (cat != null && cat.isNotEmpty) qp['category'] = cat;
     final c = cursor?.trim();
     if (c != null && c.isNotEmpty) qp['cursor'] = c;
+    CatalogDiscoveryLens.mergeIntoQueryIfAuthenticated(
+      qp,
+      catalogLens,
+      authHeaders ?? const {},
+    );
     return qp;
   }
 
@@ -167,9 +175,11 @@ class RemoteMonoSearchRepository implements MonoSearchRemote {
     String sort = 'latest',
     int limit = PaginationDefaults.defaultPageLimit,
     String? cursor,
+    CatalogDiscoveryLens? catalogLens,
   }) async {
     try {
       final lim = _clampLimit(limit);
+      final headers = await _mergeAuth(const {'Accept': 'application/json'});
       final uri = _u('/v1/search/monos').replace(
         queryParameters: _queryParams(
           q: q,
@@ -178,6 +188,8 @@ class RemoteMonoSearchRepository implements MonoSearchRemote {
           sort: sort,
           limit: lim,
           cursor: cursor,
+          catalogLens: catalogLens,
+          authHeaders: headers,
         ),
       );
       if (kDebugMode) {
@@ -185,7 +197,7 @@ class RemoteMonoSearchRepository implements MonoSearchRemote {
       }
       final resp = await _nimonAuthSend(
         uri,
-        () => _mergeAuth(const {'Accept': 'application/json'}),
+        () async => headers,
         (h) => _client.get(uri, headers: h),
       );
       _throwIfNotOk(resp);

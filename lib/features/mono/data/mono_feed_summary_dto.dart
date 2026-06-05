@@ -22,6 +22,8 @@ class MonoFeedSummaryDto {
     required this.shareUrl,
     required this.publishKind,
     required this.accessType,
+    this.contentLocale,
+    this.learningLanguage,
   });
 
   final String monoId;
@@ -44,6 +46,8 @@ class MonoFeedSummaryDto {
   final String? shareUrl;
   final String publishKind;
   final String accessType;
+  final String? contentLocale;
+  final String? learningLanguage;
 
   factory MonoFeedSummaryDto.fromJson(Map<String, Object?> json) {
     final categoryStr = _str(json['category']);
@@ -75,6 +79,8 @@ class MonoFeedSummaryDto {
       accessType: _str(json['accessType']).isEmpty
           ? 'public'
           : _str(json['accessType']),
+      contentLocale: _optStr(json['contentLocale']),
+      learningLanguage: _optStr(json['learningLanguage']),
     );
   }
 

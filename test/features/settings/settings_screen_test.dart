@@ -195,7 +195,7 @@ void main() {
     expect(fakeRepo.patchCalls.any((m) => m['contentLocale'] == 'my'), isTrue);
   });
 
-  testWidgets('Learning Language selector shows Japanese option',
+  testWidgets('Learning Language selector shows Japanese and English',
       (tester) async {
     final fakeRepo = _FakeUserPreferencesRepository();
     await tester.pumpWidget(
@@ -216,7 +216,46 @@ void main() {
     await tester.tap(find.text('Learning Language'));
     await tester.pumpAndSettle();
     expect(find.text('Japanese'), findsWidgets);
-    expect(find.text('Coming soon'), findsOneWidget);
+    expect(find.text('English'), findsWidgets);
+    expect(find.text('More languages'), findsNothing);
+  });
+
+  testWidgets('Learning Language English patches learningLanguage en',
+      (tester) async {
+    final fakeRepo = _FakeUserPreferencesRepository(
+      initial: const UserPreferences(
+        appLocale: 'system',
+        contentLocale: 'my',
+        learningLanguage: 'ja',
+        themeMode: 'system',
+        readingTextSize: 'standard',
+        showExplanations: true,
+      ),
+    );
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          authSessionProvider.overrideWith(
+            (_) => _TestAuthSessionNotifier(
+              AuthSessionAuthenticated(AuthUser(id: 'u1', email: 'e@e.com')),
+            ),
+          ),
+          userPreferencesRepositoryProvider.overrideWithValue(fakeRepo),
+        ],
+        child: _wrapRouter(_router()),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Learning Language'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('English').last);
+    await tester.pumpAndSettle();
+
+    expect(
+      fakeRepo.patchCalls.any((m) => m['learningLanguage'] == 'en'),
+      isTrue,
+    );
   });
 
   testWidgets('Theme selector patches themeMode', (tester) async {
